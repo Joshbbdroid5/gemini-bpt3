@@ -33,3 +33,5 @@ export const BINGO_COLUMNS = {
 };
 
 export const TOTAL_BOARDS = 600;
+
+export type Language = 'en' | 'am' | 'om';

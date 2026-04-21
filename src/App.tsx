@@ -7,7 +7,8 @@ import SelectionPage from './components/SelectionPage';
 import GamePage from './components/GamePage';
 import HistoryPage from './components/HistoryPage';
 import LobbyPage from './components/LobbyPage';
-import { AppPhase, HistoryEntry } from './types';
+import { AppPhase, HistoryEntry, Language } from './types';
+import { translations } from './translations';
 
 export default function App() {
   const [phase, setPhase] = useState<AppPhase>('lobby');
@@ -17,6 +18,8 @@ export default function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showRules, setShowRules] = useState(false);
   const [showGoodLuck, setShowGoodLuck] = useState(false);
+  const [language, setLanguage] = useState<Language>('en');
+  const t = translations[language];
 
   const startSelection = (choice: number) => {
     setStake(choice);
@@ -88,7 +91,12 @@ export default function App() {
               exit={{ x: -300, opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <SelectionPage staked={stake} wallet={wallet} onComplete={completeSelection} />
+              <SelectionPage 
+                staked={stake} 
+                wallet={wallet} 
+                onComplete={completeSelection} 
+                language={language} 
+              />
             </motion.div>
           )}
 
@@ -104,6 +112,7 @@ export default function App() {
                 stakedPerBoard={stake} 
                 onRestart={() => setPhase('selection')}
                 onGameEnd={addHistoryEntry}
+                language={language}
               />
             </motion.div>
           )}
@@ -116,7 +125,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <HistoryPage history={history} onBack={() => setPhase('home')} />
+              <HistoryPage history={history} onBack={() => setPhase('home')} language={language} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -138,10 +147,10 @@ export default function App() {
                 <div className="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center mb-6 shadow-2xl">
                    <Trophy size={40} className="text-white" />
                 </div>
-                <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-2">Good Luck!</h2>
+                <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-2">{t.goodLuck}</h2>
                 <p className="text-indigo-200 font-bold uppercase tracking-widest text-xs">
-                  {selectedBoardIds.length} Boards Registered <br />
-                  Redirecting to Game
+                  {selectedBoardIds.length} {t.boardsRegistered} <br />
+                  {t.redirecting}
                 </p>
                 
                 <div className="mt-8 flex gap-2">
@@ -175,7 +184,7 @@ export default function App() {
                   <div className="flex items-center justify-between mb-8">
                     <h3 className="text-2xl font-black text-indigo-950 uppercase italic tracking-tighter flex items-center gap-2">
                       <Info className="text-indigo-600" />
-                      Game Rules
+                      {t.rules}
                     </h3>
                     <button onClick={() => setShowRules(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
                       <X size={20} />
@@ -183,17 +192,17 @@ export default function App() {
                   </div>
                   
                   <div className="space-y-6">
-                    <RuleItem number="1" text="Select your entry fee (10 ETB or 20 ETB) to start." />
-                    <RuleItem number="2" text="Pick your board from the 600 available options within 60 seconds." />
-                    <RuleItem number="3" text="Wait for the system to call a ball every 5 seconds." />
-                    <RuleItem number="4" text="Numbers are marked automatically. Complete a row, column, diagonal, or four corners to win." />
+                    <RuleItem number="1" text={t.rule1} />
+                    <RuleItem number="2" text={t.rule2} />
+                    <RuleItem number="3" text={t.rule3} />
+                    <RuleItem number="4" text={t.rule4} />
                   </div>
 
                   <button 
                     onClick={() => setShowRules(false)}
                     className="mt-10 px-6 py-4 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-colors"
                   >
-                    Got it
+                    {t.gotIt}
                   </button>
                 </motion.div>
             </div>

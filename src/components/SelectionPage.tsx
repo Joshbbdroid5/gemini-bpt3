@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, Timer, ShoppingCart } from 'lucide-react';
-import { TOTAL_BOARDS } from '../types';
+import { TOTAL_BOARDS, Language } from '../types';
+import { translations } from '../translations';
 
 interface Props {
   staked: number;
   wallet: number;
   onComplete: (selectedIds: number[]) => void;
+  language: Language;
 }
 
-export default function SelectionPage({ staked, wallet, onComplete }: Props) {
+export default function SelectionPage({ staked, wallet, onComplete, language }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(60);
+  const t = translations[language];
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -46,7 +49,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
             <Wallet size={16} />
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300 opacity-50">Wallet</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300 opacity-50">{t.wallet}</span>
             <span className="text-sm font-bold text-white">{wallet} ETB</span>
           </div>
         </div>
@@ -56,7 +59,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
             <ShoppingCart size={16} />
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-widest text-orange-300 opacity-50">Staked</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-orange-300 opacity-50">{t.staked}</span>
             <span className="text-sm font-bold text-white italic">{staked} ETB</span>
           </div>
         </div>
@@ -66,7 +69,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
       <div className="px-4 py-2 bg-black/40 backdrop-blur-md flex items-center justify-between border-b border-white/10">
         <div className="flex items-center gap-2 text-white">
           <Timer size={14} className="text-yellow-400" />
-          <span className="text-[10px] font-black uppercase tracking-widest">Time Remaining</span>
+          <span className="text-[10px] font-black uppercase tracking-widest">{t.timeRemaining}</span>
         </div>
         <div className="flex items-center gap-1">
           <span className={`text-xl font-mono font-black ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
@@ -78,12 +81,12 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
       {/* Info Message */}
       <div className="px-4 py-2 bg-indigo-950/30 flex justify-between items-center border-b border-white/5">
         <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300">
-           Select 1 Board to play.
+           {t.selectBoardInfo}
         </p>
         <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
            <span className="text-[8px] font-black text-green-400 uppercase tracking-tighter">
-             {TOTAL_BOARDS} Boards Available
+             {TOTAL_BOARDS} {t.boardsAvailable}
            </span>
         </div>
       </div>
@@ -124,15 +127,15 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase tracking-widest text-purple-300/50">Selection Status</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-purple-300/50">{t.selectionStatus}</span>
               <span className={`text-lg font-black italic ${selectedId ? 'text-green-400' : 'text-white'}`}>
-                {selectedId ? `Board #${selectedId}` : 'Selecting Board...'}
+                {selectedId ? `${t.boardNum}${selectedId}` : t.selecting}
               </span>
             </div>
           </div>
           <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-3">
              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-ping"></div>
-             <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Game Starting Soon</span>
+             <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">{t.gameStarting}</span>
           </div>
         </div>
       </div>
