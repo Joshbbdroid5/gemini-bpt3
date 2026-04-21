@@ -78,10 +78,10 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#4c1d95]">
       {/* Stats Bar */}
-      <div className="grid grid-cols-2 gap-2 p-4 bg-transparent border-b border-white/5">
-        <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/10">
+      <div className="grid grid-cols-2 gap-2 p-4 bg-black/20 border-b border-white/10">
+        <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10">
           <div className="p-2 bg-indigo-600 rounded-lg text-white">
             <Wallet size={16} />
           </div>
@@ -91,7 +91,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
           </div>
         </div>
         
-        <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/10">
+        <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10">
           <div className="p-2 bg-orange-600 rounded-lg text-white">
             <ShoppingCart size={16} />
           </div>
@@ -103,7 +103,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
       </div>
 
       {/* Timer Bar */}
-      <div className="px-4 py-2 bg-black/50 backdrop-blur-md flex items-center justify-between border-b border-white/5">
+      <div className="px-4 py-2 bg-black/40 backdrop-blur-md flex items-center justify-between border-b border-white/10">
         <div className="flex items-center gap-2 text-white">
           <Timer size={14} className="text-yellow-400" />
           <span className="text-[10px] font-black uppercase tracking-widest">Time Remaining</span>
@@ -146,10 +146,10 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
                 className={`
                   aspect-square flex items-center justify-center text-[10px] font-black rounded-full border transition-all duration-300 relative overflow-hidden
                   ${isSelected
-                    ? 'bg-yellow-400 text-indigo-950 border-yellow-200 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-10' 
+                    ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.6)] z-10' 
                     : isTaken 
                       ? 'bg-white/5 text-white/10 border-transparent opacity-50 cursor-not-allowed line-through'
-                      : 'bg-[#2d2e4d] text-white/40 border-white/5 hover:border-indigo-400/50 hover:text-white'
+                      : 'bg-blue-600 text-white border-blue-400/50 hover:bg-blue-500 hover:border-white'
                   }
                 `}
               >
@@ -165,12 +165,12 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
       </div>
       
       {/* Selection Summary Overlay */}
-      <div className="p-6 bg-[#1a1b2e] border-t border-white/10 shadow-2xl">
+      <div className="p-6 bg-[#2e1065] border-t border-white/20 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Selection Status</span>
-            <span className="text-xl font-black text-yellow-400 italic">
-              {selectedId ? `Ready with Board #${selectedId}` : 'Selecting Board...'}
+            <span className="text-[10px] font-black uppercase tracking-widest text-purple-300/50">Selection Status</span>
+            <span className={`text-xl font-black italic ${selectedId ? 'text-green-400' : 'text-white'}`}>
+              {selectedId ? `Ready: Board #${selectedId}` : 'Selecting Board...'}
             </span>
           </div>
           <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-3">
