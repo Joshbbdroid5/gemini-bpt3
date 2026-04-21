@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Timer, ShoppingCart, Dices } from 'lucide-react';
+import { Wallet, Timer, ShoppingCart } from 'lucide-react';
 import { TOTAL_BOARDS } from '../types';
 
 interface Props {
@@ -12,45 +12,6 @@ interface Props {
 export default function SelectionPage({ staked, wallet, onComplete }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(60);
-  const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
-
-  // Initialize with some boards already taken
-  useEffect(() => {
-    const initial = new Set<number>();
-    const count = 120 + Math.floor(Math.random() * 40);
-    for (let i = 0; i < count; i++) {
-        initial.add(Math.floor(Math.random() * TOTAL_BOARDS) + 1);
-    }
-    setTakenBoards(initial);
-  }, []);
-
-  // Simulate other users taking boards in real-time
-  useEffect(() => {
-    if (timeLeft <= 0) return;
-    
-    const interval = setInterval(() => {
-      setTakenBoards((prev) => {
-        const next = new Set(prev);
-        // Add 1-3 new taken boards every interval
-        const newClaims = 1 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < newClaims; i++) {
-          let randomId;
-          let attempts = 0;
-          do {
-            randomId = Math.floor(Math.random() * TOTAL_BOARDS) + 1;
-            attempts++;
-          } while ((next.has(randomId) || randomId === selectedId) && attempts < 10);
-          
-          if (!next.has(randomId) && randomId !== selectedId) {
-            next.add(randomId);
-          }
-        }
-        return next;
-      });
-    }, 2000); // Every 2 seconds
-
-    return () => clearInterval(interval);
-  }, [timeLeft, selectedId]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -73,19 +34,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
   }, [timeLeft]);
 
   const handleSelect = (id: number) => {
-    if (takenBoards.has(id)) return;
     setSelectedId(prev => prev === id ? null : id);
-  };
-
-  const pickRandom = () => {
-    const available = Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1)
-      .filter(id => !takenBoards.has(id));
-    
-    if (available.length > 0) {
-      const randomId = available[Math.floor(Math.random() * available.length)];
-      setSelectedId(randomId);
-      const el = document.getElementById(`board-${randomId}`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -135,7 +84,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
         <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
            <span className="text-[8px] font-black text-green-400 uppercase tracking-tighter">
-             {TOTAL_BOARDS - takenBoards.size} Boards Available
+             {TOTAL_BOARDS} Boards Available
            </span>
         </div>
       </div>
@@ -145,28 +94,23 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
         <div className="grid grid-cols-10 gap-2 pb-24">
           {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
             const isSelected = selectedId === id;
-            const isTaken = takenBoards.has(id);
             
             return (
               <motion.button
                 id={`board-${id}`}
                 key={id}
-                whileHover={!isTaken ? { scale: 1.1 } : {}}
-                whileTap={!isTaken ? { scale: 0.9 } : {}}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => handleSelect(id)}
-                disabled={isTaken}
                 className={`
                   aspect-square flex items-center justify-center text-[9px] font-black rounded-full border transition-all duration-200 relative overflow-hidden
                   ${isSelected
                     ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.6)] z-10' 
-                    : isTaken 
-                      ? 'bg-white/5 text-white/10 border-transparent opacity-50 cursor-not-allowed line-through'
-                      : 'bg-blue-600 text-white border-blue-400/50 hover:bg-blue-500 hover:border-white'
+                    : 'bg-blue-600 text-white border-blue-400/50 hover:bg-blue-500 hover:border-white'
                   }
                 `}
               >
-                {/* Subtle highlight for available boards */}
-                {!isTaken && !isSelected && (
+                {!isSelected && (
                   <div className="absolute top-0 right-0 w-3 h-3 bg-white/5 blur-sm rounded-full -translate-x-1 translate-y-1"></div>
                 )}
                 <span className="relative z-10">{id}</span>
@@ -179,15 +123,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
       {/* Selection Summary Overlay */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2e1065]/95 backdrop-blur-xl border-t border-white/20 shadow-2xl z-50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={pickRandom}
-              className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl border border-indigo-400/50 transition-all shadow-lg shadow-indigo-900/40 group"
-            >
-              <Dices size={18} className="group-hover:rotate-12 transition-transform" />
-              <span className="text-[10px] font-black uppercase tracking-tighter">Random Pick</span>
-            </motion.button>
+          <div className="flex items-center">
             <div className="flex flex-col">
               <span className="text-[10px] font-black uppercase tracking-widest text-purple-300/50">Selection Status</span>
               <span className={`text-lg font-black italic ${selectedId ? 'text-green-400' : 'text-white'}`}>

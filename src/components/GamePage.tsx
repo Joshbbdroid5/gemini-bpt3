@@ -257,13 +257,15 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                     <div className="grid grid-cols-5 gap-0.5">
                        {grid.map((row, rIdx) => row.map((cell, cIdx) => {
                          const isMarkedLocal = typeof cell.value === 'number' ? manualMarks.has(cell.value) : cell.value === 'FREE';
+                         const isCurrentBall = typeof cell.value === 'number' && cell.value === currentBall;
+
                          return (
                            <button 
                              key={`${rIdx}-${cIdx}`}
                              onClick={() => typeof cell.value === 'number' && toggleMark(cell.value)}
                              className={`
                                aspect-square flex items-center justify-center text-[9px] font-bold rounded-sm transition-all
-                               ${isMarkedLocal ? 'bg-green-600 text-white shadow-[0_0_10px_rgba(22,163,74,0.4)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}
+                               ${isCurrentBall ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.6)] z-10 scale-105' : isMarkedLocal ? 'bg-green-600 text-white shadow-[0_0_10px_rgba(22,163,74,0.4)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}
                                ${!autoMarkMode && typeof cell.value === 'number' && calledNumbers.has(cell.value) && !isMarkedLocal ? 'ring-1 ring-yellow-400 animate-pulse' : ''}
                              `}
                            >
