@@ -1,54 +1,78 @@
 import { motion } from 'framer-motion';
+import { Language } from '../types';
+import { translations } from '../translations';
 
 interface Props {
   onPlay: (stake: number) => void;
+  language: Language;
+  onLanguageChange: (lang: Language) => void;
 }
 
-export default function Dashboard({ onPlay }: Props) {
+const LANGUAGES = [
+  { id: 'en', label: 'English', flag: '🇺🇸' },
+  { id: 'am', label: 'አማርኛ', flag: '🇪🇹' },
+  { id: 'om', label: 'Oromoo', flag: '🇪🇹' }
+] as const;
+
+export default function Dashboard({ onPlay, language, onLanguageChange }: Props) {
+  const t = translations[language];
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+      {/* Language Selection Tabs with Flags */}
+      <div className="mb-12 flex bg-white/5 p-1.5 rounded-2xl border border-white/10 shadow-2xl backdrop-blur-md">
+        {LANGUAGES.map((lang) => (
+          <button
+            key={lang.id}
+            onClick={() => onLanguageChange(lang.id)}
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+              language === lang.id 
+                ? 'bg-indigo-600 text-white shadow-lg' 
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <span className="text-sm leading-none">{lang.flag}</span>
+            {lang.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Stake Selection Section */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         className="mb-12"
       >
-        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 mb-2 block">Premium Experience</span>
-        <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-none">
-          Choose Your <br />
-          <span className="text-yellow-400">Stake</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 mb-2 block">
+          {t.premiumExp}
+        </span>
+        <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-tight whitespace-pre-line">
+          {t.chooseStake}
         </h2>
       </motion.div>
 
+      {/* Entry Fee Buttons */}
       <div className="flex flex-col gap-4 w-full max-w-xs">
-        <button
-          onClick={() => onPlay(10)}
-          className="group relative flex items-center justify-between bg-white/10 backdrop-blur-md text-white p-6 rounded-3xl border border-white/10 hover:bg-white/20 active:scale-[0.98] transition-all"
-        >
-          <div className="flex flex-col items-start relative z-10">
-            <span className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-1">Standard Entry</span>
-            <span className="text-2xl font-black italic tracking-tight uppercase">Play 10 <span className="text-[10px] not-italic ml-1">ETB</span></span>
-          </div>
-        </button>
-
-        <button
-          onClick={() => onPlay(20)}
-          className="group relative flex items-center justify-between bg-indigo-600/80 backdrop-blur-md text-white p-6 rounded-3xl border border-indigo-400/30 hover:bg-indigo-600 active:scale-[0.98] transition-all shadow-2xl shadow-indigo-500/20"
-        >
-          <div className="flex flex-col items-start relative z-10">
-            <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">Premium Entry</span>
-            <span className="text-2xl font-black italic tracking-tight uppercase">Play 20 <span className="text-[10px] not-italic ml-1">ETB</span></span>
-          </div>
-          <motion.div 
-            animate={{ x: [-100, 300] }}
-            transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-            className="absolute top-0 bottom-0 w-20 bg-white/20 blur-xl -skew-x-12"
-          />
-        </button>
+        {[10, 20].map((amount) => (
+          <motion.button
+            key={amount}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => onPlay(amount)}
+            className="group relative overflow-hidden bg-white text-indigo-950 py-5 rounded-3xl font-black text-xl italic uppercase tracking-tighter shadow-xl transition-all hover:bg-yellow-400 active:bg-yellow-500"
+          >
+            {amount} ETB
+            {/* Subtle decorative circle */}
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+               <div className="w-12 h-12 bg-black rounded-full -mr-6 -mt-6"></div>
+            </div>
+          </motion.button>
+        ))}
       </div>
-      
-      <p className="mt-12 text-[10px] text-white/30 font-black uppercase tracking-[0.2em] leading-relaxed max-w-[200px]">
-        Select your stake to proceed to board selection
-      </p>
+
+      <div className="mt-8 text-[8px] font-bold text-gray-500 uppercase tracking-[0.2em] opacity-50">
+        Secure & Verified Gaming
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Info, X, Trophy } from 'lucide-react';
 import Header from './components/Header';
@@ -18,7 +18,18 @@ export default function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showRules, setShowRules] = useState(false);
   const [showGoodLuck, setShowGoodLuck] = useState(false);
-  const [language, setLanguage] = useState<Language>('en');
+  
+  // Initialize language from localStorage or default to 'en'
+  const [language, setLanguage] = useState<Language>(() => {
+    const savedLanguage = localStorage.getItem('bingoLanguage');
+    return (savedLanguage as Language) || 'en';
+  });
+
+  // Save language to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('bingoLanguage', language);
+  }, [language]);
+
   const t = translations[language];
 
   const startSelection = (choice: number) => {
@@ -79,7 +90,11 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <Dashboard onPlay={startSelection} />
+              <Dashboard 
+                onPlay={startSelection} 
+                language={language} 
+                onLanguageChange={setLanguage} 
+              />
             </motion.div>
           )}
 

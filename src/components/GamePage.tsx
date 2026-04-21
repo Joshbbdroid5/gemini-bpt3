@@ -2,16 +2,18 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Timer, Wallet, Volume2, VolumeX, RotateCcw, LogOut } from 'lucide-react';
 import { generateBoard, checkWin, WinningPattern } from '../logic';
-import { BingoBoardData, GameStats, HistoryEntry } from '../types';
+import { BingoBoardData, GameStats, HistoryEntry, Language } from '../types';
+import { translations } from '../translations';
 
 interface Props {
   selectedBoardIds: number[];
   stakedPerBoard: number;
   onRestart: () => void;
   onGameEnd: (entry: HistoryEntry) => void;
+  language: Language;
 }
 
-export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, onGameEnd }: Props) {
+export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, onGameEnd, language }: Props) {
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[] }[]>([]);
@@ -20,6 +22,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   const [isMuted, setIsMuted] = useState(false);
   const [autoMarkMode, setAutoMarkMode] = useState(true);
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
+  const t = translations[language];
 
   // Keep manual marks in sync with called numbers when auto mode is on
   useEffect(() => {
@@ -155,11 +158,11 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     <div className="flex-1 flex flex-col bg-[#1a1b2e] text-white overflow-hidden select-none">
       {/* Top Stats - 5 Columns */}
       <div className="grid grid-cols-5 gap-1 p-2 bg-[#2d2e4d]">
-        <CompactStat label="Game ID" value={stats.gameId.slice(0, 8)} />
-        <CompactStat label="Players" value={stats.players} />
-        <CompactStat label="Bet" value={stats.staked} />
-        <CompactStat label="Derash" value={stats.derash.toFixed(0)} />
-        <CompactStat label="Called" value={calledNumbers.size} />
+        <CompactStat label={t.gameId} value={stats.gameId.slice(0, 8)} />
+        <CompactStat label={t.players} value={stats.players} />
+        <CompactStat label={t.bet} value={stats.staked} />
+        <CompactStat label={t.derash} value={stats.derash.toFixed(0)} />
+        <CompactStat label={t.called} value={calledNumbers.size} />
       </div>
 
       {/* Main Game Area */}
@@ -242,9 +245,9 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
           <div className="flex-1 bg-[#23243d] rounded-xl border border-white/10 overflow-hidden flex flex-col">
             {selectedBoardIds.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-4">
-                <h3 className="text-xl font-black tracking-tight text-white">Watching Only</h3>
+                <h3 className="text-xl font-black tracking-tight text-white">{t.watchingOnly}</h3>
                 <div className="text-[10px] font-bold text-indigo-300 leading-relaxed uppercase">
-                  የዚህ ዙር ጨዋታ ተጀምሯል፡፡ አዲስ ዙር እስኪጀምር እዚህ ይጠብቁ፡፡
+                  {t.watchingText}
                 </div>
               </div>
             ) : (
@@ -252,7 +255,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                 {boardsData.map(({ id, grid }) => (
                   <div key={id} className="p-2 bg-indigo-900/50 rounded-lg border border-white/5">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] font-black text-indigo-300">BOARD #{id}</span>
+                        <span className="text-[10px] font-black text-indigo-300">{t.boardNum}{id}</span>
                     </div>
                     <div className="grid grid-cols-5 gap-0.5">
                        {grid.map((row, rIdx) => row.map((cell, cIdx) => {
@@ -286,11 +289,11 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d]">
         <button onClick={onRestart} className="col-span-1 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center">
           <LogOut size={16} />
-          <span className="text-[8px] font-black uppercase">Leave</span>
+          <span className="text-[8px] font-black uppercase">{t.leave}</span>
         </button>
         <button onClick={() => window.location.reload()} className="col-span-1 h-12 rounded-xl bg-[#4a4b6e] flex flex-col items-center justify-center">
           <RotateCcw size={16} />
-          <span className="text-[8px] font-black uppercase">Refresh</span>
+          <span className="text-[8px] font-black uppercase">{t.refresh}</span>
         </button>
         <button 
           disabled
@@ -318,7 +321,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
             >
               <div className="bg-indigo-600 p-4 text-center">
                  <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" />
-                 <h2 className="text-xl font-black italic uppercase">Winners!</h2>
+                 <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
               </div>
               <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
                 {winners.map((winner, idx) => {
@@ -328,7 +331,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                     <div key={idx} className="bg-white/5 p-3 rounded-2xl border border-white/5">
                       <div className="flex justify-between items-center mb-2">
                          <div className="flex flex-col">
-                           <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">BOARD #{winner.id}</span>
+                           <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">{t.boardNum}{winner.id}</span>
                            <div className="flex flex-wrap gap-1 mt-1">
                               {winner.patterns.map((p, pIdx) => (
                                 <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">{p.name}</span>
@@ -362,8 +365,8 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                 })}
               </div>
               <div className="p-4 flex flex-col items-center gap-2">
-                 <span className="text-[10px] font-black text-gray-400">Next game in {popupTimeLeft}s</span>
-                 <button onClick={onRestart} className="w-full bg-white text-black py-3 rounded-xl font-black uppercase text-xs">Play Again</button>
+                 <span className="text-[10px] font-black text-gray-400">{t.nextGameIn} {popupTimeLeft}s</span>
+                 <button onClick={onRestart} className="w-full bg-white text-black py-3 rounded-xl font-black uppercase text-xs">{t.playAgain}</button>
               </div>
             </motion.div>
           </div>
