@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Timer, ShoppingCart } from 'lucide-react';
+import { Wallet, Timer, ShoppingCart, Dices } from 'lucide-react';
 import { TOTAL_BOARDS } from '../types';
 
 interface Props {
@@ -77,6 +77,18 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
     setSelectedId(prev => prev === id ? null : id);
   };
 
+  const pickRandom = () => {
+    const available = Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1)
+      .filter(id => !takenBoards.has(id));
+    
+    if (available.length > 0) {
+      const randomId = available[Math.floor(Math.random() * available.length)];
+      setSelectedId(randomId);
+      const el = document.getElementById(`board-${randomId}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#4c1d95]">
       {/* Stats Bar */}
@@ -129,22 +141,22 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
       </div>
 
       {/* Grid of 600 Boards */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-        <div className="grid grid-cols-8 gap-2">
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar scroll-smooth">
+        <div className="grid grid-cols-10 gap-2 pb-24">
           {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
             const isSelected = selectedId === id;
             const isTaken = takenBoards.has(id);
             
             return (
               <motion.button
+                id={`board-${id}`}
                 key={id}
-                whileHover={!isTaken ? { scale: 1.15 } : {}}
+                whileHover={!isTaken ? { scale: 1.1 } : {}}
                 whileTap={!isTaken ? { scale: 0.9 } : {}}
                 onClick={() => handleSelect(id)}
                 disabled={isTaken}
-                layout
                 className={`
-                  aspect-square flex items-center justify-center text-[10px] font-black rounded-full border transition-all duration-300 relative overflow-hidden
+                  aspect-square flex items-center justify-center text-[9px] font-black rounded-full border transition-all duration-200 relative overflow-hidden
                   ${isSelected
                     ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.6)] z-10' 
                     : isTaken 
@@ -153,7 +165,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
                   }
                 `}
               >
-                {/* Board Ball Highlight */}
+                {/* Subtle highlight for available boards */}
                 {!isTaken && !isSelected && (
                   <div className="absolute top-0 right-0 w-3 h-3 bg-white/5 blur-sm rounded-full -translate-x-1 translate-y-1"></div>
                 )}
@@ -165,13 +177,23 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
       </div>
       
       {/* Selection Summary Overlay */}
-      <div className="p-6 bg-[#2e1065] border-t border-white/20 shadow-2xl">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2e1065]/95 backdrop-blur-xl border-t border-white/20 shadow-2xl z-50">
         <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest text-purple-300/50">Selection Status</span>
-            <span className={`text-xl font-black italic ${selectedId ? 'text-green-400' : 'text-white'}`}>
-              {selectedId ? `Ready: Board #${selectedId}` : 'Selecting Board...'}
-            </span>
+          <div className="flex items-center gap-4">
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={pickRandom}
+              className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl border border-indigo-400/50 transition-all shadow-lg shadow-indigo-900/40 group"
+            >
+              <Dices size={18} className="group-hover:rotate-12 transition-transform" />
+              <span className="text-[10px] font-black uppercase tracking-tighter">Random Pick</span>
+            </motion.button>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black uppercase tracking-widest text-purple-300/50">Selection Status</span>
+              <span className={`text-lg font-black italic ${selectedId ? 'text-green-400' : 'text-white'}`}>
+                {selectedId ? `Board #${selectedId}` : 'Selecting Board...'}
+              </span>
+            </div>
           </div>
           <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-3">
              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-ping"></div>

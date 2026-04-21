@@ -18,8 +18,15 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [popupTimeLeft, setPopupTimeLeft] = useState(5);
   const [isMuted, setIsMuted] = useState(false);
-  const [autoMarkMode] = useState(false);
+  const [autoMarkMode, setAutoMarkMode] = useState(true);
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
+
+  // Keep manual marks in sync with called numbers when auto mode is on
+  useEffect(() => {
+    if (autoMarkMode) {
+      setManualMarks(new Set(calledNumbers));
+    }
+  }, [autoMarkMode, calledNumbers]);
 
   const callNextNumber = useCallback(() => {
     if (showWinnerPopup || calledNumbers.size >= 75) return;
@@ -64,8 +71,8 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
     const currentWinners: typeof winners = [];
     boardsData.forEach(({ id, grid }) => {
-      // Win is based on what is actually MARKED on the board
-      const win = checkWin(grid, manualMarks as any);
+      // Win is now checked against calledNumbers so the popup is automatic regardless of manual marks
+      const win = checkWin(grid, calledNumbers as any);
       if (win.isWinner) {
         currentWinners.push({ id, grid, patterns: win.patterns });
       }
@@ -85,7 +92,15 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
         isMyWin: currentWinners.some(w => selectedBoardIds.includes(w.id))
       });
     }
-  }, [manualMarks, boardsData, showWinnerPopup, stats, selectedBoardIds, onGameEnd]);
+  }, [calledNumbers, boardsData, showWinnerPopup, stats, selectedBoardIds, onGameEnd]);
+
+  // Play BINGO shout sound effect when winner popup appears
+  useEffect(() => {
+    if (showWinnerPopup && !isMuted) {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3');
+      audio.play().catch(e => console.log('Audio playback prevented by browser:', e));
+    }
+  }, [showWinnerPopup, isMuted]);
 
   // Winner Popup Timer Logic
   useEffect(() => {
@@ -196,9 +211,21 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                  </div>
                ))}
             </div>
-            <button onClick={() => setIsMuted(!isMuted)} className="text-gray-400">
-              {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setAutoMarkMode(!autoMarkMode)}
+                className={`px-3 py-1 rounded-full text-[9px] font-black transition-all border ${
+                  autoMarkMode 
+                    ? 'bg-green-500/20 border-green-500/50 text-green-400' 
+                    : 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                }`}
+              >
+                {autoMarkMode ? 'AUTO ON' : 'MANUAL'}
+              </button>
+              <button onClick={() => setIsMuted(!isMuted)} className="text-gray-400">
+                {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              </button>
+            </div>
           </div>
 
           {/* Current Ball Card */}
