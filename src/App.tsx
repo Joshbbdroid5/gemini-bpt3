@@ -59,7 +59,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col min-h-0"
             >
               <LobbyPage 
                 onPlay={() => setPhase('home')} 
@@ -74,7 +74,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col min-h-0"
             >
               <Dashboard onPlay={startSelection} />
             </motion.div>
@@ -86,7 +86,7 @@ export default function App() {
               initial={{ x: 300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -300, opacity: 0 }}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col min-h-0"
             >
               <SelectionPage staked={stake} wallet={wallet} onComplete={completeSelection} />
             </motion.div>
@@ -97,7 +97,7 @@ export default function App() {
               key="game"
               initial={{ y: 300, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col min-h-0"
             >
               <GamePage 
                 selectedBoardIds={selectedBoardIds} 
@@ -114,7 +114,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col min-h-0"
             >
               <HistoryPage history={history} onBack={() => setPhase('home')} />
             </motion.div>

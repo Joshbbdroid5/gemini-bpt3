@@ -21,7 +21,7 @@ export default function HistoryPage({ history, onBack }: Props) {
         <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Game History</h2>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
         {history.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-10 opacity-30">
             <History size={48} className="text-gray-300 mb-4" />

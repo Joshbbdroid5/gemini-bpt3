@@ -38,7 +38,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-gradient-to-br from-[#4c1d95] via-[#5b21b6] to-[#4c1d95]">
+    <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#4c1d95] via-[#5b21b6] to-[#4c1d95]">
       {/* Stats Bar */}
       <div className="grid grid-cols-2 gap-2 p-4 bg-black/20 border-b border-white/10">
         <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10">
@@ -89,7 +89,7 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
       </div>
 
       {/* Grid of 600 Boards */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar scroll-smooth">
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar scroll-smooth">
         <div className="grid grid-cols-10 gap-2 pb-24">
           {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
             const isSelected = selectedId === id;

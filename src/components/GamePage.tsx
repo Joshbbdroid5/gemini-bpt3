@@ -152,7 +152,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   const historyBalls = balls.slice(-5, -1).reverse();
 
   return (
-    <div className="h-full flex flex-col bg-[#1a1b2e] text-white overflow-hidden select-none">
+    <div className="flex-1 flex flex-col bg-[#1a1b2e] text-white overflow-hidden select-none">
       {/* Top Stats - 5 Columns */}
       <div className="grid grid-cols-5 gap-1 p-2 bg-[#2d2e4d]">
         <CompactStat label="Game ID" value={stats.gameId.slice(0, 8)} />
@@ -248,7 +248,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                 </div>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto p-2 space-y-4">
+                <div className="flex-1 overflow-hidden p-2 space-y-4">
                 {boardsData.map(({ id, grid }) => (
                   <div key={id} className="p-2 bg-indigo-900/50 rounded-lg border border-white/5">
                     <div className="flex justify-between items-center mb-1">
