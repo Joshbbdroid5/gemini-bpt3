@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Timer, ArrowRight, Wallet, Volume2, VolumeX, RotateCcw, LogOut } from 'lucide-react';
+import { Trophy, Timer, Wallet, Volume2, VolumeX, RotateCcw, LogOut } from 'lucide-react';
 import { generateBoard, checkWin, WinningPattern } from '../logic';
 import { BingoBoardData, GameStats, HistoryEntry } from '../types';
 

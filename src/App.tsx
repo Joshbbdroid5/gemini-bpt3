@@ -184,7 +184,7 @@ export default function App() {
                   
                   <div className="space-y-6">
                     <RuleItem number="1" text="Select your entry fee (10 ETB or 20 ETB) to start." />
-                    <RuleItem number="2" text="Pick any of the 600 boards within 20 seconds. You can select multiple!" />
+                    <RuleItem number="2" text="Pick your board from the 600 available options within 60 seconds." />
                     <RuleItem number="3" text="Wait for the system to call a ball every 5 seconds." />
                     <RuleItem number="4" text="Numbers are marked automatically. Complete a row, column, diagonal, or four corners to win." />
                   </div>

@@ -35,11 +35,10 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
 
   const handleSelect = (id: number) => {
     setSelectedId(prev => prev === id ? null : id);
-    }
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#4c1d95]">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-gradient-to-br from-[#4c1d95] via-[#5b21b6] to-[#4c1d95]">
       {/* Stats Bar */}
       <div className="grid grid-cols-2 gap-2 p-4 bg-black/20 border-b border-white/10">
         <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10">
@@ -103,10 +102,10 @@ export default function SelectionPage({ staked, wallet, onComplete }: Props) {
                 whileTap={{ scale: 0.9 }}
                 onClick={() => handleSelect(id)}
                 className={`
-                  aspect-square flex items-center justify-center text-[9px] font-black rounded-full border transition-all duration-200 relative overflow-hidden
+                  aspect-square flex items-center justify-center text-[10px] font-black rounded-full border-2 transition-all duration-200 relative overflow-hidden
                   ${isSelected
-                    ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.6)] z-10' 
-                    : 'bg-blue-600 text-white border-blue-400/50 hover:bg-blue-500 hover:border-white'
+                    ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10' 
+                    : 'bg-blue-600 text-white border-blue-400 hover:bg-blue-500 hover:border-white shadow-lg shadow-black/20'
                   }
                 `}
               >
