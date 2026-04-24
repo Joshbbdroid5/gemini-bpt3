@@ -1,4 +1,5 @@
-import { useState, motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Play, Eye, Timer, Trophy, History, Copy, Check } from 'lucide-react';
 import { Language } from '../types';
 import { translations } from '../translations';
@@ -83,6 +84,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
           <button 
             onClick={copyId}
             className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-colors relative"
+            aria-label="Copy Player ID"
           >
             <AnimatePresence mode="wait">
               {copied ? 

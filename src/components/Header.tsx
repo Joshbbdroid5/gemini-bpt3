@@ -18,6 +18,7 @@ export default function Header({ onShowRules, onShowHistory }: Props) {
         <button 
           onClick={onShowHistory}
           className="p-2 rounded-full border border-white/5 bg-white/5 text-gray-400 hover:text-yellow-400 hover:bg-white/10 transition-all"
+          aria-label="Show game history"
         >
           <History size={16} />
         </button>

@@ -361,7 +361,11 @@ export default function App() {
                       <Info className="text-indigo-600" />
                       {t.rules}
                     </h3>
-                    <button onClick={() => setShowRules(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+                    <button 
+                      onClick={() => setShowRules(false)} 
+                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                      aria-label="Close rules"
+                    >
                       <X size={20} />
                     </button>
                   </div>

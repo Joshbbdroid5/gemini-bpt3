@@ -67,10 +67,10 @@ export default function AdminDashboard({ onBack }: Props) {
     <div className="flex-1 flex flex-col bg-[#1a1b2e] overflow-hidden">
       <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-2 bg-white/5 rounded-full"><ArrowLeft size={18} /></button>
+          <button onClick={onBack} className="p-2 bg-white/5 rounded-full" aria-label="Go back"><ArrowLeft size={18} /></button>
           <h2 className="font-black text-white uppercase italic">Wallet Manager</h2>
         </div>
-        <button onClick={fetchWallets} className={`${loading ? 'animate-spin' : ''}`}>
+        <button onClick={fetchWallets} className={`${loading ? 'animate-spin' : ''}`} aria-label="Refresh wallet list">
           <RefreshCw size={18} className="text-indigo-400" />
         </button>
       </div>

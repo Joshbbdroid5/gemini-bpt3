@@ -219,10 +219,15 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                     ? 'bg-green-500/20 border-green-500/50 text-green-400' 
                     : 'bg-orange-500/20 border-orange-500/50 text-orange-400'
                 }`}
+                aria-label={autoMarkMode ? "Disable auto-mark" : "Enable auto-mark"}
               >
                 {autoMarkMode ? 'AUTO ON' : 'MANUAL'}
               </button>
-              <button onClick={() => setIsMuted(!isMuted)} className="text-gray-400">
+              <button 
+                onClick={() => setIsMuted(!isMuted)} 
+                className="text-gray-400"
+                aria-label={isMuted ? "Unmute" : "Mute"}
+              >
                 {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
               </button>
             </div>
@@ -249,13 +254,13 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
               </div>
             ) : (
                 <div className="flex-1 overflow-hidden p-2 space-y-4">
-                {boardsData.map(({ id, grid }) => (
+                {boardsData.map(({ id, grid }: { id: number, grid: BingoBoardData }) => (
                   <div key={id} className="p-2 bg-indigo-900/50 rounded-lg border border-white/5">
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-[10px] font-black text-indigo-300">{t.boardNum}{id}</span>
                     </div>
                     <div className="grid grid-cols-5 gap-0.5">
-                       {grid.map((row: any[], rIdx: number) => row.map((cell: any, cIdx: number) => {
+                       {grid.map((row, rIdx: number) => row.map((cell: any, cIdx: number) => {
                          const isMarkedLocal = typeof cell.value === 'number' ? manualMarks.has(cell.value) : cell.value === 'FREE';
                          const isCurrentBall = typeof cell.value === 'number' && cell.value === currentBall;
 
@@ -321,7 +326,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                  <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
               </div>
               <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                {winners.map((winner: { patterns: any[]; id: any; grid: any[]; }, idx: any) => {
+                {winners.map((winner, idx: number) => {
                   const winningIndices = new Set(winner.patterns.flatMap(p => p.indices.map(i => `${i.r}-${i.c}`)));
                   
                   return (
@@ -338,7 +343,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                          <span className="text-green-400 font-black italic">{(stats.derash / winners.length).toFixed(0)} ETB</span>
                       </div>
                       <div className="grid grid-cols-5 gap-0.5">
-                         {winner.grid.map((row: any[], rIdx: number) => row.map((cell: any, cIdx: number) => {
+                         {winner.grid.map((row, rIdx: number) => row.map((cell: any, cIdx: number) => {
                            const isMarkedWinner = typeof cell.value === 'number' ? calledNumbers.has(cell.value) : cell.value === 'FREE';
                            const isWinningCell = winningIndices.has(`${rIdx}-${cIdx}`);
                            

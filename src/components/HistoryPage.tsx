@@ -18,6 +18,7 @@ export default function HistoryPage({ history, onBack, language }: Props) {
         <button 
           onClick={onBack}
           className="p-2 hover:bg-white/10 rounded-full transition-colors"
+          aria-label="Go back"
         >
           <ArrowLeft size={20} className="text-gray-400" />
         </button>
