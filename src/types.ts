@@ -5,7 +5,7 @@ export interface BingoCell {
 
 export type BingoBoardData = BingoCell[][];
 
-export type AppPhase = 'lobby' | 'home' | 'selection' | 'game' | 'history';
+export type AppPhase = 'lobby' | 'home' | 'selection' | 'game' | 'history' | 'verifying' | 'admin';
 
 export interface GameStats {
   gameId: string;

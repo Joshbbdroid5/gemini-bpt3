@@ -1,12 +1,20 @@
-import { motion } from 'framer-motion';
-import { Users, Play, Eye, Timer, Trophy } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Users, Play, Eye, Timer, Trophy, History, Copy, Check } from 'lucide-react';
+import { Language } from '../types';
+import { translations } from '../translations';
 
 interface Props {
   onPlay: () => void;
   onWatch: () => void;
+  stats: { pool: number; players: number; gameId: string };
+  winningHistory: any[];
+  language: Language;
+  myId: string;
 }
 
-export default function LobbyPage({ onPlay, onWatch }: Props) {
+export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, language, myId }: Props) {
+  const t = translations[language];
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 bg-transparent text-white">
       {/* Branding / Game Name */}
@@ -32,8 +40,8 @@ export default function LobbyPage({ onPlay, onWatch }: Props) {
         
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase text-indigo-300 tracking-widest">Active Game</span>
-            <span className="text-lg font-black italic tracking-tight">#LIVE-9928</span>
+            <span className="text-[10px] font-black uppercase text-indigo-300 tracking-widest">{t.gameId}</span>
+            <span className="text-lg font-black italic tracking-tight">{stats.gameId}</span>
           </div>
           <div className="bg-red-500 px-3 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-1.5 animate-pulse">
             <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
@@ -45,17 +53,35 @@ export default function LobbyPage({ onPlay, onWatch }: Props) {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-white/50 text-[10px] font-black uppercase">
               <Users size={12} />
-              Players
+              {t.players}
             </div>
-            <div className="text-xl font-black italic text-white">1,204</div>
+            <div className="text-xl font-black italic text-white">{stats.players}</div>
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-white/50 text-[10px] font-black uppercase">
               <Trophy size={12} className="text-yellow-400" />
-              Pool Size
+              {t.derash}
             </div>
-            <div className="text-xl font-black italic text-green-400">12,450 ETB</div>
+            <div className="text-xl font-black italic text-green-400">{(stats.pool * 0.8).toFixed(0)} ETB</div>
           </div>
+        </div>
+
+        {/* Manual Deposit Info / User ID */}
+        <div className="p-4 bg-indigo-950/40 rounded-3xl border border-white/5 flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[8px] font-black text-indigo-300 uppercase tracking-widest leading-none mb-1">My Player ID</span>
+            <span className="text-sm font-black text-white italic">{myId}</span>
+          </div>
+          <button 
+            onClick={copyId}
+            className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-colors relative"
+          >
+            <AnimatePresence mode="wait">
+              {copied ? 
+                <motion.div key="check" initial={{ scale: 0 }} animate={{ scale: 1 }}><Check size={16} className="text-green-400" /></motion.div> : 
+                <motion.div key="copy" initial={{ scale: 0 }} animate={{ scale: 1 }}><Copy size={16} className="text-indigo-300" /></motion.div>}
+            </AnimatePresence>
+          </button>
         </div>
 
         <div className="space-y-3 pt-4 border-t border-white/10">
@@ -84,6 +110,29 @@ export default function LobbyPage({ onPlay, onWatch }: Props) {
           </button>
         </div>
       </motion.div>
+
+      {/* Recent Winners List */}
+      {winningHistory.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-sm mt-8 space-y-3"
+        >
+          <div className="flex items-center gap-2 px-2 mb-2">
+            <History size={14} className="text-indigo-400" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">{t.winners}</span>
+          </div>
+          <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+            {winningHistory.map((winner, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5 text-[10px] font-bold">
+                <span className="text-white/60">ID: <span className="text-white">{winner.userId.slice(-5)}</span></span>
+                <span className="text-indigo-300">Board #{winner.boardId}</span>
+                <span className="text-yellow-400">{winner.payout.toFixed(0)} ETB</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Stats Footnote */}
       <motion.div 

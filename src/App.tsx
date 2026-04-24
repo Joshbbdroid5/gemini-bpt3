@@ -7,8 +7,17 @@ import SelectionPage from './components/SelectionPage';
 import GamePage from './components/GamePage';
 import HistoryPage from './components/HistoryPage';
 import LobbyPage from './components/LobbyPage';
+import AdminDashboard from './components/AdminDashboard';
 import { AppPhase, HistoryEntry, Language } from './types';
+import { connectToGame, disconnectFromGame, socket, socketEvents } from './components/socket';
 import { translations } from './translations';
+
+// Declare Telegram WebApp global
+declare global {
+  interface Window {
+    Telegram?: any;
+  }
+}
 
 export default function App() {
   const [phase, setPhase] = useState<AppPhase>('lobby');
@@ -18,7 +27,16 @@ export default function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showRules, setShowRules] = useState(false);
   const [showGoodLuck, setShowGoodLuck] = useState(false);
+  const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  const [myId, setMyId] = useState<string>('');
   
+  const [winningHistory, setWinningHistory] = useState<any[]>([]);
+  const [liveStats, setLiveStats] = useState({
+    pool: 0,
+    players: 0,
+    gameId: '---'
+  });
+
   // Initialize language from localStorage or default to 'en'
   const [language, setLanguage] = useState<Language>(() => {
     const savedLanguage = localStorage.getItem('bingoLanguage');
@@ -30,6 +48,37 @@ export default function App() {
     localStorage.setItem('bingoLanguage', language);
   }, [language]);
 
+  // Handle Socket Connection
+  useEffect(() => {
+    const handleStatus = (status: { isVerified: boolean }) => {
+      setIsVerified(status.isVerified);
+    };
+
+    const handleWallet = (balance: number) => setWallet(balance);
+    const handlePoolUpdate = (data: any) => setLiveStats(data);
+    const handleWinHistory = (history: any[]) => setWinningHistory(history);
+    const handleInit = (data: any) => setLiveStats(prev => ({ ...prev, gameId: data.gameId }));
+
+    socket.on('user:status', handleStatus);
+    socket.on(socketEvents.WALLET_UPDATE, handleWallet);
+    socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
+    socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
+    socket.on('game:init', handleInit);
+
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.expand(); // Open full screen in Telegram
+      connectToGame({
+        initData: tg.initData,
+        user: tg.initDataUnsafe?.user
+      });
+    } else {
+      // Fallback for browser testing
+      connectToGame({ userId: `guest_${Math.floor(Math.random() * 1000)}` });
+    }
+    return () => disconnectFromGame();
+  }, []);
+
   const t = translations[language];
 
   const startSelection = (choice: number) => {
@@ -39,8 +88,21 @@ export default function App() {
 
   const completeSelection = (ids: number[]) => {
     setSelectedBoardIds(ids);
+
+    // Prevent playing if not verified
+    if (!isVerified) {
+      alert("Please verify your phone number in the bot first!");
+      return;
+    }
+
     const totalCost = ids.length * stake;
-    setWallet(prev => prev - totalCost);
+    if (wallet < totalCost) {
+      alert("Insufficient balance!");
+      return;
+    }
+
+    // Notify server of the bet
+    socket.emit(socketEvents.PLACE_BET, { stake: totalCost, boardIds: ids });
     
     setShowGoodLuck(true);
     setTimeout(() => {
@@ -67,6 +129,27 @@ export default function App() {
       
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <AnimatePresence mode="wait">
+          {isVerified === false && (
+            <motion.div
+              key="verify"
+              className="fixed inset-0 z-[150] bg-[#1a1b2e] flex flex-col items-center justify-center p-8 text-center"
+            >
+              <div className="w-20 h-20 bg-orange-500/20 rounded-full flex items-center justify-center mb-6">
+                <Info size={40} className="text-orange-500" />
+              </div>
+              <h2 className="text-2xl font-black text-white uppercase italic mb-2">Verification Required</h2>
+              <p className="text-gray-400 text-sm mb-8">
+                To ensure secure payments and fair play, please share your phone number with our bot.
+              </p>
+              <button 
+                onClick={() => window.Telegram?.WebApp?.close()}
+                className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase"
+              >
+                Go Back to Bot
+              </button>
+            </motion.div>
+          )}
+
           {phase === 'lobby' && (
             <motion.div
               key="lobby"
@@ -78,6 +161,10 @@ export default function App() {
               <LobbyPage 
                 onPlay={() => setPhase('home')} 
                 onWatch={startWatching} 
+                stats={liveStats}
+                winningHistory={winningHistory}
+                language={language}
+                myId={myId}
               />
             </motion.div>
           )}
@@ -141,6 +228,17 @@ export default function App() {
               className="flex-1 flex flex-col min-h-0"
             >
               <HistoryPage history={history} onBack={() => setPhase('home')} language={language} />
+            </motion.div>
+          )}
+
+          {phase === 'admin' && (
+            <motion.div
+              key="admin"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <AdminDashboard onBack={() => setPhase('lobby')} />
             </motion.div>
           )}
         </AnimatePresence>

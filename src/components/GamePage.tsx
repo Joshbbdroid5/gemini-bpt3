@@ -4,6 +4,7 @@ import { Trophy, Timer, Wallet, Volume2, VolumeX, RotateCcw, LogOut } from 'luci
 import { generateBoard, checkWin, WinningPattern } from '../logic';
 import { BingoBoardData, GameStats, HistoryEntry, Language } from '../types';
 import { translations } from '../translations';
+import { socket, socketEvents } from './socket';
 
 interface Props {
   selectedBoardIds: number[];
@@ -24,6 +25,12 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
   const t = translations[language];
 
+  const [gameMetadata, setGameMetadata] = useState({ 
+    pool: 0, 
+    players: 0, 
+    gameId: '---'
+  });
+
   // Keep manual marks in sync with called numbers when auto mode is on
   useEffect(() => {
     if (autoMarkMode) {
@@ -31,34 +38,64 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     }
   }, [autoMarkMode, calledNumbers]);
 
-  const callNextNumber = useCallback(() => {
-    if (showWinnerPopup || calledNumbers.size >= 75) return;
-    
-    const allNumbers = Array.from({ length: 75 }, (_, i) => i + 1);
-    const available = allNumbers.filter(n => !calledNumbers.has(n));
-    
-    if (available.length === 0) return;
-    
-    const idx = Math.floor(Math.random() * available.length);
-    const val = available[idx];
-    
-    setCurrentBall(val);
-    setCalledNumbers(prev => new Set(prev).add(val));
-    
-    if (autoMarkMode) {
-      setManualMarks(prev => new Set(prev).add(val));
-    }
-    
-    return val;
-  }, [showWinnerPopup, calledNumbers, autoMarkMode]);
+  // Handle incoming balls from server
+  useEffect(() => {
+    const handleNewBall = (num: number) => {
+      if (showWinnerPopup) return;
+      setCurrentBall(num);
+      setCalledNumbers(prev => new Set(prev).add(num));
+    };
+
+    const handleInit = (data: { balls: number[], gameId: string }) => {
+      setCalledNumbers(new Set(data.balls));
+      setGameMetadata(prev => ({ ...prev, gameId: data.gameId }));
+      if (data.balls.length > 0) setCurrentBall(data.balls[data.balls.length - 1]);
+    };
+
+    const handlePoolUpdate = (data: { pool: number; players: number; gameId: string }) => {
+      setGameMetadata(data);
+    };
+
+    const handleReset = () => {
+      // Clear local state when server starts a new round
+      setCalledNumbers(new Set());
+      setCurrentBall(null);
+      setShowWinnerPopup(false);
+    };
+
+    const handleServerWinner = (winnerData: any) => {
+      // If someone (could be us or someone else) wins, show the popup
+      // In a real app, winnerData would contain the grid to display
+      setWinners([{ 
+        id: winnerData.boardId, 
+        grid: generateBoard(winnerData.boardId), 
+        patterns: winnerData.patterns 
+      }]);
+      setShowWinnerPopup(true);
+    };
+
+    socket.on(socketEvents.BALL_DRAWN, handleNewBall);
+    socket.on('game:init', handleInit);
+    socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
+    socket.on('game:reset', handleReset);
+    socket.on(socketEvents.NEW_WINNER, handleServerWinner);
+
+    return () => {
+      socket.off(socketEvents.BALL_DRAWN, handleNewBall);
+      socket.off('game:init', handleInit);
+      socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
+      socket.off('game:reset', handleReset);
+      socket.off(socketEvents.NEW_WINNER, handleServerWinner);
+    };
+  }, [showWinnerPopup]);
   
   // Game Stats
   const stats: GameStats = useMemo(() => ({
-    gameId: `WB-${Math.floor(100000 + Math.random() * 900000)}`,
-    players: (selectedBoardIds.length || 0) + 529, // Default + user
+    gameId: gameMetadata.gameId,
+    players: gameMetadata.players,
     staked: stakedPerBoard || 10,
-    derash: ((selectedBoardIds.length || 0) + 529) * (stakedPerBoard || 10) * 0.8 
-  }), [selectedBoardIds, stakedPerBoard]);
+    derash: gameMetadata.pool * 0.8
+  }), [gameMetadata, stakedPerBoard]);
 
   // Boards data
   const boardsData = useMemo(() => {
@@ -67,35 +104,6 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       grid: generateBoard(id)
     }));
   }, [selectedBoardIds]);
-
-  // Win Detection
-  useEffect(() => {
-    if (showWinnerPopup || selectedBoardIds.length === 0) return;
-
-    const currentWinners: typeof winners = [];
-    boardsData.forEach(({ id, grid }) => {
-      // Win is now checked against calledNumbers so the popup is automatic regardless of manual marks
-      const win = checkWin(grid, calledNumbers as any);
-      if (win.isWinner) {
-        currentWinners.push({ id, grid, patterns: win.patterns });
-      }
-    });
-
-    if (currentWinners.length > 0) {
-      setWinners(currentWinners);
-      setShowWinnerPopup(true);
-      
-      onGameEnd({
-        gameId: stats.gameId,
-        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        totalStaked: stats.players * stats.staked,
-        totalWinners: currentWinners.length,
-        payoutPerWinner: stats.derash / currentWinners.length,
-        myBoardsCount: selectedBoardIds.length,
-        isMyWin: currentWinners.some(w => selectedBoardIds.includes(w.id))
-      });
-    }
-  }, [calledNumbers, boardsData, showWinnerPopup, stats, selectedBoardIds, onGameEnd]);
 
   // Play BINGO shout sound effect when winner popup appears
   useEffect(() => {
@@ -121,17 +129,6 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       return () => clearInterval(timer);
     }
   }, [showWinnerPopup, onRestart]);
-
-  // Calling Logic
-  useEffect(() => {
-    if (showWinnerPopup) return;
-
-    const interval = setInterval(() => {
-      callNextNumber();
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [showWinnerPopup, callNextNumber]);
 
   const toggleMark = (num: number) => {
     if (autoMarkMode || !calledNumbers.has(num)) return;
@@ -286,6 +283,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       </div>
 
       {/* Footer Area */}
+      <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d]">
       <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d]">
         <button onClick={onRestart} className="col-span-1 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center">
           <LogOut size={16} />
