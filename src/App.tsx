@@ -140,6 +140,21 @@ export default function App() {
     }, 3000);
   };
 
+  const handleTopUp = (amount: number) => {
+    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME; // e.g., @your_bingo_bot
+    if (!botUsername) {
+      alert("Telegram bot username is not configured. Please set VITE_TELEGRAM_BOT_USERNAME.");
+      return;
+    }
+    if (window.Telegram?.WebApp) {
+      // Using the 'start' parameter to pass structured data to the bot
+      const payload = `topup_${amount}_${myId}`; // Example payload: topup_100_guest_1234
+      window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=${encodeURIComponent(payload)}`);
+    } else {
+      alert("This feature is only available in Telegram WebApp.");
+    }
+  };
+
   const startWatching = () => {
     setSelectedBoardIds([]);
     setPhase('game');
@@ -227,6 +242,7 @@ export default function App() {
                 winningHistory={winningHistory}
                 language={language}
                 myId={myId}
+                onTopUp={handleTopUp}
               />
             </motion.div>
           )}
