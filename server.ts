@@ -141,7 +141,7 @@ const broadcastPoolUpdate = () => {
 let isGameOver = false;
 
 // Global interval for drawing balls
-const ballInterval = setInterval(() => {
+const runGameLoop = () => {
   if (currentBalls.length < 75 && !isGameOver) {
     const ball = Math.floor(Math.random() * 75) + 1;
     if (!currentBalls.includes(ball)) {
@@ -195,18 +195,30 @@ const ballInterval = setInterval(() => {
         io.emit('game:win_history', winningHistory);
       }
     }
-  } else {
-    // Auto-reset logic for a continuous "Free" experience
-    console.log("Game over, resetting for next round in 30 seconds...");
-    currentBalls = [];
-    globalPool = 0;
-    playerBoards.clear();
-    isGameOver = false;
-    currentGameId = `WB-${Math.floor(100000 + Math.random() * 900000)}`;
-    io.emit('game:reset');
-    broadcastPoolUpdate();
   }
-}, 5000);
+
+  if (isGameOver || currentBalls.length >= 75) {
+    console.log("Game ending, scheduled reset in 20 seconds...");
+    setTimeout(resetGame, 20000); // Give players 20 seconds to celebrate
+    return; // Exit the loop
+  }
+
+  setTimeout(runGameLoop, 5000);
+};
+
+const resetGame = () => {
+  currentBalls = [];
+  globalPool = 0;
+  playerBoards.clear();
+  isGameOver = false;
+  currentGameId = `WB-${Math.floor(100000 + Math.random() * 900000)}`;
+  io.emit('game:reset');
+  broadcastPoolUpdate();
+  runGameLoop(); // Restart the loop
+};
+
+// Start the first game
+runGameLoop();
 
 // Socket.io Logic
 io.on('connection', (socket) => {
@@ -253,6 +265,12 @@ io.on('connection', (socket) => {
   // Handle Betting/Joining Pool
   socket.on('game:bet', (data: { stake: number; boardIds: number[] }) => {
     const currentBalance = userWallets.get(userId) || 0;
+
+    // SECURITY: Ensure user is verified before accepting bets
+    if (!verifiedUsers.has(userId)) {
+      socket.emit('message', 'Please verify your account to place bets.');
+      return;
+    }
 
     // SECURITY: Validate data and balance
     if (typeof data.stake !== 'number' || !Array.isArray(data.boardIds) || data.stake <= 0) {

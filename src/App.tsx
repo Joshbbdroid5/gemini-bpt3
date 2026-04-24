@@ -93,7 +93,12 @@ export default function App() {
       });
     } else {
       // Fallback for browser testing
-      const guestId = `guest_${Math.floor(Math.random() * 1000)}`;
+      // Persist guestId in localStorage to prevent balance reset on refresh
+      let guestId = localStorage.getItem('bingoGuestId');
+      if (!guestId) {
+        guestId = `guest_${Math.floor(1000 + Math.random() * 9000)}`;
+        localStorage.setItem('bingoGuestId', guestId);
+      }
       connectToGame({ userId: guestId });
       setMyId(guestId); // Set myId for guest users
     }

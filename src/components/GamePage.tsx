@@ -48,7 +48,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
     const handleInit = (data: { balls: number[], gameId: string }) => {
       setCalledNumbers(new Set(data.balls));
-      setGameMetadata(prev => ({ ...prev, gameId: data.gameId }));
+      setGameMetadata((prev: typeof gameMetadata) => ({ ...prev, gameId: data.gameId }));
       if (data.balls.length > 0) setCurrentBall(data.balls[data.balls.length - 1]);
     };
 
@@ -117,7 +117,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   useEffect(() => {
     if (showWinnerPopup) {
       const timer = setInterval(() => {
-        setPopupTimeLeft((prev) => {
+        setPopupTimeLeft((prev: number) => {
           if (prev <= 1) {
             clearInterval(timer);
             onRestart();
@@ -132,7 +132,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
   const toggleMark = (num: number) => {
     if (autoMarkMode || !calledNumbers.has(num)) return;
-    setManualMarks(prev => {
+    setManualMarks((prev: Set<number>) => {
       const next = new Set(prev);
       if (next.has(num)) next.delete(num);
       else next.add(num);
@@ -249,13 +249,13 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
               </div>
             ) : (
                 <div className="flex-1 overflow-hidden p-2 space-y-4">
-                {boardsData.map(({ id, grid }) => (
+                {boardsData.map(({ id, grid }: { id: number; grid: BingoBoardData }) => (
                   <div key={id} className="p-2 bg-indigo-900/50 rounded-lg border border-white/5">
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-[10px] font-black text-indigo-300">{t.boardNum}{id}</span>
                     </div>
                     <div className="grid grid-cols-5 gap-0.5">
-                       {grid.map((row, rIdx) => row.map((cell, cIdx) => {
+                       {grid.map((row, rIdx: number) => row.map((cell, cIdx: number) => {
                          const isMarkedLocal = typeof cell.value === 'number' ? manualMarks.has(cell.value) : cell.value === 'FREE';
                          const isCurrentBall = typeof cell.value === 'number' && cell.value === currentBall;
 
@@ -265,7 +265,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                              onClick={() => typeof cell.value === 'number' && toggleMark(cell.value)}
                              className={`
                                aspect-square flex items-center justify-center text-[9px] font-bold rounded-sm transition-all
-                               ${isCurrentBall ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.6)] z-10 scale-105' : isMarkedLocal ? 'bg-green-600 text-white shadow-[0_0_10px_rgba(22,163,74,0.4)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}
+                               ${isCurrentBall ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.6)] z-10 scale-110' : isMarkedLocal ? 'bg-green-600 text-white shadow-[0_0_10px_rgba(22,163,74,0.4)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}
                                ${!autoMarkMode && typeof cell.value === 'number' && calledNumbers.has(cell.value) && !isMarkedLocal ? 'ring-1 ring-yellow-400 animate-pulse' : ''}
                              `}
                            >
@@ -321,7 +321,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                  <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
               </div>
               <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                {winners.map((winner, idx) => {
+                {winners.map((winner: { patterns: any[]; id: any; grid: any[]; }, idx: any) => {
                   const winningIndices = new Set(winner.patterns.flatMap(p => p.indices.map(i => `${i.r}-${i.c}`)));
                   
                   return (
@@ -338,7 +338,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                          <span className="text-green-400 font-black italic">{(stats.derash / winners.length).toFixed(0)} ETB</span>
                       </div>
                       <div className="grid grid-cols-5 gap-0.5">
-                         {winner.grid.map((row, rIdx) => row.map((cell, cIdx) => {
+                         {winner.grid.map((row: any[], rIdx: number) => row.map((cell: any, cIdx: number) => {
                            const isMarkedWinner = typeof cell.value === 'number' ? calledNumbers.has(cell.value) : cell.value === 'FREE';
                            const isWinningCell = winningIndices.has(`${rIdx}-${cIdx}`);
                            
