@@ -284,7 +284,6 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
       {/* Footer Area */}
       <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d]">
-      <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d]">
         <button onClick={onRestart} className="col-span-1 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center">
           <LogOut size={16} />
           <span className="text-[8px] font-black uppercase">{t.leave}</span>
