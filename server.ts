@@ -13,8 +13,8 @@ const server = http.createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
     // CRITICAL: Prevent other sites from connecting to your socket
-    origin: process.env.NODE_ENV === 'production' 
-      ? [process.env.FRONTEND_URL || ""] 
+    origin: process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
+      ? [process.env.FRONTEND_URL, "https://vercel.com"] // Add Vercel's domain or specific URL
       : "*",
     methods: ["GET", "POST"],
     credentials: true
@@ -149,42 +149,51 @@ const ballInterval = setInterval(() => {
       console.log(`Drawing ball: ${ball}`);
       io.emit('game:ball', ball);
 
-      // AUTO-CLAIM CHECK: Check all active player boards for a win
+      // AUTO-CLAIM CHECK: Collect all winners for this specific ball
+      const winnersThisRound: any[] = [];
+      
       playerBoards.forEach((boardIds, userId) => {
         for (const boardId of boardIds) {
           const grid = boardsCache.get(boardId);
           const win = checkWin(grid, new Set(currentBalls) as any);
           
           if (win.isWinner) {
-            console.log(`AUTO-CLAIM: User ${userId} won on Board ${boardId}`);
-            isGameOver = true;
-            
-            const winnerInfo = {
+            winnersThisRound.push({
               userId,
               boardId,
-              patterns: win.patterns,
-              payout: globalPool * 0.8,
-              gameId: currentGameId,
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            };
-
-            winningHistory.unshift(winnerInfo);
-            if (winningHistory.length > 10) winningHistory.pop();
-
-            // Credit the winner's wallet
-            const currentBal = userWallets.get(userId) || 0;
-            const newBal = currentBal + winnerInfo.payout;
-            userWallets.set(userId, newBal);
-            saveWallets();
-            const winnerSocketId = socketMapping.get(userId);
-            if (winnerSocketId) io.to(winnerSocketId).emit('wallet:update', newBal);
-
-            io.emit('game:winner', winnerInfo);
-            io.emit('game:win_history', winningHistory);
-            break; 
+              patterns: win.patterns
+            });
           }
         }
       });
+
+      if (winnersThisRound.length > 0) {
+        isGameOver = true;
+        const totalPayout = globalPool * 0.8;
+        const splitPayout = totalPayout / winnersThisRound.length;
+
+        winnersThisRound.forEach(w => {
+          const winnerInfo = {
+            ...w,
+            payout: splitPayout,
+            gameId: currentGameId,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+
+          winningHistory.unshift(winnerInfo);
+          const currentBal = userWallets.get(w.userId) || 0;
+          const newBal = currentBal + splitPayout;
+          userWallets.set(w.userId, newBal);
+          
+          const sId = socketMapping.get(w.userId);
+          if (sId) io.to(sId).emit('wallet:update', newBal);
+          io.emit('game:winner', winnerInfo);
+        });
+
+        saveWallets();
+        if (winningHistory.length > 10) winningHistory.splice(10);
+        io.emit('game:win_history', winningHistory);
+      }
     }
   } else {
     // Auto-reset logic for a continuous "Free" experience
@@ -210,9 +219,12 @@ io.on('connection', (socket) => {
   if (initData && verifyTelegramData(initData)) {
     userId = user?.id?.toString() || userId;
     isVerified = true;
+    verifiedUsers.add(userId); // Mark user as verified if Telegram data is valid
     console.log(`Verified Telegram User: ${user?.first_name} (@${user?.username})`);
   } else {
     console.log(`Unverified connection using ID: ${userId}`);
+    // For development/testing, you might want to auto-verify guests:
+    // verifiedUsers.add(userId);
   }
 
   console.log(`Authenticated as: ${userId}`);
@@ -282,4 +294,9 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.TELEGRAM_BOT_TOKEN) console.warn("WARNING: TELEGRAM_BOT_TOKEN is not set!");
+    if (!process.env.FRONTEND_URL) console.warn("WARNING: FRONTEND_URL is not set! CORS might block connections.");
+    console.log(`CORS allowed origin: ${process.env.FRONTEND_URL}`);
+  }
 });

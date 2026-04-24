@@ -15,8 +15,9 @@ export default function AdminDashboard({ onBack }: Props) {
 
   const fetchWallets = async () => {
     setLoading(true);
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : '');
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/admin/wallets`, {
+      const response = await fetch(`${backendUrl}/admin/wallets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret })

@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, motion, AnimatePresence } from 'framer-motion';
 import { Users, Play, Eye, Timer, Trophy, History, Copy, Check } from 'lucide-react';
 import { Language } from '../types';
 import { translations } from '../translations';
@@ -14,6 +14,14 @@ interface Props {
 
 export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, language, myId }: Props) {
   const t = translations[language];
+  const [copied, setCopied] = useState(false);
+
+  const copyId = () => {
+    if (!myId) return;
+    navigator.clipboard.writeText(myId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 bg-transparent text-white">

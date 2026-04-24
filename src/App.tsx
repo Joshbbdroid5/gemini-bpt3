@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Info, X, Trophy } from 'lucide-react';
+import { Info, X, Trophy, RefreshCcw } from 'lucide-react';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import SelectionPage from './components/SelectionPage';
 import GamePage from './components/GamePage';
 import HistoryPage from './components/HistoryPage';
-import LobbyPage from './components/LobbyPage';
+import LobbyPage from './components/LobbyPage'; // Ensure this import is correct
 import AdminDashboard from './components/AdminDashboard';
 import { AppPhase, HistoryEntry, Language } from './types';
 import { connectToGame, disconnectFromGame, socket, socketEvents } from './components/socket';
@@ -28,6 +28,7 @@ export default function App() {
   const [showRules, setShowRules] = useState(false);
   const [showGoodLuck, setShowGoodLuck] = useState(false);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  const [connectionError, setConnectionError] = useState(false);
   const [myId, setMyId] = useState<string>('');
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
@@ -65,6 +66,24 @@ export default function App() {
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on('game:init', handleInit);
 
+    // Set a timeout to catch connection failures
+    const timeoutId = setTimeout(() => {
+      setIsVerified(currentStatus => {
+        if (currentStatus === null) setConnectionError(true);
+        return currentStatus;
+      });
+    }, 10000); // 10 seconds timeout
+
+    // Add cleanup to prevent memory leaks and duplicate listeners
+    const cleanup = () => {
+      socket.off('user:status', handleStatus);
+      socket.off(socketEvents.WALLET_UPDATE, handleWallet);
+      socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
+      socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
+      socket.off('game:init', handleInit);
+      clearTimeout(timeoutId);
+    };
+
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.expand(); // Open full screen in Telegram
@@ -74,9 +93,14 @@ export default function App() {
       });
     } else {
       // Fallback for browser testing
-      connectToGame({ userId: `guest_${Math.floor(Math.random() * 1000)}` });
+      const guestId = `guest_${Math.floor(Math.random() * 1000)}`;
+      connectToGame({ userId: guestId });
+      setMyId(guestId); // Set myId for guest users
     }
-    return () => disconnectFromGame();
+    return () => {
+      cleanup();
+      disconnectFromGame();
+    };
   }, []);
 
   const t = translations[language];
@@ -102,7 +126,7 @@ export default function App() {
     }
 
     // Notify server of the bet
-    socket.emit(socketEvents.PLACE_BET, { stake: totalCost, boardIds: ids });
+    socket.emit('game:bet', { stake: totalCost, boardIds: ids });
     
     setShowGoodLuck(true);
     setTimeout(() => {
@@ -128,6 +152,39 @@ export default function App() {
       />
       
       <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Loading state while verification status is unknown */}
+        {isVerified === null && (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[150] bg-[#1a1b2e] flex flex-col items-center justify-center p-8 text-center"
+          >
+            {!connectionError ? (
+              <>
+                <div className="w-16 h-16 border-4 border-t-4 border-t-indigo-500 border-gray-200 rounded-full animate-spin mb-4"></div>
+                <p className="text-white text-lg font-bold">Loading...</p>
+              </>
+            ) : (
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="flex flex-col items-center"
+              >
+                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                  <X size={32} className="text-red-500" />
+                </div>
+                <h2 className="text-white text-xl font-black uppercase italic mb-2">Connection Failed</h2>
+                <p className="text-gray-400 text-sm mb-8">We couldn't reach the game server. Please check your connection and try again.</p>
+                <button onClick={() => window.location.reload()} className="flex items-center gap-2 bg-white text-black px-8 py-3 rounded-xl font-black uppercase text-xs">
+                  <RefreshCcw size={16} /> Retry
+                </button>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+
         <AnimatePresence mode="wait">
           {isVerified === false && (
             <motion.div
