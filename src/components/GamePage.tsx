@@ -43,7 +43,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     const handleNewBall = (num: number) => {
       if (showWinnerPopup) return;
       setCurrentBall(num);
-      setCalledNumbers(prev => new Set(prev).add(num));
+      setCalledNumbers((prev: Set<number>) => new Set(prev).add(num));
     };
 
     const handleInit = (data: { balls: number[], gameId: string }) => {
@@ -180,7 +180,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
             ))}
           </div>
           <div className="flex-1 grid grid-cols-5 gap-1 overflow-hidden">
-            {Array.from({ length: 15 }).map((_, rowIndex) => (
+            {Array.from({ length: 15 }).map((_, rowIndex: number) => (
               ['B', 'I', 'N', 'G', 'O'].map((l, colIndex) => {
                 const num = (colIndex * 15) + rowIndex + 1;
                 const isCalled = calledNumbers.has(num);
@@ -205,7 +205,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
           {/* Recent Balls History + Mute */}
           <div className="flex items-center justify-between p-1">
             <div className="flex gap-1">
-               {historyBalls.map((n: number) => (
+               {historyBalls.map((n) => (
                  <div key={n} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border-2 ${getBallColor(n)}`}>
                    {getLetter(n)}-{n}
                  </div>
@@ -249,13 +249,13 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
               </div>
             ) : (
                 <div className="flex-1 overflow-hidden p-2 space-y-4">
-                {boardsData.map(({ id, grid }: { id: number; grid: BingoBoardData }) => (
+                {boardsData.map(({ id, grid }) => (
                   <div key={id} className="p-2 bg-indigo-900/50 rounded-lg border border-white/5">
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-[10px] font-black text-indigo-300">{t.boardNum}{id}</span>
                     </div>
                     <div className="grid grid-cols-5 gap-0.5">
-                       {grid.map((row, rIdx: number) => row.map((cell, cIdx: number) => {
+                       {grid.map((row: any[], rIdx: number) => row.map((cell: any, cIdx: number) => {
                          const isMarkedLocal = typeof cell.value === 'number' ? manualMarks.has(cell.value) : cell.value === 'FREE';
                          const isCurrentBall = typeof cell.value === 'number' && cell.value === currentBall;
 
@@ -330,7 +330,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                          <div className="flex flex-col">
                            <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">{t.boardNum}{winner.id}</span>
                            <div className="flex flex-wrap gap-1 mt-1">
-                              {winner.patterns.map((p, pIdx) => (
+                              {winner.patterns.map((p: WinningPattern, pIdx: number) => (
                                 <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">{p.name}</span>
                               ))}
                            </div>
