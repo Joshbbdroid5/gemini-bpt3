@@ -18,7 +18,7 @@ const io = new SocketIOServer(server, {
   cors: {
     // CRITICAL: Prevent other sites from connecting to your socket
     origin: process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
-      ? [process.env.FRONTEND_URL] 
+      ? [process.env.FRONTEND_URL.replace(/\/$/, "")] // Remove trailing slash if present
       : "*",
     methods: ["GET", "POST"],
     credentials: true

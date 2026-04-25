@@ -72,7 +72,7 @@ export default function App() {
         if (currentStatus === null) setConnectionError(true);
         return currentStatus;
       });
-    }, 10000); // 10 seconds timeout
+    }, 30000); // Increased to 30 seconds for Render cold starts
 
     // Add cleanup to prevent memory leaks and duplicate listeners
     const cleanup = () => {
