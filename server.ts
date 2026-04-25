@@ -18,7 +18,7 @@ const io = new SocketIOServer(server, {
   cors: {
     // CRITICAL: Prevent other sites from connecting to your socket
     origin: process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
-      ? [process.env.FRONTEND_URL, "https://vercel.com"] // Add Vercel's domain or specific URL
+      ? [process.env.FRONTEND_URL] 
       : "*",
     methods: ["GET", "POST"],
     credentials: true
