@@ -1,3 +1,4 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -5,6 +6,9 @@ import cors from 'cors';
 import crypto from 'crypto';
 import { generateBoard, checkWin } from './src/logic';
 import fs from 'fs';
+import mongoose from 'mongoose';
+
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
@@ -27,26 +31,69 @@ app.use(express.json());
 const PORT = process.env.PORT || 3001;
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'your-super-secret-key';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo';
 
-const WALLET_FILE = './wallets.json';
+// MongoDB Connection
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
-// Helper to load wallets from file
-const loadWallets = (): Map<string, number> => {
-  if (fs.existsSync(WALLET_FILE)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(WALLET_FILE, 'utf8'));
-      return new Map(Object.entries(data));
-    } catch (e) {
-      console.error("Error loading wallets:", e);
-    }
+// TopUpHistory Schema
+interface ITopUpHistory {
+  userId: string;
+  amount: number;
+  adminSecretUsed: string; // To log which admin secret was used
+  timestamp: Date;
+}
+const topUpHistorySchema = new mongoose.Schema<ITopUpHistory>({
+  userId: { type: String, required: true },
+  amount: { type: Number, required: true },
+  adminSecretUsed: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now }
+});
+const TopUpHistory = mongoose.model<ITopUpHistory>('TopUpHistory', topUpHistorySchema);
+// User Schema
+interface IUser {
+  userId: string;
+  balance: number;
+  isVerified: boolean;
+}
+const userSchema = new mongoose.Schema<IUser>({
+  userId: { type: String, required: true, unique: true },
+  balance: { type: Number, default: 1000 },
+  isVerified: { type: Boolean, default: false }
+});
+const User = mongoose.model<IUser>('User', userSchema);
+
+// Global Stats Schema (To persist volume/profit on Render)
+interface IGlobalStats {
+  key: string;
+  totalVolume: number;
+  totalProfit: number;
+}
+const globalStatsSchema = new mongoose.Schema<IGlobalStats>({
+  key: { type: String, default: 'main_stats', unique: true },
+  totalVolume: { type: Number, default: 0 },
+  totalProfit: { type: Number, default: 0 }
+});
+const GlobalStats = mongoose.model<IGlobalStats>('GlobalStats', globalStatsSchema);
+
+// In-memory cache for high-frequency access (optional, but keep for compatibility)
+const userWallets = new Map<string, number>();
+
+// Sync memory cache with DB on startup
+async function syncCache() {
+  const users = await User.find({});
+  users.forEach(u => userWallets.set(u.userId, u.balance));
+  console.log('Wallet cache synced from DB');
+
+  // Sync Global Stats
+  const stats = await GlobalStats.findOne({ key: 'main_stats' });
+  if (stats) {
+    totalVolume = stats.totalVolume;
+    totalProfit = stats.totalProfit;
   }
-  return new Map<string, number>();
-};
-
-// Helper to save wallets to file
-const saveWallets = () => {
-  fs.writeFileSync(WALLET_FILE, JSON.stringify(Object.fromEntries(userWallets), null, 2));
-};
+}
 
 // Utility to verify Telegram Init Data
 function verifyTelegramData(initData: string): boolean {
@@ -67,14 +114,20 @@ function verifyTelegramData(initData: string): boolean {
   return hmac === hash;
 }
 
-// Basic Express route
-app.get('/', (req, res) => {
-  res.send('Bingo Backend is running!');
+// Health check endpoint for Render monitoring
+app.get('/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.json({
+    status: 'ok',
+    database: dbStatus,
+    clients: io.engine.clientsCount,
+    uptime: process.uptime()
+  });
 });
 
 // ADMIN ENDPOINT: Manually update user wallet
 // This is used by your bot/admin tool to add ETB after manual payment
-app.post('/admin/update-wallet', (req, res) => {
+app.post('/admin/update-wallet', async (req, res) => {
   const { userId, amount, secret } = req.body;
 
   if (secret !== ADMIN_SECRET) {
@@ -85,19 +138,28 @@ app.post('/admin/update-wallet', (req, res) => {
     return res.status(400).json({ error: 'Invalid data' });
   }
 
-  const currentBal = userWallets.get(userId) || 0;
-  const newBal = currentBal + amount;
-  userWallets.set(userId, newBal);
-  saveWallets();
+  const user = await User.findOneAndUpdate(
+    { userId },
+    { $inc: { balance: amount } },
+    { upsert: true, new: true }
+  );
+  
+  if (user) userWallets.set(userId, user.balance);
 
   // Notify the user via Socket if they are currently connected
   const socketId = socketMapping.get(userId);
-  if (socketId) {
-    io.to(socketId).emit('wallet:update', newBal);
+  if (socketId && user) {
+    io.to(socketId).emit('wallet:update', user.balance);
   }
 
-  console.log(`ADMIN: Updated wallet for ${userId}. New balance: ${newBal}`);
-  res.json({ success: true, newBalance: newBal });
+  // Log the top-up transaction
+  await TopUpHistory.create({
+    userId,
+    amount,
+    adminSecretUsed: secret,
+    timestamp: new Date()
+  });
+  res.json({ success: true, newBalance: user.balance });
 });
 
 // ADMIN ENDPOINT: Fetch all wallets
@@ -106,17 +168,41 @@ app.post('/admin/wallets', (req, res) => {
   if (secret !== ADMIN_SECRET) {
     return res.status(403).json({ error: 'Unauthorized' });
   }
-  // Convert Map to Object for JSON response
-  res.json(Object.fromEntries(userWallets));
+  res.json({
+    wallets: Object.fromEntries(userWallets),
+    stats: { totalVolume, totalProfit, activeBets: globalPool, isMaintenanceMode }
+  });
+});
+
+// ADMIN ENDPOINT: Toggle Maintenance Mode
+app.post('/admin/toggle-maintenance', (req, res) => {
+  const { secret, enabled } = req.body;
+  if (secret !== ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+
+  const wasMaintenance = isMaintenanceMode;
+  isMaintenanceMode = enabled;
+
+  if (wasMaintenance && !isMaintenanceMode) {
+    console.log("Maintenance mode deactivated. Resuming game loop...");
+    clearTimeout(gameLoopTimeout);
+    runGameLoop();
+  }
+
+  res.json({ success: true, isMaintenanceMode });
 });
 
 // Global Game State
 let currentBalls: number[] = [];
 let globalPool = 0;
+let totalVolume = 0;
+let totalProfit = 0;
+let isMaintenanceMode = false;
+let gameLoopTimeout: any;
 let activePlayers = 0;
 let currentGameId = `WB-${Math.floor(100000 + Math.random() * 900000)}`;
 let winningHistory: any[] = [];
-const userWallets = loadWallets(); // userId -> balance
 const socketMapping = new Map<string, string>(); // userId -> socketId
 const playerBoards = new Map<string, number[]>(); // Map of userId to their selected board IDs
 
@@ -142,6 +228,12 @@ let isGameOver = false;
 
 // Global interval for drawing balls
 const runGameLoop = () => {
+  // Only suspend the loop if maintenance is enabled and we are NOT in the middle of an active round
+  if (isMaintenanceMode && currentBalls.length === 0 && globalPool === 0) {
+    console.log("Game loop suspended: Maintenance Mode is active and system is idle.");
+    return;
+  }
+
   if (currentBalls.length < 75 && !isGameOver) {
     const ball = Math.floor(Math.random() * 75) + 1;
     if (!currentBalls.includes(ball)) {
@@ -170,9 +262,15 @@ const runGameLoop = () => {
       if (winnersThisRound.length > 0) {
         isGameOver = true;
         const totalPayout = globalPool * 0.8;
+        const profitShare = (globalPool - totalPayout);
+        
+        totalProfit += profitShare;
+        // Persist profit to DB
+        GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalProfit: profitShare } }, { upsert: true }).exec();
+
         const splitPayout = totalPayout / winnersThisRound.length;
 
-        winnersThisRound.forEach(w => {
+        winnersThisRound.forEach(async (w) => {
           const winnerInfo = {
             ...w,
             payout: splitPayout,
@@ -181,16 +279,15 @@ const runGameLoop = () => {
           };
 
           winningHistory.unshift(winnerInfo);
-          const currentBal = userWallets.get(w.userId) || 0;
-          const newBal = currentBal + splitPayout;
-          userWallets.set(w.userId, newBal);
+          
+          const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
+          if (user) userWallets.set(w.userId, user.balance);
           
           const sId = socketMapping.get(w.userId);
-          if (sId) io.to(sId).emit('wallet:update', newBal);
+          if (sId && user) io.to(sId).emit('wallet:update', user.balance);
           io.emit('game:winner', winnerInfo);
         });
 
-        saveWallets();
         if (winningHistory.length > 10) winningHistory.splice(10);
         io.emit('game:win_history', winningHistory);
       }
@@ -199,11 +296,11 @@ const runGameLoop = () => {
 
   if (isGameOver || currentBalls.length >= 75) {
     console.log("Game ending, scheduled reset in 20 seconds...");
-    setTimeout(resetGame, 20000); // Give players 20 seconds to celebrate
+    gameLoopTimeout = setTimeout(resetGame, 20000); // Give players 20 seconds to celebrate
     return; // Exit the loop
   }
 
-  setTimeout(runGameLoop, 5000);
+  gameLoopTimeout = setTimeout(runGameLoop, 5000);
 };
 
 const resetGame = () => {
@@ -218,7 +315,9 @@ const resetGame = () => {
 };
 
 // Start the first game
-runGameLoop();
+syncCache().then(() => {
+  runGameLoop();
+});
 
 // Socket.io Logic
 io.on('connection', (socket) => {
@@ -242,13 +341,23 @@ io.on('connection', (socket) => {
   console.log(`Authenticated as: ${userId}`);
   socketMapping.set(userId, socket.id);
 
-  // Initialize Wallet for new users (Default 1000 ETB)
-  if (!userWallets.has(userId)) {
-    userWallets.set(userId, 1000);
-    saveWallets();
-  }
+  // Fetch or Create User in DB
+  User.findOne({ userId }).then(async (user: any) => {
+    if (!user) {
+      const newUser = await User.create({ userId, balance: 1000, isVerified });
+      userWallets.set(userId, newUser.balance);
+      socket.emit('wallet:update', newUser.balance);
+    } else {
+      // Update verification status if it changed
+      if (isVerified && !user.isVerified) {
+        await User.updateOne({ userId }, { isVerified: true });
+      }
+      userWallets.set(userId, user.balance);
+      socket.emit('wallet:update', user.balance);
+    }
+  });
+  
   // Sync balance with client immediately
-  socket.emit('wallet:update', userWallets.get(userId));
   
   activePlayers++;
   broadcastPoolUpdate();
@@ -263,7 +372,12 @@ io.on('connection', (socket) => {
   socket.emit('game:win_history', winningHistory);
 
   // Handle Betting/Joining Pool
-  socket.on('game:bet', (data: { stake: number; boardIds: number[] }) => {
+  socket.on('game:bet', async (data: { stake: number; boardIds: number[] }) => {
+    if (isMaintenanceMode) {
+      socket.emit('message', 'The game is currently under maintenance. No new bets are being accepted.');
+      return;
+    }
+
     const currentBalance = userWallets.get(userId) || 0;
 
     // SECURITY: Ensure user is verified before accepting bets
@@ -284,13 +398,18 @@ io.on('connection', (socket) => {
     }
 
     // Deduct from wallet
-    const newBalance = currentBalance - data.stake;
-    userWallets.set(userId, newBalance);
-    saveWallets();
-    socket.emit('wallet:update', newBalance);
+    const user = await User.findOneAndUpdate({ userId }, { $inc: { balance: -data.stake } }, { new: true });
+    if (user) {
+      userWallets.set(userId, user.balance);
+      socket.emit('wallet:update', user.balance);
+    }
 
     playerBoards.set(userId, data.boardIds);
     globalPool += data.stake;
+    totalVolume += data.stake;
+    // Persist volume to DB
+    GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: data.stake } }, { upsert: true }).exec();
+
     console.log(`Bet received from ${userId}: ${data.stake} ETB. New Pool: ${globalPool}`);
     broadcastPoolUpdate();
   });
@@ -307,6 +426,14 @@ io.on('connection', (socket) => {
     socketMapping.delete(userId);
     activePlayers = Math.max(0, activePlayers - 1);
     broadcastPoolUpdate();
+  });
+});
+
+// Handle Graceful Shutdown for Render
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    mongoose.connection.close();
   });
 });
 
