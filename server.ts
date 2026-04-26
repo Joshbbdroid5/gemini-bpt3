@@ -6,7 +6,7 @@ import cors from 'cors';
 import crypto from 'crypto';
 import { generateBoard, checkWin } from './src/logic';
 import fs from 'fs';
-import mongoose from 'mongoose';
+import mongoose, { Error as MongooseError } from 'mongoose';
 
 dotenv.config();
 
@@ -138,28 +138,35 @@ app.post('/admin/update-wallet', async (req, res) => {
     return res.status(400).json({ error: 'Invalid data' });
   }
 
-  const user = await User.findOneAndUpdate(
-    { userId },
-    { $inc: { balance: amount } },
-    { upsert: true, new: true }
-  );
-  
-  if (user) userWallets.set(userId, user.balance);
+  try {
+    const user = await User.findOneAndUpdate(
+      { userId },
+      { $inc: { balance: amount } },
+      { upsert: true, new: true, runValidators: true }
+    );
+    
+    if (user) userWallets.set(userId, user.balance);
 
-  // Notify the user via Socket if they are currently connected
-  const socketId = socketMapping.get(userId);
-  if (socketId && user) {
-    io.to(socketId).emit('wallet:update', user.balance);
+    // Notify the user via Socket if they are currently connected
+    const socketId = socketMapping.get(userId);
+    if (socketId && user) {
+      io.to(socketId).emit('wallet:update', user.balance);
+    }
+
+    // Log the top-up transaction
+    await TopUpHistory.create({
+      userId,
+      amount,
+      adminSecretUsed: secret,
+      timestamp: new Date()
+    });
+    res.json({ success: true, newBalance: user?.balance });
+  } catch (err) {
+    if (err instanceof MongooseError) {
+      return res.status(400).json({ error: 'Database operation failed', details: err.message });
+    }
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  // Log the top-up transaction
-  await TopUpHistory.create({
-    userId,
-    amount,
-    adminSecretUsed: secret,
-    timestamp: new Date()
-  });
-  res.json({ success: true, newBalance: user.balance });
 });
 
 // ADMIN ENDPOINT: Fetch all wallets
