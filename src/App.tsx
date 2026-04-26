@@ -51,6 +51,10 @@ export default function App() {
 
   // Handle Socket Connection
   useEffect(() => {
+    // Wake up the backend (Render cold start mitigation)
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+    fetch(`${backendUrl}/health`).catch(() => {}); // Simple poke, ignore errors
+
     const handleStatus = (status: { isVerified: boolean }) => {
       setIsVerified(status.isVerified);
     };
@@ -60,11 +64,17 @@ export default function App() {
     const handleWinHistory = (history: any[]) => setWinningHistory(history);
     const handleInit = (data: any) => setLiveStats(prev => ({ ...prev, gameId: data.gameId }));
 
+    const handleConnectError = (err: Error) => {
+      console.error("Socket connection error:", err);
+      setConnectionError(true);
+    };
+
     socket.on('user:status', handleStatus);
     socket.on(socketEvents.WALLET_UPDATE, handleWallet);
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on('game:init', handleInit);
+    socket.on('connect_error', handleConnectError);
 
     // Set a timeout to catch connection failures
     const timeoutId = setTimeout(() => {
@@ -81,6 +91,7 @@ export default function App() {
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
       socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
       socket.off('game:init', handleInit);
+      socket.off('connect_error', handleConnectError);
       clearTimeout(timeoutId);
     };
 

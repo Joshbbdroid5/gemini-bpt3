@@ -16,9 +16,10 @@ export default function AdminDashboard({ onBack }: Props) {
   const [adjustmentValues, setAdjustmentValues] = useState<Record<string, string>>({});
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
   const fetchWallets = async () => {
     setLoading(true);
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : '');
     try {
       const response = await fetch(`${backendUrl}/admin/wallets`, {
         method: 'POST',
@@ -44,7 +45,6 @@ export default function AdminDashboard({ onBack }: Props) {
     if (isNaN(amount) || amount === 0) return;
     
     setIsUpdating(userId);
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : '');
     
     try {
       const response = await fetch(`${backendUrl}/admin/update-wallet`, {
@@ -72,7 +72,6 @@ export default function AdminDashboard({ onBack }: Props) {
     const nextState = !stats.isMaintenanceMode;
     if (!confirm(`Are you sure you want to ${nextState ? 'ENABLE' : 'DISABLE'} maintenance mode?`)) return;
 
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : '');
     try {
       const response = await fetch(`${backendUrl}/admin/toggle-maintenance`, {
         method: 'POST',
