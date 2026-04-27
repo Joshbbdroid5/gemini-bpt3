@@ -15,6 +15,7 @@ This application is built with **React**, **Vite**, and **Tailwind CSS**. It is 
     *   **Output Directory**: `dist`
 4.  **Environment Variables**:
     *   If you plan to use AI features or the Gemini API, add `GEMINI_API_KEY` to your Vercel Environment Variables in the project settings.
+    *   Add `TELEGRAM_BOT_TOKEN` with your token from @BotFather to the Vercel Environment Variables.
 5.  **Deploy**: Click "Deploy".
 
 ## Features
