@@ -29,8 +29,8 @@ app.use(cors()); // Enable CORS for Express routes as well
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8668239467:AAEQxsaN9ePOZz-vJHibN2ayPtIzc8r8QOY';
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'JoshLomiBingo_Admin_2026#';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo';
 
 // MongoDB Connection

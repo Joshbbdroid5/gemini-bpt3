@@ -3,10 +3,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8668239467:AAEQxsaN9ePOZz-vJHibN2ayPtIzc8r8QOY';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // 1307241885
 const BACKEND_URL = process.env.VITE_BACKEND_URL || 'http://localhost:3001';
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'JoshLomiBingo_Admin_2026#';
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
 /**
  * Helper to safely notify a user. 
