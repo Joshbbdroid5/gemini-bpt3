@@ -37,7 +37,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
         className="text-center mb-12"
       >
         <h1 className="text-5xl font-black italic tracking-tighter uppercase text-white mb-2 drop-shadow-lg">
-          Western <span className="text-yellow-400">Bingo</span>
+          Lomi <span className="text-yellow-400">Bingo</span>
         </h1>
         <p className="text-indigo-200 text-xs font-black uppercase tracking-[0.3em]">The Premium Live Experience</p>
       </motion.div>

@@ -12,12 +12,23 @@ if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
 const bot = new Telegraf(BOT_TOKEN);
 
+// Simple in-memory storage for registration status (Use DB for production)
+const registeredUsers = new Set<number>();
+
 // 1. Handle user clicking "Top Up" in the WebApp
 bot.start(async (ctx) => {
   const startPayload = (ctx as any).startPayload;
 
   if (!startPayload || !startPayload.startsWith('topup_')) {
-    return ctx.reply("Welcome to Western Bingo! Please use the WebApp to manage your wallet.");
+    return ctx.reply(
+      "Welcome to Lomi Bingo! 🍋\nSelect an option from the menu below:",
+      Markup.inlineKeyboard([
+        [Markup.button.callback('📝 Register', 'register'), Markup.button.callback('🎮 Play', 'play')],
+        [Markup.button.callback('💳 Deposit', 'deposit'), Markup.button.callback('💸 Withdraw', 'withdraw')],
+        [Markup.button.callback('ℹ️ Instruction', 'show_rules'), Markup.button.callback('🤝 Invite', 'invite')],
+        [Markup.button.callback('📞 Contact Support', 'help_support')]
+      ])
+    );
   }
 
   // Parse payload: topup_100_guest_1234
@@ -53,6 +64,111 @@ bot.start(async (ctx) => {
   }
 });
 
+// --- 1st Button: Register ---
+bot.action('register', (ctx) => {
+  return ctx.reply(
+    "To register, please confirm your phone number by clicking the button below.",
+    Markup.keyboard([
+      [Markup.button.contactRequest('📲 Confirm My Phone Number')]
+    ]).resize().oneTime()
+  );
+});
+
+// Handle Phone Number Sharing
+bot.on('contact', async (ctx) => {
+  const userId = ctx.from.id;
+  const phone = ctx.message.contact.phone_number;
+  
+  registeredUsers.add(userId);
+  
+  // In a real app, you would send this to your backend/DB here
+  await ctx.reply(`✅ Thank you! Registered with: ${phone}`, Markup.removeKeyboard());
+  await ctx.reply("You can now play Lomi Bingo!", Markup.inlineKeyboard([
+    [Markup.button.callback('🎮 Play Now', 'play')]
+  ]));
+});
+
+// --- 2nd Button: Play ---
+bot.action('play', (ctx) => {
+  if (!registeredUsers.has(ctx.from.id)) {
+    return ctx.reply("⚠️ You must register first before playing.", Markup.inlineKeyboard([
+      [Markup.button.callback('📝 Register Now', 'register')]
+    ]));
+  }
+  
+  return ctx.reply("Good luck! 🎮", Markup.inlineKeyboard([
+    [Markup.button.webApp('Launch Lomi Bingo', BACKEND_URL)]
+  ]));
+});
+
+// --- 3rd Button: Deposit ---
+bot.action('deposit', (ctx) => {
+  return ctx.reply("💰 Enter the amount you wish to deposit (Minimum 10 ETB):", {
+    reply_markup: { force_reply: true }
+  });
+});
+
+// --- 4th Button: Withdraw ---
+bot.action('withdraw', (ctx) => {
+  return ctx.reply("💸 Enter the amount you wish to withdraw (Minimum 50 ETB):", {
+    reply_markup: { force_reply: true }
+  });
+});
+
+// Handle Inputs for Deposit/Withdraw
+bot.on('text', async (ctx) => {
+  const text = ctx.message.text;
+  const amount = parseInt(text);
+  const isReply = ctx.message.reply_to_message;
+
+  if (isReply && 'text' in isReply) {
+    if (isReply.text.includes("deposit")) {
+      if (isNaN(amount) || amount < 10) return ctx.reply("❌ Invalid amount. Minimum deposit is 10 ETB.");
+      return ctx.reply(
+        `💳 To deposit ${amount} ETB, please send payment to:\n\n` +
+        `Telebirr: 0912345678 (Lomi Bingo)\n\n` +
+        `After payment, please send a screenshot to @your_admin_username`
+      );
+    }
+    
+    if (isReply.text.includes("withdraw")) {
+      if (isNaN(amount) || amount < 50) return ctx.reply("❌ Invalid amount. Minimum withdrawal is 50 ETB.");
+      return ctx.reply(`✅ Withdrawal request for ${amount} ETB received. Our team will process it within 24 hours.`);
+    }
+  }
+});
+
+// --- 6th Button: Contact Support ---
+bot.action('help_support', async (ctx) => {
+  await ctx.answerCbQuery(); // Acknowledge the button press
+  return ctx.reply(
+    "📞 Questions or Comments?\n\n" +
+    "Join our community: @LomiBingoGroup\n" +
+    "Direct Support: @your_admin_username\n" +
+    "Email: support@lomibingo.com"
+  );
+});
+
+// --- 7th Button: Instruction ---
+bot.action('show_rules', (ctx) => {
+  return ctx.reply(
+    "📜 *BINGO RULES*\n\n" +
+    "1. Choose your stake and select your boards.\n" +
+    "2. Numbers are drawn every 5 seconds.\n" +
+    "3. First player to complete a Row, Column, Diagonal, or 4 Corners wins!\n" +
+    "4. Winner takes 80% of the total game pool.",
+    { parse_mode: 'Markdown' }
+  );
+});
+
+// --- 8th Button: Invite ---
+bot.action('invite', (ctx) => {
+  const inviteLink = `https://t.me/share/url?url=https://t.me/${ctx.botInfo.username}?start=ref_${ctx.from.id}&text=Join me on Lomi Bingo and win big! 🍋`;
+  return ctx.reply("Invite your friends and earn bonuses!", Markup.inlineKeyboard([
+    [Markup.button.url('📤 Share Invite Link', inviteLink)]
+  ]));
+});
+
 // 2. Handle Admin Approval
 bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
   const amount = parseInt(ctx.match[1]);
@@ -71,7 +187,7 @@ bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
       // Try to notify the user if they have a chat with the bot
       // Note: This requires the userId to be their Telegram Chat ID
       try {
-        await bot.telegram.sendMessage(userId, `🎊 *Payment Approved!*\nYour balance has been updated with ${amount} ETB. Good luck!`, { parse_mode: 'Markdown' });
+        await bot.telegram.sendMessage(parseInt(userId), `🎊 *Payment Approved!*\nYour balance has been updated with ${amount} ETB. Good luck!`, { parse_mode: 'Markdown' });
       } catch (e) {
         console.log("Could not notify user via bot (maybe not started).");
       }
@@ -89,7 +205,7 @@ bot.action(/reject_(.+)/, async (ctx) => {
   await ctx.editMessageText(`❌ *Rejected* top-up for \`${userId}\`.`, { parse_mode: 'Markdown' });
   
   try {
-    await bot.telegram.sendMessage(userId, `❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.`, { parse_mode: 'Markdown' });
+    await bot.telegram.sendMessage(parseInt(userId), `❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.`, { parse_mode: 'Markdown' });
   } catch (e) {}
 });
 

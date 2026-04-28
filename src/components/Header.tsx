@@ -10,8 +10,8 @@ export default function Header({ onShowRules, onShowHistory }: Props) {
   return (
     <header className="flex items-center justify-between p-4 sticky top-0 bg-transparent z-50">
       <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-black border border-white/20 flex items-center justify-center text-white font-black rounded-lg shadow-lg">W</div>
-        <h1 className="text-sm font-black tracking-tighter text-white uppercase italic">Western Bingo</h1>
+        <div className="w-8 h-8 bg-black border border-white/20 flex items-center justify-center text-white font-black rounded-lg shadow-lg">L</div>
+        <h1 className="text-sm font-black tracking-tighter text-white uppercase italic">Lomi Bingo</h1>
       </div>
       
       <div className="flex items-center gap-2">

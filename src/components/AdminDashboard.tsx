@@ -225,11 +225,13 @@ export default function AdminDashboard({ onBack }: Props) {
                   onClick={() => handleUpdateBalance(id, -Math.abs(Number(adjustmentValues[id])))}
                   disabled={isUpdating === id || !adjustmentValues[id]}
                   className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 disabled:opacity-30"
+                  aria-label="Decrease Balance"
                 ><Minus size={14} /></button>
                 <button 
                   onClick={() => handleUpdateBalance(id, Math.abs(Number(adjustmentValues[id])))}
                   disabled={isUpdating === id || !adjustmentValues[id]}
                   className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 disabled:opacity-30"
+                  aria-label="Increase Balance"
                 ><Plus size={14} /></button>
               </div>
             </div>

@@ -376,7 +376,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       </AnimatePresence>
 
       <div className="text-center py-1 text-[8px] font-bold text-gray-500 uppercase tracking-widest bg-gray-950/20">
-         @westernbingo_bot
+         @lomibingo_bot
       </div>
     </div>
   );

@@ -176,7 +176,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-indigo-100 selection:text-indigo-900 overflow-hidden">
+    <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-indigo-100 selection:text-indigo-900 overflow-hidden relative bg-[#1a1b2e] before:content-[''] before:absolute before:inset-0 before:bg-[url('https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920')] before:bg-cover before:bg-center before:opacity-15 before:pointer-events-none">
       <Header 
         onShowRules={() => setShowRules(true)} 
         onShowHistory={() => setPhase('history')}

@@ -208,7 +208,7 @@ let totalProfit = 0;
 let isMaintenanceMode = false;
 let gameLoopTimeout: any;
 let activePlayers = 0;
-let currentGameId = `WB-${Math.floor(100000 + Math.random() * 900000)}`;
+let currentGameId = `LB-${Math.floor(100000 + Math.random() * 900000)}`;
 let winningHistory: any[] = [];
 const socketMapping = new Map<string, string>(); // userId -> socketId
 const playerBoards = new Map<string, number[]>(); // Map of userId to their selected board IDs
@@ -315,7 +315,7 @@ const resetGame = () => {
   globalPool = 0;
   playerBoards.clear();
   isGameOver = false;
-  currentGameId = `WB-${Math.floor(100000 + Math.random() * 900000)}`;
+  currentGameId = `LB-${Math.floor(100000 + Math.random() * 900000)}`;
   io.emit('game:reset');
   broadcastPoolUpdate();
   runGameLoop(); // Restart the loop

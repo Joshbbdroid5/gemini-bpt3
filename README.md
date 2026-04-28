@@ -1,6 +1,6 @@
-# Western Bingo - Vercel Deployment Guide
+# Lomi Bingo - Vercel Deployment Guide
 
-This application is built with **React**, **Vite**, and **Tailwind CSS**. It is ready for deployment on Vercel.
+This application is built with **React**, **Vite**, and **Tailwind CSS**. It is themed for the Lomi Bingo experience.
 
 ## Quick Start (Deploying to Vercel)
 
@@ -18,7 +18,7 @@ This application is built with **React**, **Vite**, and **Tailwind CSS**. It is 
 5.  **Deploy**: Click "Deploy".
 
 ## Features
-- Fully responsive Western-themed Bingo.
+- Fully responsive Lemon-themed Bingo.
 - 600 unique, deterministic boards.
 - Live draw system with win detection.
 - Game history log (saved per session).
