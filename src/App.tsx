@@ -52,8 +52,8 @@ export default function App() {
   // Handle Socket Connection
   useEffect(() => {
     // Wake up the backend (Render cold start mitigation)
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
-    fetch(`${backendUrl}/health`).catch(() => {}); // Simple poke, ignore errors
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'; // Ensure this is your Render backend URL
+    fetch(`${backendUrl}/health`).catch((e) => console.error("Backend health check failed:", e)); // Simple poke, added error logging
 
     const handleStatus = (status: { isVerified: boolean }) => {
       setIsVerified(status.isVerified);

@@ -18,7 +18,7 @@ const io = new SocketIOServer(server, {
   cors: {
     // CRITICAL: Prevent other sites from connecting to your socket
     origin: process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
-      ? [process.env.FRONTEND_URL.replace(/\/$/, "")] // Remove trailing slash if present
+      ? process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, "")) // Support multiple origins
       : "*",
     methods: ["GET", "POST"],
     credentials: true
@@ -29,8 +29,8 @@ app.use(cors()); // Enable CORS for Express routes as well
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'your-super-secret-key';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8668239467:AAEQxsaN9ePOZz-vJHibN2ayPtIzc8r8QOY';
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'JoshLomiBingo_Admin_2026#';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo';
 
 // MongoDB Connection

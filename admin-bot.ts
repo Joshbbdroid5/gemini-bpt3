@@ -3,10 +3,32 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // Your personal Telegram ID
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8668239467:AAEQxsaN9ePOZz-vJHibN2ayPtIzc8r8QOY';
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // 1307241885
 const BACKEND_URL = process.env.VITE_BACKEND_URL || 'http://localhost:3001';
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'your-super-secret-key';
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'JoshLomiBingo_Admin_2026#';
+
+/**
+ * Helper to safely notify a user. 
+ * Telegram Chat IDs are numbers. Guest IDs (e.g., 'guest_1234') cannot receive bot messages.
+ */
+async function notifyUser(userId: string, message: string) {
+  const chatId = parseInt(userId);
+  if (!isNaN(chatId)) { // Ensure it's a valid number
+    try {
+      await bot.telegram.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    } catch (e) {
+      // Log specific errors for better debugging
+      if (e instanceof Error) {
+        console.error(`Could not notify user ${chatId} (Telegram ID): ${e.message}`);
+      } else {
+        console.error(`Could not notify user ${chatId} (Telegram ID):`, e);
+      }
+    }
+  } else {
+    console.warn(`Attempted to notify non-numeric userId: ${userId}. Skipping notification.`);
+  }
+}
 
 if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
@@ -184,13 +206,10 @@ bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
     if (response.ok) {
       await ctx.editMessageText(`✅ *Approved!*\nCredited ${amount} ETB to \`${userId}\`.`, { parse_mode: 'Markdown' });
       
-      // Try to notify the user if they have a chat with the bot
-      // Note: This requires the userId to be their Telegram Chat ID
-      try {
-        await bot.telegram.sendMessage(parseInt(userId), `🎊 *Payment Approved!*\nYour balance has been updated with ${amount} ETB. Good luck!`, { parse_mode: 'Markdown' });
-      } catch (e) {
-        console.log("Could not notify user via bot (maybe not started).");
-      }
+      await notifyUser(
+        userId, 
+        `🎊 *Payment Approved!*\nYour balance has been updated with ${amount} ETB. Good luck!`
+      );
     } else {
       await ctx.reply("❌ Error: Could not connect to game server API.");
     }
@@ -204,9 +223,10 @@ bot.action(/reject_(.+)/, async (ctx) => {
   const userId = ctx.match[1];
   await ctx.editMessageText(`❌ *Rejected* top-up for \`${userId}\`.`, { parse_mode: 'Markdown' });
   
-  try {
-    await bot.telegram.sendMessage(parseInt(userId), `❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.`, { parse_mode: 'Markdown' });
-  } catch (e) {}
+  await notifyUser(
+    userId, 
+    `❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.`
+  );
 });
 
 bot.launch();
