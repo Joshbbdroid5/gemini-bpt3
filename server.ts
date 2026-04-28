@@ -169,6 +169,43 @@ app.post('/admin/update-wallet', async (req, res) => {
   }
 });
 
+// ADMIN ENDPOINT: Mark user as verified (called by bot)
+app.post('/admin/verify-user', async (req, res) => {
+  const { userId, phone, secret } = req.body;
+
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const user = await User.findOneAndUpdate(
+      { userId },
+      { isVerified: true, phone }, // Assuming you might want to add a phone field to User schema
+      { upsert: true, new: true }
+    );
+
+    // Notify connected socket that they are now verified
+    const socketId = socketMapping.get(userId);
+    if (socketId) {
+      io.to(socketId).emit('user:status', { isVerified: true });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ADMIN ENDPOINT: Check user status
+app.get('/admin/check-user', async (req, res) => {
+  const { userId, secret } = req.query;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  const user = await User.findOne({ userId: userId as string });
+  res.json({ 
+    exists: !!user, 
+    isVerified: user?.isVerified || false 
+  });
+});
+
 // ADMIN ENDPOINT: Fetch all wallets
 app.post('/admin/wallets', (req, res) => {
   const { secret } = req.body;

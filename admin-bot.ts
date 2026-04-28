@@ -34,9 +34,6 @@ if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Simple in-memory storage for registration status (Use DB for production)
-const registeredUsers = new Set<number>();
-
 // 1. Handle user clicking "Top Up" in the WebApp
 bot.start(async (ctx) => {
   const startPayload = (ctx as any).startPayload;
@@ -101,18 +98,37 @@ bot.on('contact', async (ctx) => {
   const userId = ctx.from.id;
   const phone = ctx.message.contact.phone_number;
   
-  registeredUsers.add(userId);
-  
-  // In a real app, you would send this to your backend/DB here
-  await ctx.reply(`✅ Thank you! Registered with: ${phone}`, Markup.removeKeyboard());
-  await ctx.reply("You can now play Lomi Bingo!", Markup.inlineKeyboard([
+  try {
+    const response = await fetch(`${BACKEND_URL}/admin/verify-user`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: userId.toString(), phone, secret: ADMIN_SECRET })
+    });
+
+    if (!response.ok) throw new Error("Backend failed to verify");
+
+    await ctx.reply(`✅ Thank you! Registered with: ${phone}`, Markup.removeKeyboard());
+  } catch (err) {
+    console.error("Verification error:", err);
+    return ctx.reply("❌ Sorry, there was an error saving your registration. Please try again later.");
+  }
+
+  return ctx.reply("You can now play Lomi Bingo!", Markup.inlineKeyboard([
     [Markup.button.callback('🎮 Play Now', 'play')]
   ]));
 });
 
 // --- 2nd Button: Play ---
-bot.action('play', (ctx) => {
-  if (!registeredUsers.has(ctx.from.id)) {
+
+// --- 2nd Button: Play ---
+bot.action('play', async (ctx) => {
+  const userId = ctx.from.id.toString();
+  
+  // Check registration status from backend
+  const response = await fetch(`${BACKEND_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
+  const data = await response.json();
+
+  if (!data.isVerified) {
     return ctx.reply("⚠️ You must register first before playing.", Markup.inlineKeyboard([
       [Markup.button.callback('📝 Register Now', 'register')]
     ]));
