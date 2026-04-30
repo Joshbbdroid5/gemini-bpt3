@@ -92,15 +92,19 @@ const userWallets = new Map<string, number>();
 
 // Sync memory cache with DB on startup
 async function syncCache() {
-  const users = await User.find({});
-  users.forEach(u => userWallets.set(u.userId, u.balance));
-  console.log('Wallet cache synced from DB');
+  try {
+    const users = await User.find({});
+    users.forEach(u => userWallets.set(u.userId, u.balance));
+    console.log(`Wallet cache synced: ${users.length} users loaded.`);
 
-  // Sync Global Stats
-  const stats = await GlobalStats.findOne({ key: 'main_stats' });
-  if (stats) {
-    totalVolume = stats.totalVolume;
-    totalProfit = stats.totalProfit;
+    // Sync Global Stats
+    const stats = await GlobalStats.findOne({ key: 'main_stats' });
+    if (stats) {
+      totalVolume = stats.totalVolume;
+      totalProfit = stats.totalProfit;
+    }
+  } catch (err) {
+    console.error('Failed to sync cache from MongoDB:', err);
   }
 }
 
@@ -498,11 +502,13 @@ process.on('SIGTERM', () => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+const HOST = '0.0.0.0';
+server.listen(Number(PORT), HOST, () => {
+  console.log(`Server listening on http://${HOST}:${PORT}`);
   if (process.env.NODE_ENV === 'production') {
     if (!process.env.TELEGRAM_BOT_TOKEN) console.warn("WARNING: TELEGRAM_BOT_TOKEN is not set!");
     if (!process.env.FRONTEND_URL) console.warn("WARNING: FRONTEND_URL is not set! CORS might block connections.");
-    console.log(`CORS allowed origin: ${process.env.FRONTEND_URL}`);
+    console.log(`Production Mode: Static files serving from /dist`);
+    console.log(`CORS Allowed Origin: ${process.env.FRONTEND_URL}`);
   }
 });
