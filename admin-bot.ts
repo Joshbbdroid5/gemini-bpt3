@@ -5,7 +5,8 @@ dotenv.config();
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // 1307241885
-const BACKEND_URL = process.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const PORT = process.env.PORT || 3001;
+const BACKEND_URL = process.env.VITE_BACKEND_URL || `http://127.0.0.1:${PORT}`;
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
 /**
@@ -105,11 +106,14 @@ bot.on('contact', async (ctx) => {
       body: JSON.stringify({ userId: userId.toString(), phone, secret: ADMIN_SECRET })
     });
 
-    if (!response.ok) throw new Error("Backend failed to verify");
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Backend failed to verify: ${response.status} ${JSON.stringify(errorData)}`);
+    }
 
     await ctx.reply(`✅ Thank you! Registered with: ${phone}`, Markup.removeKeyboard());
   } catch (err) {
-    console.error("Verification error:", err);
+    console.error("❌ Registration error details:", err);
     return ctx.reply("❌ Sorry, there was an error saving your registration. Please try again later.");
   }
 
