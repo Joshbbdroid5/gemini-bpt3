@@ -32,7 +32,7 @@ async function notifyUser(userId: string, message: string) {
 
 if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
-const bot = new Telegraf(BOT_TOKEN);
+export const bot = new Telegraf(BOT_TOKEN);
 
 // 1. Handle user clicking "Top Up" in the WebApp
 bot.start(async (ctx) => {
@@ -244,10 +244,3 @@ bot.action(/reject_(.+)/, async (ctx) => {
     `❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.`
   );
 });
-
-bot.launch();
-console.log("Admin Bot is running and waiting for requests...");
-
-// Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));

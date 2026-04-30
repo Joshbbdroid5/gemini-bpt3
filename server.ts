@@ -6,6 +6,7 @@ import cors from 'cors';
 import crypto from 'crypto';
 import { generateBoard, checkWin } from './src/logic';
 import fs from 'fs';
+import { bot } from './admin-bot';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose, { Error as MongooseError } from 'mongoose';
@@ -372,8 +373,12 @@ const resetGame = () => {
 };
 
 // Start the first game
-syncCache().then(() => {
+syncCache().then(async () => {
   runGameLoop();
+
+  // Launch the Telegram Bot alongside the server
+  bot.launch().catch(err => console.error("Failed to launch Telegram Bot:", err));
+  console.log("Telegram Bot initialized");
 });
 
 // Socket.io Logic
@@ -498,6 +503,7 @@ app.get('*', (req, res) => {
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
   server.close(() => {
+    bot.stop('SIGTERM');
     mongoose.connection.close();
   });
 });
