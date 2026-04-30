@@ -6,11 +6,16 @@ import cors from 'cors';
 import crypto from 'crypto';
 import { generateBoard, checkWin } from './src/logic';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import mongoose, { Error as MongooseError } from 'mongoose';
 
 dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const server = http.createServer(app);
 
 // Configure CORS for Socket.io
@@ -34,6 +39,10 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo';
 
 // MongoDB Connection
+if (process.env.NODE_ENV === 'production' && MONGODB_URI.includes('localhost')) {
+  console.warn('WARNING: MONGODB_URI is pointing to localhost in production. Ensure your environment variables are set on Render.');
+}
+
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
@@ -471,6 +480,14 @@ io.on('connection', (socket) => {
     activePlayers = Math.max(0, activePlayers - 1);
     broadcastPoolUpdate();
   });
+});
+
+// Serve static files from the Vite build directory
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Handle SPA routing: serve index.html for any unknown routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 // Handle Graceful Shutdown for Render
