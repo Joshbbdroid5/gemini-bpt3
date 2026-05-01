@@ -100,6 +100,40 @@ bot.action('register', (ctx) => {
   );
 });
 
+// --- Admin Server Control ---
+bot.command('manage', (ctx) => {
+  if (ctx.from.id.toString() !== ADMIN_CHAT_ID) {
+    return ctx.reply("🚫 Unauthorized access.");
+  }
+  return ctx.reply(
+    "🛠 *Server Management*\n\nToggle Maintenance Mode to start or stop game rounds.",
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('🛑 Stop Game (Maintenance)', 'maint_on')],
+        [Markup.button.callback('🚀 Start Game (Resume)', 'maint_off')]
+      ])
+    }
+  );
+});
+
+bot.action(/maint_(on|off)/, async (ctx) => {
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery("Unauthorized");
+  const enable = ctx.match[1] === 'on';
+  
+  try {
+    const response = await fetch(`${API_URL}/admin/toggle-maintenance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET, enabled: enable })
+    });
+    const data = await response.json();
+    await ctx.editMessageText(`Status: ${data.isMaintenanceMode ? '🛑 Maintenance Mode Active' : '✅ Game Server Running'}`);
+  } catch (err) {
+    await ctx.reply("❌ Error: Could not reach the game server.");
+  }
+});
+
 // Handle Phone Number Sharing
 bot.on('contact', async (ctx) => {
   const userId = ctx.from.id;
