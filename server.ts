@@ -25,7 +25,7 @@ const io = new SocketIOServer(server, {
     // CRITICAL: Prevent other sites from connecting to your socket
     origin: process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
       ? process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, "")) // Support multiple origins
-      : "*",
+      : ["http://localhost:5173", "http://127.0.0.1:5173"], // Specific origins for dev
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -67,11 +67,13 @@ interface IUser {
   userId: string;
   balance: number;
   isVerified: boolean;
+  phone?: string;
 }
 const userSchema = new mongoose.Schema<IUser>({
   userId: { type: String, required: true, unique: true },
   balance: { type: Number, default: 1000 },
-  isVerified: { type: Boolean, default: false }
+  isVerified: { type: Boolean, default: false },
+  phone: { type: String }
 });
 const User = mongoose.model<IUser>('User', userSchema);
 
@@ -176,6 +178,7 @@ app.post('/admin/update-wallet', async (req, res) => {
     });
     res.json({ success: true, newBalance: user?.balance });
   } catch (err) {
+    console.error("Wallet Update Error:", err); // Log the real error
     if (err instanceof MongooseError) {
       return res.status(400).json({ error: 'Database operation failed', details: err.message });
     }
@@ -204,6 +207,7 @@ app.post('/admin/verify-user', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
+    console.error("Verification Route Error:", err); // Log the real error
     res.status(500).json({ error: 'Internal server error' });
   }
 });
