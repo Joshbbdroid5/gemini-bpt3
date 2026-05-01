@@ -53,16 +53,16 @@ console.log('Attempting to connect to MongoDB...');
 mongoose.connect(MONGODB_URI, {
   serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of hanging
 })
-  .then((m) => {
-    console.log(`✅ Connected to MongoDB: ${m.connection.host}`);
+  .then((conn) => {
+    console.log(`✅ Connected to MongoDB: ${conn.connection.host}`);
+    console.log(`📂 Database Name: ${conn.connection.name}`);
   })
   .catch(err => {
-    console.error('❌ MongoDB Connection Error!');
-    console.error(`Error Name: ${err.name}`);
-    console.error(`Error Message: ${err.message}`);
+    console.error('❌ MongoDB Connection Error Details:');
     if (err.message.includes('auth')) {
-      console.error('👉 TIP: Check your username/password. Remember to URL-encode special characters.');
+      console.error('👉 TIP: Authentication failed. Check your password in MONGODB_URI. (URL-encode special characters like @ to %40)');
     }
+    console.error(`Error Message: ${err.message}`);
   });
 
 // TopUpHistory Schema
