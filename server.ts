@@ -39,18 +39,30 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo';
 
+// Debugging: Check for essential environment variables
+if (!ADMIN_SECRET) {
+  console.error('❌ CRITICAL: ADMIN_SECRET is not set in environment variables!');
+}
+
 // MongoDB Connection
 if (process.env.NODE_ENV === 'production' && MONGODB_URI.includes('localhost')) {
   console.warn('WARNING: MONGODB_URI is pointing to localhost in production. Ensure your environment variables are set on Render.');
 }
 
 console.log('Attempting to connect to MongoDB...');
-mongoose.connect(MONGODB_URI)
-  .then(() => {
-    console.log('✅ Connected to MongoDB successfully');
+mongoose.connect(MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of hanging
+})
+  .then((m) => {
+    console.log(`✅ Connected to MongoDB: ${m.connection.host}`);
   })
   .catch(err => {
-    console.error('❌ MongoDB connection error details:', err);
+    console.error('❌ MongoDB Connection Error!');
+    console.error(`Error Name: ${err.name}`);
+    console.error(`Error Message: ${err.message}`);
+    if (err.message.includes('auth')) {
+      console.error('👉 TIP: Check your username/password. Remember to URL-encode special characters.');
+    }
   });
 
 // TopUpHistory Schema
