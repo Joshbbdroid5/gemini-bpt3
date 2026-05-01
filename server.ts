@@ -44,9 +44,14 @@ if (process.env.NODE_ENV === 'production' && MONGODB_URI.includes('localhost')) 
   console.warn('WARNING: MONGODB_URI is pointing to localhost in production. Ensure your environment variables are set on Render.');
 }
 
+console.log('Attempting to connect to MongoDB...');
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .then(() => {
+    console.log('✅ Connected to MongoDB successfully');
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection error details:', err);
+  });
 
 // TopUpHistory Schema
 interface ITopUpHistory {
