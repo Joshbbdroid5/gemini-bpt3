@@ -6,7 +6,13 @@ dotenv.config();
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // 1307241885
 const PORT = process.env.PORT || 3001;
-const BACKEND_URL = process.env.VITE_BACKEND_URL || `http://127.0.0.1:${PORT}`;
+
+// For internal requests within the same Render service
+const API_URL = process.env.VITE_API_URL || `http://127.0.0.1:${PORT}`;
+
+// The public URL used to launch the WebApp (Must be HTTPS)
+const FRONTEND_URL = process.env.FRONTEND_URL || process.env.VITE_BACKEND_URL;
+
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
 /**
@@ -100,7 +106,7 @@ bot.on('contact', async (ctx) => {
   const phone = ctx.message.contact.phone_number;
   
   try {
-    const response = await fetch(`${BACKEND_URL}/admin/verify-user`, {
+    const response = await fetch(`${API_URL}/admin/verify-user`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: userId.toString(), phone, secret: ADMIN_SECRET })
@@ -129,7 +135,7 @@ bot.action('play', async (ctx) => {
   const userId = ctx.from.id.toString();
   
   // Check registration status from backend
-  const response = await fetch(`${BACKEND_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
+  const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
   const data = await response.json();
 
   if (!data.isVerified) {
@@ -139,7 +145,7 @@ bot.action('play', async (ctx) => {
   }
   
   return ctx.reply("Good luck! 🎮", Markup.inlineKeyboard([
-    [Markup.button.webApp('Launch Lomi Bingo', BACKEND_URL)]
+    [Markup.button.webApp('Launch Lomi Bingo', FRONTEND_URL as string)]
   ]));
 });
 
@@ -168,7 +174,7 @@ bot.on('text', async (ctx) => {
       if (isNaN(amount) || amount < 10) return ctx.reply("❌ Invalid amount. Minimum deposit is 10 ETB.");
       return ctx.reply(
         `💳 To deposit ${amount} ETB, please send payment to:\n\n` +
-        `Telebirr: 0912345678 (Lomi Bingo)\n\n` +
+        `Telebirr: 0978015131 (Lomi Bingo)\n\n` +
         `After payment, please send a screenshot to @your_admin_username`
       );
     }
@@ -217,7 +223,7 @@ bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
   const userId = ctx.match[2];
 
   try {
-    const response = await fetch(`${BACKEND_URL}/admin/update-wallet`, {
+    const response = await fetch(`${API_URL}/admin/update-wallet`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, amount, secret: ADMIN_SECRET })
