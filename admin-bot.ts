@@ -117,7 +117,11 @@ bot.on('contact', async (ctx) => {
       throw new Error(`Backend failed to verify: ${response.status} ${JSON.stringify(errorData)}`);
     }
 
-    await ctx.reply(`✅ Thank you! Registered with: ${phone}`, Markup.removeKeyboard());
+    // Check if the user was already verified to give appropriate feedback
+    const userData = await response.json(); // Assuming the backend returns user data or status
+    const message = userData.isNewUser ? `✅ Thank you! Registered with: ${phone}` : `✅ Your registration details have been updated to: ${phone}`;
+
+    await ctx.reply(message, Markup.removeKeyboard());
   } catch (err) {
     console.error("❌ Registration error details:", err);
     return ctx.reply("❌ Sorry, there was an error saving your registration. Please try again later.");
@@ -172,16 +176,48 @@ bot.on('text', async (ctx) => {
   if (isReply && 'text' in isReply) {
     if (isReply.text.includes("deposit")) {
       if (isNaN(amount) || amount < 10) return ctx.reply("❌ Invalid amount. Minimum deposit is 10 ETB.");
-      return ctx.reply(
-        `💳 To deposit ${amount} ETB, please send payment to:\n\n` +
-        `Telebirr: 0978015131 (Lomi Bingo)\n\n` +
-        `After payment, please send a screenshot to @your_admin_username`
+      return ctx.replyWithMarkdown(
+        `💳 *DEPOSIT INSTRUCTIONS*\n\n` +
+        `1. Send exactly *${amount} ETB* to our Telebirr account:\n` +
+        `Number: \`0978015131\`\n` +
+        `Name: *Lomi Bingo*\n\n` +
+        `(_Tap the number above to copy it_)\n\n` +
+        `2. After paying, *copy* the Telebirr confirmation SMS and *paste* it here as a reply to this message.`
       );
     }
     
     if (isReply.text.includes("withdraw")) {
       if (isNaN(amount) || amount < 50) return ctx.reply("❌ Invalid amount. Minimum withdrawal is 50 ETB.");
       return ctx.reply(`✅ Withdrawal request for ${amount} ETB received. Our team will process it within 24 hours.`);
+    }
+
+    // Handle the pasted Telebirr confirmation SMS
+    if (isReply.text.includes("DEPOSIT INSTRUCTIONS")) {
+      // Extract amount from instructions message: "1. Send exactly *100 ETB* to..."
+      const amountMatch = isReply.text.match(/\*(\d+) ETB\*/);
+      const amountFromMsg = amountMatch ? amountMatch[1] : '0';
+      const userId = ctx.from.id.toString();
+
+      if (ADMIN_CHAT_ID) {
+        await bot.telegram.sendMessage(
+          ADMIN_CHAT_ID,
+          `🚨 *DEPOSIT VERIFICATION NEEDED*\n\n` +
+          `👤 *User ID:* \`${userId}\`\n` +
+          `💰 *Amount:* ${amountFromMsg} ETB\n` +
+          `🧾 *Telebirr Message:* \n\n${text}\n\n` +
+          `Please verify this transaction ID manually in your Telebirr app.`,
+          { 
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              [
+                Markup.button.callback('✅ Approve', `approve_${amountFromMsg}_${userId}`),
+                Markup.button.callback('❌ Reject', `reject_${userId}`)
+              ]
+            ])
+          }
+        );
+        return ctx.reply("✅ Confirmation received! The admin is now verifying your payment. Your balance will be updated shortly.");
+      }
     }
   }
 });

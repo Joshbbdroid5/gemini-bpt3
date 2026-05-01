@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Play, Eye, Timer, Trophy, History, Copy, Check, Wallet } from 'lucide-react';
 import { Language } from '../types';

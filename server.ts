@@ -62,6 +62,9 @@ mongoose.connect(MONGODB_URI, {
     if (err.message.includes('auth')) {
       console.error('👉 TIP: Authentication failed. Check your password in MONGODB_URI. (URL-encode special characters like @ to %40)');
     }
+    if (err.message.includes('port number') && MONGODB_URI.startsWith('mongodb+srv')) {
+      console.error('👉 TIP: SRV connection strings (mongodb+srv://) must not include a port number. Remove ":27017" or any other port from your URI string in Render.');
+    }
     console.error(`Error Message: ${err.message}`);
   });
 
@@ -113,12 +116,12 @@ const userWallets = new Map<string, number>();
 // Sync memory cache with DB on startup
 async function syncCache() {
   try {
-    const users = await User.find({});
+    const users = await User.find({}).lean(); // lean() makes queries much faster for read-only sync
     users.forEach(u => userWallets.set(u.userId, u.balance));
     console.log(`Wallet cache synced: ${users.length} users loaded.`);
 
     // Sync Global Stats
-    const stats = await GlobalStats.findOne({ key: 'main_stats' });
+       const stats = await GlobalStats.findOne({ key: 'main_stats' }).lean();
     if (stats) {
       totalVolume = stats.totalVolume;
       totalProfit = stats.totalProfit;

@@ -30,6 +30,7 @@ export default function App() {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [connectionError, setConnectionError] = useState(false);
   const [myId, setMyId] = useState<string>('');
+  const [isGameActive, setIsGameActive] = useState(false);
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
   const [liveStats, setLiveStats] = useState({
@@ -62,7 +63,12 @@ export default function App() {
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: any) => setLiveStats(data);
     const handleWinHistory = (history: any[]) => setWinningHistory(history);
-    const handleInit = (data: any) => setLiveStats(prev => ({ ...prev, gameId: data.gameId }));
+    
+    const handleInit = (data: any) => {
+      setLiveStats(prev => ({ ...prev, gameId: data.gameId }));
+      // If there are already balls drawn, the game is active
+      if (data.balls && data.balls.length > 0) setIsGameActive(true);
+    };
 
     const handleConnectError = (err: Error) => {
       console.error("Socket connection error:", err);
@@ -74,6 +80,8 @@ export default function App() {
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on('game:init', handleInit);
+    socket.on('game:ball', () => setIsGameActive(true));
+    socket.on('game:reset', () => setIsGameActive(false));
     socket.on('connect_error', handleConnectError);
 
     // Set a timeout to catch connection failures
@@ -91,6 +99,8 @@ export default function App() {
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
       socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
       socket.off('game:init', handleInit);
+      socket.off('game:ball');
+      socket.off('game:reset');
       socket.off('connect_error', handleConnectError);
       clearTimeout(timeoutId);
     };
@@ -122,6 +132,11 @@ export default function App() {
   const t = translations[language];
 
   const startSelection = (choice: number) => {
+    // Requirement: Check if game is in play before entering selection
+    if (isGameActive) {
+      startWatching();
+      return;
+    }
     setStake(choice);
     setPhase('selection');
   };
@@ -246,8 +261,15 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <LobbyPage 
-                onPlay={() => setPhase('home')} 
+              <LobbyPage
+                onPlay={() => {
+                  // Immediate check from lobby
+                  if (isGameActive) {
+                    startWatching();
+                  } else {
+                    setPhase('home');
+                  }
+                }} 
                 onWatch={startWatching} 
                 stats={liveStats}
                 winningHistory={winningHistory}
@@ -270,6 +292,7 @@ export default function App() {
                 onPlay={startSelection} 
                 language={language} 
                 onLanguageChange={setLanguage} 
+                isGameActive={isGameActive}
               />
             </motion.div>
           )}
