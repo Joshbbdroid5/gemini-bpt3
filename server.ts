@@ -401,8 +401,16 @@ syncCache().then(async () => {
   runGameLoop();
 
   // Launch the Telegram Bot alongside the server
-  bot.launch().catch(err => console.error("Failed to launch Telegram Bot:", err));
-  console.log("Telegram Bot initialized");
+  bot.launch()
+    .then(() => {
+      console.log("Telegram Bot initialized");
+      const adminId = process.env.ADMIN_CHAT_ID;
+      if (adminId) {
+        bot.telegram.sendMessage(adminId, "🚀 *Bot Online*\nThe game server and admin bot have started successfully.", { parse_mode: 'Markdown' })
+          .catch(e => console.error("Failed to send startup message to admin:", e.message));
+      }
+    })
+    .catch(err => console.error("Failed to launch Telegram Bot:", err));
 });
 
 // Socket.io Logic

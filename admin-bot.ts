@@ -39,6 +39,12 @@ async function notifyUser(userId: string, message: string) {
 
 if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
+if (!ADMIN_CHAT_ID) {
+  console.warn("⚠️ WARNING: ADMIN_CHAT_ID is not set. Admin commands will be inaccessible.");
+} else {
+  console.log(`🚀 Admin Bot initialized. Authorized Admin ID: ${ADMIN_CHAT_ID}`);
+}
+
 export const bot = new Telegraf(BOT_TOKEN);
 
 // 1. Handle user clicking "Top Up" in the WebApp
