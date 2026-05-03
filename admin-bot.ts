@@ -116,8 +116,8 @@ bot.command('manage', (ctx) => {
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
-        [Markup.button.callback('🛑 Stop Game (Maintenance)', 'maint_on')],
-        [Markup.button.callback('🚀 Start Game (Resume)', 'maint_off')]
+        [Markup.button.callback('🛑 Stop Game', 'maint_on'), Markup.button.callback('🚀 Start Game', 'maint_off')],
+        [Markup.button.callback('📋 View Pending Deposits', 'view_pending')]
       ])
     }
   );
@@ -137,6 +137,26 @@ bot.action(/maint_(on|off)/, async (ctx) => {
     await ctx.editMessageText(`Status: ${data.isMaintenanceMode ? '🛑 Maintenance Mode Active' : '✅ Game Server Running'}`);
   } catch (err) {
     await ctx.reply("❌ Error: Could not reach the game server.");
+  }
+});
+
+bot.action('view_pending', async (ctx) => {
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery("Unauthorized");
+  try {
+    const response = await fetch(`${API_URL}/admin/pending-deposits?secret=${ADMIN_SECRET}`);
+    const pending = await response.json();
+
+    if (!Array.isArray(pending) || pending.length === 0) {
+      return ctx.reply("✅ No pending deposit requests at the moment.");
+    }
+
+    let msg = "📋 *PENDING DEPOSIT REQUESTS*\n\n";
+    pending.forEach((req: any, index: number) => {
+      msg += `${index + 1}. User: \`${req.userId}\` - *${req.amount} ETB*\n`;
+    });
+    await ctx.reply(msg, { parse_mode: 'Markdown' });
+  } catch (err) {
+    await ctx.reply("❌ Error fetching pending deposits from the server.");
   }
 });
 
@@ -239,6 +259,13 @@ bot.on('text', async (ctx) => {
       const userId = ctx.from.id.toString();
 
       if (ADMIN_CHAT_ID) {
+        // Save to DB as pending via API
+        await fetch(`${API_URL}/admin/add-pending-deposit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, amount: parseInt(amountFromMsg), telebirrSms: text, secret: ADMIN_SECRET })
+        }).catch(err => console.error("Failed to register pending deposit:", err));
+
         await bot.telegram.sendMessage(
           ADMIN_CHAT_ID,
           `🚨 *DEPOSIT VERIFICATION NEEDED*\n\n` +
@@ -323,10 +350,22 @@ bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
 // 3. Handle Admin Rejection
 bot.action(/reject_(.+)/, async (ctx) => {
   const userId = ctx.match[1];
-  await ctx.editMessageText(`❌ *Rejected* top-up for \`${userId}\`.`, { parse_mode: 'Markdown' });
-  
-  await notifyUser(
-    userId, 
-    `❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.`
-  );
+
+  try {
+    // Cleanup server record
+    await fetch(`${API_URL}/admin/reject-deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, secret: ADMIN_SECRET })
+    });
+
+    await ctx.editMessageText(`❌ *Rejected* top-up for \`${userId}\`.`, { parse_mode: 'Markdown' });
+    
+    await notifyUser(
+      userId, 
+      `❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.`
+    );
+  } catch (err) {
+    await ctx.reply("❌ Error notifying server of rejection.");
+  }
 });

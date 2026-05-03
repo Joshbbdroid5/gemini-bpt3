@@ -161,6 +161,30 @@ app.get('/health', (req, res) => {
   });
 });
 
+// ADMIN ENDPOINT: Register a pending deposit
+app.post('/admin/add-pending-deposit', async (req, res) => {
+  const { userId, amount, telebirrSms, secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    await PendingDeposit.create({ userId, amount, telebirrSms });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save pending deposit' });
+  }
+});
+
+// ADMIN ENDPOINT: List all pending deposits
+app.get('/admin/pending-deposits', async (req, res) => {
+  const { secret } = req.query;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const pending = await PendingDeposit.find().sort({ timestamp: -1 });
+    res.json(pending);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch pending deposits' });
+  }
+});
+
 // ADMIN ENDPOINT: Manually update user wallet
 // This is used by your bot/admin tool to add ETB after manual payment
 app.post('/admin/update-wallet', async (req, res) => {
@@ -183,6 +207,9 @@ app.post('/admin/update-wallet', async (req, res) => {
     
     if (user) userWallets.set(userId, user.balance);
 
+    // Remove from pending list upon approval
+    await PendingDeposit.findOneAndDelete({ userId, amount });
+
     // Notify the user via Socket if they are currently connected
     const socketId = socketMapping.get(userId);
     if (socketId && user) {
@@ -203,6 +230,18 @@ app.post('/admin/update-wallet', async (req, res) => {
       return res.status(400).json({ error: 'Database operation failed', details: err.message });
     }
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ADMIN ENDPOINT: Reject a deposit (cleanup)
+app.post('/admin/reject-deposit', async (req, res) => {
+  const { userId, secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    await PendingDeposit.findOneAndDelete({ userId });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reject' });
   }
 });
 
