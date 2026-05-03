@@ -1,9 +1,15 @@
 import { motion } from 'framer-motion';
 import { Language } from '../types';
 import { translations } from '../translations';
+import { Users, Trophy, Wallet, Landmark, DollarSign, MessageCircle } from 'lucide-react';
+
 // isGameActive prop now reflects the current room's live status
 interface Props {
   onPlay: (stake: number) => void;
+  onDeposit: () => void;
+  onWithdraw: () => void;
+  wallet: number; // Added wallet prop
+  allStats: Record<number, any>;
   language: Language;
   onLanguageChange: (lang: Language) => void;
   isGameActive: boolean;
@@ -15,7 +21,7 @@ const LANGUAGES = [
   { id: 'om', label: 'Oromoo', flag: '🇪🇹' }
 ] as const;
 
-export default function Dashboard({ onPlay, language, onLanguageChange, isGameActive }: Props) {
+export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats, language, onLanguageChange, isGameActive }: Props) {
   const t = translations[language];
 
   return (
@@ -37,6 +43,42 @@ export default function Dashboard({ onPlay, language, onLanguageChange, isGameAc
           </button>
         ))}
       </div>
+
+      {/* Wallet Actions */}
+      <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10 mb-6 w-full max-w-xs">
+        <div className="p-2 bg-lime-600 rounded-lg text-white">
+          <DollarSign size={16} />
+        </div>
+        <div className="flex flex-col items-start">
+          <span className="text-[9px] font-black uppercase tracking-widest text-yellow-100 opacity-50">My Balance</span>
+          <span className="text-sm font-bold text-white">{wallet} ETB</span>
+        </div>
+      </div>
+      <div className="flex gap-4 mb-8 w-full max-w-xs">
+        <button 
+          onClick={onDeposit}
+          className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 text-white font-black uppercase text-[10px] tracking-widest transition-all backdrop-blur-md"
+        >
+          <Wallet size={16} className="text-yellow-400" />
+          {t.deposit}
+        </button>
+        <button 
+          onClick={onWithdraw}
+          className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 text-white font-black uppercase text-[10px] tracking-widest transition-all backdrop-blur-md"
+        >
+          <Landmark size={16} className="text-yellow-400" />
+          {t.withdraw}
+        </button>
+      </div>
+
+      {/* Community Link */}
+      <button 
+        onClick={() => window.open('https://t.me/your_channel', '_blank')}
+        className="mb-8 flex items-center gap-2 px-4 py-2 bg-indigo-600/20 text-indigo-300 rounded-full border border-indigo-500/30 text-[9px] font-black uppercase tracking-widest animate-bounce"
+      >
+        <MessageCircle size={14} />
+        Join Official Channel
+      </button>
 
       {/* Game in Progress Badge */}
       {isGameActive && (
@@ -63,16 +105,35 @@ export default function Dashboard({ onPlay, language, onLanguageChange, isGameAc
       </motion.div>
 
       {/* Entry Fee Buttons */}
-      <div className="flex flex-col gap-4 w-full max-w-xs">
+      <div className="flex flex-col gap-6 w-full max-w-xs">
         {[10, 20].map((amount) => (
           <motion.button
             key={amount}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => onPlay(amount)} 
-            className="group relative overflow-hidden bg-white text-indigo-950 py-5 rounded-3xl font-black text-xl italic uppercase tracking-tighter shadow-xl transition-all hover:bg-yellow-400 active:bg-yellow-500"
+            className="group relative overflow-hidden bg-white text-indigo-950 p-6 rounded-[32px] shadow-xl transition-all hover:bg-yellow-400 active:bg-yellow-500 flex flex-col items-start"
           >
-            {amount} ETB
+            <div className="flex justify-between items-center w-full mb-2">
+               <span className="text-2xl font-black italic uppercase tracking-tighter">{amount} ETB</span>
+               {allStats[amount]?.isLive && (
+                 <span className="bg-red-500 text-white text-[8px] px-2 py-0.5 rounded-full animate-pulse font-black uppercase">LIVE</span>
+               )}
+            </div>
+            
+            <div className="flex gap-4">
+              <div className="flex items-center gap-1.5">
+                <Users size={14} className="text-indigo-900/40" />
+                <span className="text-xs font-bold">{allStats[amount]?.players || 0}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Trophy size={14} className="text-yellow-600" />
+                <span className="text-xs font-black italic">
+                  {((allStats[amount]?.pool || 0) * 0.8).toFixed(0)} ETB
+                </span>
+              </div>
+            </div>
+
             {/* Subtle decorative circle */}
             <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
                <div className="w-12 h-12 bg-black rounded-full -mr-6 -mt-6"></div>

@@ -20,7 +20,7 @@ declare global {
 }
 
 export default function App() {
-  const [phase, setPhase] = useState<AppPhase>('lobby');
+  const [phase, setPhase] = useState<AppPhase>('home');
   const [stake, setStake] = useState(10);
   const [wallet, setWallet] = useState(1000);
   const [selectedBoardIds, setSelectedBoardIds] = useState<number[]>([]);
@@ -142,15 +142,19 @@ export default function App() {
 
   const t = translations[language];
 
-  const startSelection = (choice: number) => {
+  const goToRoom = (choice: number) => {
     setStake(choice);
     socket.emit('room:join', choice);
 
-    // Use the isLive status from the specific room's stats
-    if (allRoomStats[choice]?.isLive) {
+    setPhase('lobby');
+  };
+
+  const startSelection = () => {
+    if (currentRoomStats.isLive) {
       startWatching();
+    } else {
+      setPhase('selection');
     }
-    setPhase('selection');
   };
 
   const completeSelection = (ids: number[]) => {
@@ -190,6 +194,26 @@ export default function App() {
       window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=${encodeURIComponent(payload)}`);
     } else {
       alert("This feature is only available in Telegram WebApp.");
+    }
+  };
+
+  const handleDeposit = () => {
+    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
+    if (!botUsername) return alert("Bot username not set.");
+    if (window.Telegram?.WebApp) {
+       window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=deposit`);
+    } else {
+       window.open(`https://t.me/${botUsername}?start=deposit`, '_blank');
+    }
+  };
+
+  const handleWithdraw = () => {
+    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
+    if (!botUsername) return alert("Bot username not set.");
+    if (window.Telegram?.WebApp) {
+       window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=withdraw`);
+    } else {
+       window.open(`https://t.me/${botUsername}?start=withdraw`, '_blank');
     }
   };
 
@@ -294,11 +318,8 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <LobbyPage
-                onPlay={() => {
-                  // onPlay will now always lead to startSelection, which handles the logic
-                  startSelection(stake);
-                }} 
+              <LobbyPage 
+                onPlay={startSelection}
                 onWatch={startWatching} 
                 stats={currentRoomStats}
                 winningHistory={winningHistory}
@@ -318,11 +339,15 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <Dashboard 
-                onPlay={startSelection} 
+              <Dashboard
+                onPlay={goToRoom}
+                onDeposit={handleDeposit}
+                onWithdraw={handleWithdraw}
+                allStats={allRoomStats}
                 language={language} 
                 onLanguageChange={setLanguage}
                 isGameActive={currentRoomStats.isLive} // Pass the room's live status
+                wallet={wallet}
               />
             </motion.div>
           )}

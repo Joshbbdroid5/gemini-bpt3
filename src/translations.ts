@@ -1,6 +1,8 @@
 export const translations = {
   en: {
     back: "Back",
+    deposit: "Deposit",
+    withdraw: "Withdraw",
     selectionStatus: "Selection Status",
     wallet: "Wallet",
     staked: "Staked",
@@ -33,7 +35,7 @@ export const translations = {
     called: "Called",
     rule1: "Select your entry fee (10 ETB or 20 ETB) to start.",
     rule2: "Pick your board from the 600 available options within 60 seconds.",
-    rule3: "Wait for the system to call a ball every 5 seconds.",
+    rule3: "Wait for the system to call a ball every 3 seconds.",
     rule4: "Numbers are marked automatically. Complete a row, column, diagonal, or four corners to win.",
     boardsRegistered: "Boards Registered",
     redirecting: "Redirecting to Game",
@@ -45,6 +47,8 @@ export const translations = {
   },
   am: {
     back: "ተመለስ",
+    deposit: "ገንዘብ አስገባ",
+    withdraw: "ገንዘብ አውጣ",
     selectionStatus: "የምርጫ ሁኔታ",
     wallet: "ዋሌት",
     staked: "የተያዘ",
@@ -77,7 +81,7 @@ export const translations = {
     called: "የተጠሩ",
     rule1: "ለመጀመር የመግቢያ ክፍያዎን (10 ETB ወይም 20 ETB) ይምረጡ።",
     rule2: "ከ600 አማራጮች ውስጥ ቦርድዎን በ60 ሰከንድ ውስጥ ይምረጡ።",
-    rule3: "ሲስተሙ በየ5 ሰከንዱ ኳስ እስኪጠራ ይጠብቁ።",
+    rule3: "ሲስተሙ በየ3 ሰከንዱ ኳስ እስኪጠራ ይጠብቁ።",
     rule4: "ቁጥሮች በራስ-ሰር ምልክት ይደረግባቸዋል። ለማሸነፍ ረድፍ፣ አምድ፣ ዲያግናል ወይም አራት ማዕዘኖችን ያጠናቅቁ።",
     boardsRegistered: "ቦርዶች ተመዝግበዋል",
     redirecting: "ወደ ጨዋታው በመቀየር ላይ",
@@ -89,6 +93,8 @@ export const translations = {
   },
   om: {
     back: "Duubatti",
+    deposit: "Galii",
+    withdraw: "Baasii",
     selectionStatus: "Haala Filannoo",
     wallet: "Boorsaa",
     staked: "Qabsiifame",
@@ -121,7 +127,7 @@ export const translations = {
     called: "Wamamanii",
     rule1: "Seeninsa kee (10 ETB ykn 20 ETB) filadhu.",
     rule2: "Sekondii 60 keessatti gabateewwan 600 keessaa filadhu.",
-    rule3: "Hamma kuullaan wamamuitti sekondii 5 eeggadhu.",
+    rule3: "Hamma kuullaan wamamuitti sekondii 3 eeggadhu.",
     rule4: "Lakkoofsonni ofumaan mallatteeffamu. Mo'achuuf sarara guuti.",
     boardsRegistered: "Gabateewwan Galmaa'an",
     redirecting: "Gara Taphaatti deemaa jira",

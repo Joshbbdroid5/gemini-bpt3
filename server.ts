@@ -103,12 +103,14 @@ interface IUser {
   userId: string;
   balance: number;
   isVerified: boolean;
+  referredBy?: string;
   phone?: string;
 }
 const userSchema = new mongoose.Schema<IUser>({
   userId: { type: String, required: true, unique: true },
   balance: { type: Number, default: 1000 },
   isVerified: { type: Boolean, default: false },
+  referredBy: { type: String },
   phone: { type: String }
 });
 const User = mongoose.model<IUser>('User', userSchema);
@@ -177,6 +179,25 @@ app.get('/health', (req, res) => {
   });
 });
 
+// ADMIN ENDPOINT: Create or update user record (used for referrals)
+app.post('/admin/create-user', async (req, res) => {
+  const { userId, referredBy, secret } = req.body;
+
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const user = await User.findOneAndUpdate(
+      { userId },
+      { referredBy },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error("User Creation Error:", err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ADMIN ENDPOINT: Register a pending deposit
 app.post('/admin/add-pending-deposit', async (req, res) => {
   const { userId, amount, telebirrSms, secret } = req.body;
@@ -222,6 +243,17 @@ app.post('/admin/update-wallet', async (req, res) => {
     );
     
     if (user) userWallets.set(userId, user.balance);
+
+    // REFERRAL LOGIC: Reward the inviter with 5% of the deposit
+    if (user?.referredBy) {
+      const bonus = amount * 0.05;
+      const referrer = await User.findOneAndUpdate(
+        { userId: user.referredBy },
+        { $inc: { balance: bonus } },
+        { new: true }
+      );
+      if (referrer) userWallets.set(user.referredBy, referrer.balance);
+    }
 
     // Remove from pending list upon approval
     await PendingDeposit.findOneAndDelete({ userId, amount });
@@ -393,8 +425,8 @@ for (let i = 1; i <= 600; i++) {
 // Mock database for verified users (In production, use a real DB)
 const verifiedUsers = new Set<string>(); 
 
-// We use a slower interval (5s) which is already good for free tier CPU limits
-// If you find the server lagging, you can increase this to 7s or 10s
+// We use a slower interval (3s) which is already good for free tier CPU limits
+// If you find the server lagging, you can increase this to 5s or 10s
 const broadcastPoolUpdate = () => {
   const allRoomStats: Record<number, any> = {};
   const nextStartTime = getNextStartTime();
@@ -499,7 +531,7 @@ const runGameLoop = (stake: number) => {
     return; // Exit the loop
   }
 
-  room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 5000);
+  room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 3000);
 };
 
 const resetGame = (stake: number) => {

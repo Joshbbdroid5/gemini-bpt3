@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function SelectionPage({ staked, wallet, onComplete, onBack, language }: Props) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [timeLeft, setTimeLeft] = useState(60);
   const t = translations[language];
 
@@ -33,12 +33,17 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack, lang
 
   useEffect(() => {
     if (timeLeft === 0) {
-      onComplete(selectedId ? [selectedId] : []);
+      onComplete(Array.from(selectedIds));
     }
   }, [timeLeft]);
 
   const handleSelect = (id: number) => {
-    setSelectedId(prev => prev === id ? null : id);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 10) next.add(id); // Limit to 10 boards
+      return next;
+    });
   };
 
   return (
@@ -71,7 +76,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack, lang
           </div>
           <div className="flex flex-col">
             <span className="text-[9px] font-black uppercase tracking-widest text-orange-300 opacity-50">{t.staked}</span>
-            <span className="text-sm font-bold text-white italic">{staked} ETB</span>
+            <span className="text-sm font-bold text-white italic">{staked * selectedIds.size} ETB</span>
           </div>
         </div>
       </div>
@@ -106,7 +111,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack, lang
       <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar scroll-smooth">
         <div className="grid grid-cols-10 gap-2 pb-24">
           {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
-            const isSelected = selectedId === id;
+            const isSelected = selectedIds.has(id);
             
             return (
               <motion.button
@@ -134,13 +139,16 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack, lang
       </div>
       
       {/* Selection Summary Overlay */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#1a2e05]/95 backdrop-blur-xl border-t border-white/20 shadow-2xl z-50">
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#1a2e05]/95 backdrop-blur-xl border-t border-white/20 shadow-2xl z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <div className="flex flex-col">
               <span className="text-[10px] font-black uppercase tracking-widest text-yellow-200/50">{t.selectionStatus}</span>
-              <span className={`text-lg font-black italic ${selectedId ? 'text-green-400' : 'text-white'}`}>
-                {selectedId ? `${t.boardNum}${selectedId}` : t.selecting}
+              <span className={`text-lg font-black italic ${selectedIds.size > 0 ? 'text-green-400' : 'text-white'}`}>
+                {selectedIds.size > 0 
+                  ? `${selectedIds.size} ${t.boardsRegistered}` 
+                  : t.selecting
+                }
               </span>
             </div>
           </div>

@@ -51,6 +51,23 @@ export const bot = new Telegraf(BOT_TOKEN);
 bot.start(async (ctx) => {
   const startPayload = (ctx as any).startPayload;
 
+  // Handle Referrals: /start ref_12345
+  if (startPayload && startPayload.startsWith('ref_')) {
+    const referrerId = startPayload.replace('ref_', '');
+    const userId = ctx.from.id.toString();
+    
+    // Only set referrer if user doesn't exist yet
+    const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
+    const data = await response.json();
+    if (!data.exists) {
+      await fetch(`${API_URL}/admin/create-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, referredBy: referrerId, secret: ADMIN_SECRET })
+      }).catch(err => console.error("Failed to register referral:", err));
+    }
+  }
+
   if (!startPayload || !startPayload.startsWith('topup_')) {
     return ctx.reply(
       "Welcome to Lomi Bingo! 🍋\nSelect an option from the menu below:",
