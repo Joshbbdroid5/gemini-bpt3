@@ -91,7 +91,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack, lang
 
       {/* Info Message */}
       <div className="px-4 py-2 bg-indigo-950/30 flex justify-between items-center border-b border-white/5">
-        <p className="text-[9px] font-black uppercase tracking-widest text-indigo-300">
+        <p className="text-[9px] font-black uppercase tracking-widest text-yellow-100">
            {t.selectBoardInfo}
         </p>
         <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">

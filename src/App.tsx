@@ -374,7 +374,7 @@ export default function App() {
                 initial={{ scale: 0.8, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 className="flex flex-col items-center"
-              >
+            > 
                 <div className="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center mb-6 shadow-2xl">
                    <Trophy size={40} className="text-white" />
                 </div>
@@ -382,7 +382,7 @@ export default function App() {
                 <p className="text-indigo-200 font-bold uppercase tracking-widest text-xs">
                   {selectedBoardIds.length} {t.boardsRegistered} <br />
                   {t.redirecting}
-                </p>
+                </p> 
                 
                 <div className="mt-8 flex gap-2">
                    {[1, 2, 3].map(i => (
@@ -415,7 +415,7 @@ export default function App() {
                   <div className="flex items-center justify-between mb-8">
                     <h3 className="text-2xl font-black text-indigo-950 uppercase italic tracking-tighter flex items-center gap-2">
                       <Info className="text-indigo-600" />
-                      {t.rules}
+                      {t.rules} 
                     </h3>
                     <button 
                       onClick={() => setShowRules(false)} 
@@ -436,7 +436,7 @@ export default function App() {
                   <button 
                     onClick={() => setShowRules(false)}
                     className="mt-10 px-6 py-4 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-colors"
-                  >
+                  > 
                     {t.gotIt}
                   </button>
                 </motion.div>
@@ -453,7 +453,7 @@ function RuleItem({ number, text }: { number: string, text: string }) {
     <div className="flex gap-4">
       <div className="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600 border border-indigo-100">
         {number}
-      </div>
+      </div> 
       <p className="text-gray-600 text-sm font-medium leading-normal">{text}</p>
     </div>
   );

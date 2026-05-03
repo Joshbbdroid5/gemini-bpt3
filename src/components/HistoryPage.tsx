@@ -51,7 +51,7 @@ export default function HistoryPage({ history, onBack, language }: Props) {
 
               <div className="flex items-start justify-between mb-4">
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-black text-indigo-300 tracking-widest uppercase">{t.gameId}</span>
+                  <span className="text-[9px] font-black text-yellow-300 tracking-widest uppercase">{t.gameId}</span>
                   <span className="text-xl font-black text-white tracking-tight italic select-all block">{entry.gameId}</span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500">

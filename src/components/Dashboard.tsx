@@ -29,7 +29,7 @@ export default function Dashboard({ onPlay, language, onLanguageChange, isGameAc
             className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
               language === lang.id 
                 ? 'bg-indigo-600 text-white shadow-lg' 
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                : 'text-yellow-200 hover:text-white hover:bg-white/5'
             }`}
           >
             <span className="text-sm leading-none">{lang.flag}</span>
@@ -53,11 +53,11 @@ export default function Dashboard({ onPlay, language, onLanguageChange, isGameAc
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         className="mb-12"
-      >
-        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 mb-2 block">
+      > 
+        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-200 mb-2 block">
           {t.premiumExp}
         </span>
-        <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-tight whitespace-pre-line">
+        <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-tight whitespace-pre-line drop-shadow-lg">
           {t.chooseStake}
         </h2>
       </motion.div>
@@ -69,7 +69,7 @@ export default function Dashboard({ onPlay, language, onLanguageChange, isGameAc
             key={amount}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => onPlay(amount)}
+            onClick={() => onPlay(amount)} 
             className="group relative overflow-hidden bg-white text-indigo-950 py-5 rounded-3xl font-black text-xl italic uppercase tracking-tighter shadow-xl transition-all hover:bg-yellow-400 active:bg-yellow-500"
           >
             {amount} ETB

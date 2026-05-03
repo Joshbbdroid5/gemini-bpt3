@@ -236,7 +236,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
           {/* Current Ball Card */}
           <div className="h-24 bg-[#23243d] rounded-xl border border-white/10 flex items-center justify-center relative overflow-hidden">
             <div className="absolute inset-0 bg-indigo-500/10 blur-2xl radial-gradient"></div>
-            <div className="w-16 h-16 rounded-full bg-white border-4 border-yellow-400 flex items-center justify-center shadow-[0_0_20px_rgba(250,204,21,0.5)] z-10">
+            <div className="w-16 h-16 rounded-full bg-white border-4 border-lime-400 flex items-center justify-center shadow-[0_0_20px_rgba(250,204,21,0.5)] z-10">
               <span className="text-xl font-black text-indigo-950">
                 {currentBall ? `${getLetter(currentBall)}-${currentBall}` : '--'}
               </span>

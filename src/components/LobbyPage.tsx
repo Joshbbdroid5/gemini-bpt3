@@ -198,7 +198,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
         >
           <div className="flex items-center gap-2 px-2 mb-2">
             <History size={14} className="text-indigo-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">{t.winners}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-yellow-300">{t.winners}</span>
           </div>
           <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
             {winningHistory.map((winner, i) => (
