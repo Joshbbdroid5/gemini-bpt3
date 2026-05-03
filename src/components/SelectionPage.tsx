@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Timer, ShoppingCart } from 'lucide-react';
+import { Wallet, Timer, ShoppingCart, ArrowLeft } from 'lucide-react';
 import { TOTAL_BOARDS, Language } from '../types';
 import { translations } from '../translations';
 
@@ -8,10 +8,11 @@ interface Props {
   staked: number;
   wallet: number;
   onComplete: (selectedIds: number[]) => void;
+  onBack: () => void;
   language: Language;
 }
 
-export default function SelectionPage({ staked, wallet, onComplete, language }: Props) {
+export default function SelectionPage({ staked, wallet, onComplete, onBack, language }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(60);
   const t = translations[language];
@@ -41,15 +42,25 @@ export default function SelectionPage({ staked, wallet, onComplete, language }: 
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#4c1d95] via-[#5b21b6] to-[#4c1d95]">
+    <div className="flex-1 flex flex-col overflow-hidden relative bg-gradient-to-br from-yellow-600 via-yellow-700 to-lime-900">
       {/* Stats Bar */}
       <div className="grid grid-cols-2 gap-2 p-4 bg-black/20 border-b border-white/10">
-        <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10">
-          <div className="p-2 bg-indigo-600 rounded-lg text-white">
+        {/* Back Button */}
+        <div className="absolute top-4 left-4 z-50">
+          <button
+            onClick={onBack}
+            className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+            aria-label={t.back}
+          >
+            <ArrowLeft size={20} />
+          </button>
+        </div>
+        <div className="flex items-center gap-3 p-3 pl-12 bg-white/10 rounded-2xl border border-white/10">
+          <div className="p-2 bg-lime-600 rounded-lg text-white">
             <Wallet size={16} />
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300 opacity-50">{t.wallet}</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-yellow-100 opacity-50">{t.wallet}</span>
             <span className="text-sm font-bold text-white">{wallet} ETB</span>
           </div>
         </div>
@@ -108,7 +119,7 @@ export default function SelectionPage({ staked, wallet, onComplete, language }: 
                   aspect-square flex items-center justify-center text-[10px] font-black rounded-full border-2 transition-all duration-200 relative overflow-hidden
                   ${isSelected
                     ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10' 
-                    : 'bg-blue-600 text-white border-blue-400 hover:bg-blue-500 hover:border-white shadow-lg shadow-black/20'
+                    : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
                   }
                 `}
               >
@@ -123,11 +134,11 @@ export default function SelectionPage({ staked, wallet, onComplete, language }: 
       </div>
       
       {/* Selection Summary Overlay */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#2e1065]/95 backdrop-blur-xl border-t border-white/20 shadow-2xl z-50">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#1a2e05]/95 backdrop-blur-xl border-t border-white/20 shadow-2xl z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase tracking-widest text-purple-300/50">{t.selectionStatus}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-yellow-200/50">{t.selectionStatus}</span>
               <span className={`text-lg font-black italic ${selectedId ? 'text-green-400' : 'text-white'}`}>
                 {selectedId ? `${t.boardNum}${selectedId}` : t.selecting}
               </span>

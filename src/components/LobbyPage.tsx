@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Play, Eye, Timer, Trophy, History, Copy, Check, Wallet } from 'lucide-react';
+import { Users, Play, Eye, Timer, Trophy, History, Copy, Check, Wallet, ArrowLeft } from 'lucide-react';
 import { Language } from '../types';
 import { translations } from '../translations';
 
@@ -10,13 +10,14 @@ interface Props {
   stats: { pool: number; players: number; gameId: string };
   winningHistory: any[];
   language: Language;
+  onBack: () => void;
   myId: string;
   onTopUp: (amount: number) => void; // New prop for top-up
 }
 
 const MIN_DEPOSIT_AMOUNT = 10;
 
-export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, language, myId, onTopUp }: Props) {
+export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, language, onBack, myId, onTopUp }: Props) {
   const t = translations[language];
   const [copied, setCopied] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(10);
@@ -29,8 +30,21 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-transparent text-white">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-transparent text-white relative">
       {/* Branding / Game Name */}
+      <motion.div 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="absolute top-4 left-4 z-50"
+      >
+        <button
+          onClick={onBack}
+          className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+          aria-label={t.back}
+        >
+          <ArrowLeft size={20} />
+        </button>
+      </motion.div>
       <motion.div 
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -39,7 +53,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
         <h1 className="text-5xl font-black italic tracking-tighter uppercase text-white mb-2 drop-shadow-lg">
           Lomi <span className="text-yellow-400">Bingo</span>
         </h1>
-        <p className="text-indigo-200 text-xs font-black uppercase tracking-[0.3em]">The Premium Live Experience</p>
+        <p className="text-yellow-200 text-xs font-black uppercase tracking-[0.3em]">The Premium Live Experience</p>
       </motion.div>
 
       {/* Active Game Info Card */}
@@ -47,13 +61,13 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="w-full max-w-sm bg-white/10 backdrop-blur-xl rounded-[40px] border border-white/20 p-8 shadow-2xl space-y-6 relative overflow-hidden"
+        className="w-full max-w-sm bg-[#1a2e05]/30 backdrop-blur-xl rounded-[40px] border border-white/20 p-8 shadow-2xl space-y-6 relative overflow-hidden"
       >
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/20 blur-3xl rounded-full"></div>
+        <div className="absolute -top-10 -right-10 w-32 h-32 bg-lime-500/20 blur-3xl rounded-full"></div>
         
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase text-indigo-300 tracking-widest">{t.gameId}</span>
+            <span className="text-[10px] font-black uppercase text-yellow-300 tracking-widest">{t.gameId}</span>
             <span className="text-lg font-black italic tracking-tight">{stats.gameId}</span>
           </div>
           <div className="bg-red-500 px-3 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-1.5 animate-pulse">
@@ -165,7 +179,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
             <button
               onClick={() => topUpAmount >= MIN_DEPOSIT_AMOUNT && onTopUp(topUpAmount)}
               disabled={topUpAmount < MIN_DEPOSIT_AMOUNT}
-              className="w-full p-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition-all rounded-3xl flex items-center justify-center gap-3 text-white font-black uppercase tracking-widest text-[10px] shadow-[0_10px_20px_rgba(79,70,229,0.3)]"
+              className="w-full p-4 bg-lime-600 hover:bg-lime-700 active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition-all rounded-3xl flex items-center justify-center gap-3 text-white font-black uppercase tracking-widest text-[10px] shadow-[0_10px_20px_rgba(101,163,13,0.3)]"
             >
               <Wallet size={16} />
               Top Up {topUpAmount || 0} ETB (Manual)

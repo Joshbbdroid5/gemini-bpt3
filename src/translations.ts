@@ -1,5 +1,6 @@
 export const translations = {
   en: {
+    back: "Back",
     selectionStatus: "Selection Status",
     wallet: "Wallet",
     staked: "Staked",
@@ -42,6 +43,7 @@ export const translations = {
     premiumExp: "Premium Experience"
   },
   am: {
+    back: "ተመለስ",
     selectionStatus: "የምርጫ ሁኔታ",
     wallet: "ዋሌት",
     staked: "የተያዘ",
@@ -84,6 +86,7 @@ export const translations = {
     premiumExp: "ልዩ ተሞክሮ"
   },
   om: {
+    back: "Duubatti",
     selectionStatus: "Haala Filannoo",
     wallet: "Boorsaa",
     staked: "Qabsiifame",
