@@ -69,15 +69,21 @@ bot.start(async (ctx) => {
   }
 
   if (!startPayload || !startPayload.startsWith('topup_')) {
-    return ctx.reply(
-      "Welcome to Lomi Bingo! 🍋\nSelect an option from the menu below:",
-      Markup.inlineKeyboard([
-        [Markup.button.callback('📝 Register', 'register'), Markup.button.callback('🎮 Play', 'play')],
-        [Markup.button.callback('💳 Deposit', 'deposit'), Markup.button.callback('💸 Withdraw', 'withdraw')],
-        [Markup.button.callback('ℹ️ Instruction', 'show_rules'), Markup.button.callback('🤝 Invite', 'invite')],
-        [Markup.button.callback('📞 Contact Support', 'help_support')]
-      ])
-    );
+    // Placeholder for your welcome image URL
+    const welcomeImageUrl = "https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920"; // Replace with your actual welcome image URL
+
+    return ctx.replyWithPhoto(
+      { url: welcomeImageUrl },
+      {
+        caption: "Welcome to Lomi Bingo! 🍋\nSelect an option from the menu below:",
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback(' My Profile', 'my_profile'), Markup.button.callback('🎮 Play', 'play')],
+          [Markup.button.callback('📝 Register', 'register'), Markup.button.callback('💳 Deposit', 'deposit')],
+          [Markup.button.callback('💸 Withdraw', 'withdraw'), Markup.button.callback('🤝 Invite', 'invite')],
+          [Markup.button.callback('ℹ️ Instruction', 'show_rules'), Markup.button.callback('🤝 Invite', 'invite')],
+          [Markup.button.callback('📞 Contact Support', 'help_support')]
+        ])
+      });
   }
 
   // Parse payload: topup_100_guest_1234
@@ -110,6 +116,32 @@ bot.start(async (ctx) => {
         ])
       }
     );
+  }
+});
+
+// --- My Profile Handler ---
+bot.action('my_profile', async (ctx) => {
+  const userId = ctx.from.id.toString();
+  try {
+    const response = await fetch(`${API_URL}/admin/user-info?userId=${userId}&secret=${ADMIN_SECRET}`);
+    if (!response.ok) throw new Error("Failed to fetch user info");
+    const data = await response.json();
+    
+    const inviteLink = `https://t.me/${ctx.botInfo.username}?start=ref_${userId}`;
+    
+    const message = 
+      `👤 *MY PROFILE*\n\n` +
+      `🆔 *User ID:* \`${userId}\`\n` +
+      `💰 *Balance:* ${data.balance.toFixed(2)} ETB\n` +
+      `✅ *Status:* ${data.isVerified ? 'Verified' : 'Unverified'}\n\n` +
+      `🔗 *Your Referral Link:* \n${inviteLink}\n\n` +
+      `_Share this link! You earn a 5% bonus every time your friends deposit._`;
+
+    await ctx.reply(message, { parse_mode: 'Markdown' });
+    return ctx.answerCbQuery();
+  } catch (err) {
+    console.error("Profile fetch error:", err);
+    return ctx.answerCbQuery("❌ Error fetching profile.");
   }
 });
 

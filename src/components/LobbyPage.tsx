@@ -60,7 +60,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-transparent text-white relative">
+    <div className="flex-1 flex flex-col items-center p-6 bg-transparent text-white relative">
       {/* Branding / Game Name */}
       <motion.div 
         initial={{ y: -20, opacity: 0 }}

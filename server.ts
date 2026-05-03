@@ -319,6 +319,23 @@ app.post('/admin/verify-user', async (req, res) => {
   }
 });
 
+// ADMIN ENDPOINT: Fetch specific user details for the bot profile
+app.get('/admin/user-info', async (req, res) => {
+  const { userId, secret } = req.query;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const user = await User.findOne({ userId: userId as string });
+    if (!user) {
+      return res.json({ balance: 0, isVerified: false });
+    }
+    res.json({ balance: user.balance, isVerified: user.isVerified });
+  } catch (err) {
+    console.error("User Info Fetch Error:", err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ADMIN ENDPOINT: Check user status
 app.get('/admin/check-user', async (req, res) => {
   const { userId, secret } = req.query;

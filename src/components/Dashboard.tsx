@@ -12,7 +12,6 @@ interface Props {
   allStats: Record<number, any>;
   language: Language;
   onLanguageChange: (lang: Language) => void;
-  isGameActive: boolean;
 }
 
 const LANGUAGES = [
@@ -21,7 +20,7 @@ const LANGUAGES = [
   { id: 'om', label: 'Oromoo', flag: '🇪🇹' }
 ] as const;
 
-export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats, language, onLanguageChange, isGameActive }: Props) {
+export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats, language, onLanguageChange }: Props) {
   const t = translations[language];
 
   return (
@@ -79,16 +78,6 @@ export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allSt
         <MessageCircle size={14} />
         Join Official Channel
       </button>
-
-      {/* Game in Progress Badge */}
-      {isGameActive && (
-        <div className="flex justify-center mb-6">
-          <div className="bg-red-500 px-3 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-1.5 animate-pulse text-white shadow-lg">
-            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-            Game in Progress
-          </div>
-        </div>
-      )}
 
       {/* Stake Selection Section */}
       <motion.div
