@@ -82,6 +82,22 @@ const topUpHistorySchema = new mongoose.Schema<ITopUpHistory>({
   timestamp: { type: Date, default: Date.now }
 });
 const TopUpHistory = mongoose.model<ITopUpHistory>('TopUpHistory', topUpHistorySchema);
+
+// PendingDeposit Schema for tracking manual payments
+interface IPendingDeposit {
+  userId: string;
+  amount: number;
+  telebirrSms: string;
+  timestamp: Date;
+}
+const pendingDepositSchema = new mongoose.Schema<IPendingDeposit>({
+  userId: { type: String, required: true },
+  amount: { type: Number, required: true },
+  telebirrSms: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now }
+});
+const PendingDeposit = mongoose.model<IPendingDeposit>('PendingDeposit', pendingDepositSchema);
+
 // User Schema
 interface IUser {
   userId: string;
@@ -291,7 +307,7 @@ app.post('/admin/wallets', (req, res) => {
   }
   res.json({
     wallets: Object.fromEntries(userWallets),
-    stats: { totalVolume, totalProfit, activeBets: globalPool, isMaintenanceMode }
+    stats: { totalVolume, totalProfit, activeBets: Array.from(roomStates.values()).reduce((a, b) => a + b.globalPool, 0), isMaintenanceMode }
   });
 });
 
@@ -306,26 +322,56 @@ app.post('/admin/toggle-maintenance', (req, res) => {
   isMaintenanceMode = enabled;
 
   if (wasMaintenance && !isMaintenanceMode) {
-    console.log("Maintenance mode deactivated. Resuming game loop...");
-    clearTimeout(gameLoopTimeout);
-    runGameLoop();
+    console.log("Maintenance mode deactivated. Resuming game loops for all rooms...");
+    STAKES.forEach(stake => {
+      const room = roomStates.get(stake);
+      if (room && room.gameLoopTimeout) {
+        clearTimeout(room.gameLoopTimeout);
+      }
+      runGameLoop(stake);
+    });
   }
 
   res.json({ success: true, isMaintenanceMode });
 });
 
 // Global Game State
-let currentBalls: number[] = [];
-let globalPool = 0;
 let totalVolume = 0;
 let totalProfit = 0;
 let isMaintenanceMode = false;
-let gameLoopTimeout: any;
 let activePlayers = 0;
-let currentGameId = `LB-${Math.floor(100000 + Math.random() * 900000)}`;
-let winningHistory: any[] = [];
+
+interface RoomState {
+  stake: number;
+  currentBalls: number[];
+  globalPool: number;
+  isGameOver: boolean;
+  currentGameId: string;
+  winningHistory: any[];
+  playerBoards: Map<string, number[]>; // userId -> boardIds
+  gameLoopTimeout?: any;
+}
+
+const roomStates = new Map<number, RoomState>();
+const STAKES = [10, 20];
+
+function generateGameId(stake: number) {
+  return `LB-${stake}-${Math.floor(100000 + Math.random() * 900000)}`;
+}
+
+STAKES.forEach(stake => {
+  roomStates.set(stake, {
+    stake,
+    currentBalls: [],
+    globalPool: 0,
+    isGameOver: false,
+    currentGameId: generateGameId(stake),
+    winningHistory: [],
+    playerBoards: new Map(),
+  });
+});
+
 const socketMapping = new Map<string, string>(); // userId -> socketId
-const playerBoards = new Map<string, number[]>(); // Map of userId to their selected board IDs
 
 // Pre-generate and cache all 600 boards to ensure they are static and highly performant
 const boardsCache = new Map<number, any>();
@@ -339,36 +385,45 @@ const verifiedUsers = new Set<string>();
 // We use a slower interval (5s) which is already good for free tier CPU limits
 // If you find the server lagging, you can increase this to 7s or 10s
 const broadcastPoolUpdate = () => {
+  const allRoomStats: Record<number, any> = {};
+  STAKES.forEach(stake => {
+    const room = roomStates.get(stake)!;
+    allRoomStats[stake] = {
+      pool: room.globalPool,
+      players: room.playerBoards.size,
+      gameId: room.currentGameId
+    };
+  });
+
   io.emit('game:pool_sync', {
-    pool: globalPool,
-    players: activePlayers
+    rooms: allRoomStats,
+    totalActive: activePlayers
   });
 };
 
-let isGameOver = false;
-
 // Global interval for drawing balls
-const runGameLoop = () => {
+const runGameLoop = (stake: number) => {
+  const room = roomStates.get(stake)!;
+
   // Only suspend the loop if maintenance is enabled and we are NOT in the middle of an active round
-  if (isMaintenanceMode && currentBalls.length === 0 && globalPool === 0) {
-    console.log("Game loop suspended: Maintenance Mode is active and system is idle.");
+  if (isMaintenanceMode && room.currentBalls.length === 0 && room.globalPool === 0) {
+    console.log(`Game loop [${stake}] suspended: Maintenance Mode is active and system is idle.`);
     return;
   }
 
-  if (currentBalls.length < 75 && !isGameOver) {
+  if (room.currentBalls.length < 75 && !room.isGameOver) {
     const ball = Math.floor(Math.random() * 75) + 1;
-    if (!currentBalls.includes(ball)) {
-      currentBalls.push(ball);
-      console.log(`Drawing ball: ${ball}`);
-      io.emit('game:ball', ball);
+    if (!room.currentBalls.includes(ball)) {
+      room.currentBalls.push(ball);
+      io.to(`room_${stake}`).emit('game:ball', ball);
 
       // AUTO-CLAIM CHECK: Collect all winners for this specific ball
       const winnersThisRound: any[] = [];
       
-      playerBoards.forEach((boardIds, userId) => {
+      room.playerBoards.forEach((boardIds, userId) => {
         for (const boardId of boardIds) {
           const grid = boardsCache.get(boardId);
-          const win = checkWin(grid, new Set(currentBalls) as any);
+          const win = checkWin(grid, new Set(room.currentBalls) as any);
           
           if (win.isWinner) {
             winnersThisRound.push({
@@ -381,9 +436,9 @@ const runGameLoop = () => {
       });
 
       if (winnersThisRound.length > 0) {
-        isGameOver = true;
-        const totalPayout = globalPool * 0.8;
-        const profitShare = (globalPool - totalPayout);
+        room.isGameOver = true;
+        const totalPayout = room.globalPool * 0.8;
+        const profitShare = (room.globalPool - totalPayout);
         
         totalProfit += profitShare;
         // Persist profit to DB
@@ -395,49 +450,49 @@ const runGameLoop = () => {
           const winnerInfo = {
             ...w,
             payout: splitPayout,
-            gameId: currentGameId,
+            gameId: room.currentGameId,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
 
-          winningHistory.unshift(winnerInfo);
+          room.winningHistory.unshift(winnerInfo);
           
           const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
           if (user) userWallets.set(w.userId, user.balance);
           
           const sId = socketMapping.get(w.userId);
           if (sId && user) io.to(sId).emit('wallet:update', user.balance);
-          io.emit('game:winner', winnerInfo);
+          io.to(`room_${stake}`).emit('game:winner', winnerInfo);
         });
 
-        if (winningHistory.length > 10) winningHistory.splice(10);
-        io.emit('game:win_history', winningHistory);
+        if (room.winningHistory.length > 10) room.winningHistory.splice(10);
+        io.to(`room_${stake}`).emit('game:win_history', room.winningHistory);
       }
     }
   }
 
-  if (isGameOver || currentBalls.length >= 75) {
-    console.log("Game ending, scheduled reset in 20 seconds...");
-    gameLoopTimeout = setTimeout(resetGame, 20000); // Give players 20 seconds to celebrate
+  if (room.isGameOver || room.currentBalls.length >= 75) {
+    room.gameLoopTimeout = setTimeout(() => resetGame(stake), 20000); // Give players 20 seconds to celebrate
     return; // Exit the loop
   }
 
-  gameLoopTimeout = setTimeout(runGameLoop, 5000);
+  room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 5000);
 };
 
-const resetGame = () => {
-  currentBalls = [];
-  globalPool = 0;
-  playerBoards.clear();
-  isGameOver = false;
-  currentGameId = `LB-${Math.floor(100000 + Math.random() * 900000)}`;
-  io.emit('game:reset');
+const resetGame = (stake: number) => {
+  const room = roomStates.get(stake)!;
+  room.currentBalls = [];
+  room.globalPool = 0;
+  room.playerBoards.clear();
+  room.isGameOver = false;
+  room.currentGameId = generateGameId(stake);
+  io.to(`room_${stake}`).emit('game:reset');
   broadcastPoolUpdate();
-  runGameLoop(); // Restart the loop
+  runGameLoop(stake); // Restart the loop
 };
 
 // Start the first game
 syncCache().then(async () => {
-  runGameLoop();
+  STAKES.forEach(stake => runGameLoop(stake));
 
   // Launch the Telegram Bot alongside the server
   bot.launch()
@@ -498,14 +553,25 @@ io.on('connection', (socket) => {
   // Inform the user of their verification status
   socket.emit('user:status', { isVerified: verifiedUsers.has(userId) });
 
-  // Send currently drawn balls to the newly connected user
-  socket.emit('game:init', { balls: currentBalls, gameId: currentGameId });
-
-  // Send the current winning history to the newly connected user
-  socket.emit('game:win_history', winningHistory);
+  // Joining a specific room
+  socket.on('room:join', (stake: number) => {
+    if (!STAKES.includes(stake)) return;
+    
+    STAKES.forEach(s => socket.leave(`room_${s}`));
+    socket.join(`room_${stake}`);
+    
+    const room = roomStates.get(stake)!;
+    socket.emit('game:init', { balls: room.currentBalls, gameId: room.currentGameId });
+    socket.emit('game:win_history', room.winningHistory);
+  });
 
   // Handle Betting/Joining Pool
   socket.on('game:bet', async (data: { stake: number; boardIds: number[] }) => {
+    const roomStake = data.stake / data.boardIds.length;
+    const room = roomStates.get(roomStake);
+
+    if (!room) return socket.emit('message', 'Invalid stake room.');
+
     if (isMaintenanceMode) {
       socket.emit('message', 'The game is currently under maintenance. No new bets are being accepted.');
       return;
@@ -537,13 +603,14 @@ io.on('connection', (socket) => {
       socket.emit('wallet:update', user.balance);
     }
 
-    playerBoards.set(userId, data.boardIds);
-    globalPool += data.stake;
+    room.playerBoards.set(userId, data.boardIds);
+    room.globalPool += data.stake;
     totalVolume += data.stake;
     // Persist volume to DB
     GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: data.stake } }, { upsert: true }).exec();
 
-    console.log(`Bet received from ${userId}: ${data.stake} ETB. New Pool: ${globalPool}`);
+    console.log(`Bet received from ${userId}: ${data.stake} ETB in Room ${roomStake}`);
+    socket.join(`room_${roomStake}`);
     broadcastPoolUpdate();
   });
 

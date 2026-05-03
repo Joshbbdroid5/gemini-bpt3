@@ -33,11 +33,14 @@ export default function App() {
   const [isGameActive, setIsGameActive] = useState(false);
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
-  const [liveStats, setLiveStats] = useState({
+  const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
+  const [totalActivePlayers, setTotalActivePlayers] = useState(0);
+
+  const currentRoomStats = allRoomStats[stake] || {
     pool: 0,
     players: 0,
     gameId: '---'
-  });
+  };
 
   // Initialize language from localStorage or default to 'en'
   const [language, setLanguage] = useState<Language>(() => {
@@ -61,13 +64,18 @@ export default function App() {
     };
 
     const handleWallet = (balance: number) => setWallet(balance);
-    const handlePoolUpdate = (data: any) => setLiveStats(data);
+    const handlePoolUpdate = (data: any) => {
+      if (data.rooms) setAllRoomStats(data.rooms);
+      if (data.totalActive !== undefined) setTotalActivePlayers(data.totalActive);
+    };
     const handleWinHistory = (history: any[]) => setWinningHistory(history);
     
     const handleInit = (data: any) => {
-      setLiveStats(prev => ({ ...prev, gameId: data.gameId }));
-      // If there are already balls drawn, the game is active
-      if (data.balls && data.balls.length > 0) setIsGameActive(true);
+      setAllRoomStats(prev => ({ 
+        ...prev, 
+        [stake]: { ...prev[stake], gameId: data.gameId } 
+      }));
+      setIsGameActive(data.balls && data.balls.length > 0);
     };
 
     const handleConnectError = (err: Error) => {
@@ -112,6 +120,7 @@ export default function App() {
         initData: tg.initData,
         user: tg.initDataUnsafe?.user
       });
+      socket.emit('room:join', 10); // Default to room 10
     } else {
       // Fallback for browser testing
       // Persist guestId in localStorage to prevent balance reset on refresh
@@ -121,6 +130,7 @@ export default function App() {
         localStorage.setItem('bingoGuestId', guestId);
       }
       connectToGame({ userId: guestId });
+      socket.emit('room:join', 10);
       setMyId(guestId); // Set myId for guest users
     }
     return () => {
@@ -132,12 +142,14 @@ export default function App() {
   const t = translations[language];
 
   const startSelection = (choice: number) => {
-    // Requirement: Check if game is in play before entering selection
-    if (isGameActive) {
+    setStake(choice);
+    socket.emit('room:join', choice);
+
+    const isRoomActive = allRoomStats[choice]?.balls?.length > 0;
+    if (isRoomActive || isGameActive) {
       startWatching();
       return;
     }
-    setStake(choice);
     setPhase('selection');
   };
 
@@ -195,13 +207,30 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a] before:content-[''] before:absolute before:inset-0 before:bg-[url('https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920')] before:bg-cover before:bg-center before:opacity-35 before:pointer-events-none">
+    <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
+      {/* Static background image */}
+      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920')] bg-cover bg-center opacity-35 pointer-events-none z-0"></div>
+
+      {/* Animated background overlay for transitions */}
+      <AnimatePresence>
+        {/* Only show this animated layer when transitioning between phases, or when a specific phase needs a distinct background animation */}
+        {/* For a subtle fruit-slice effect, we can animate a radial gradient */}
+        <motion.div
+          key={phase} // Key changes with phase to trigger re-animation
+          initial={{ opacity: 0, scale: 0.8, borderRadius: '50%' }}
+          animate={{ opacity: 0.6, scale: 1, borderRadius: '0%' }}
+          exit={{ opacity: 0, scale: 1.2, borderRadius: '50%' }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+          className="absolute inset-0 z-[1] bg-gradient-to-br from-yellow-500/70 via-lime-500/70 to-green-700/70 pointer-events-none"
+        />
+      </AnimatePresence>
+
       <Header 
         onShowRules={() => setShowRules(true)} 
         onShowHistory={() => setPhase('history')}
       />
       
-      <main className="flex-1 flex flex-col overflow-hidden relative bg-black/10 backdrop-blur-[2px]">
+      <main className="flex-1 flex flex-col overflow-hidden relative z-[2] bg-black/10 backdrop-blur-[2px]">
         {/* Loading state while verification status is unknown */}
         {isVerified === null && (
           <motion.div
@@ -275,7 +304,7 @@ export default function App() {
                   }
                 }} 
                 onWatch={startWatching} 
-                stats={liveStats}
+                stats={currentRoomStats}
                 winningHistory={winningHistory}
                 language={language}
                 onBack={handleBackToHome}
