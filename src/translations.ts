@@ -39,6 +39,7 @@ export const translations = {
     redirecting: "Redirecting to Game",
     gotIt: "Got it",
     selectBoardInfo: "Select 1 Board to play.",
+    startsAt: "Starts Daily at 9:00 Afternoon (EAT)",
     chooseStake: "Choose Your Stake",
     premiumExp: "Premium Experience"
   },
@@ -82,6 +83,7 @@ export const translations = {
     redirecting: "ወደ ጨዋታው በመቀየር ላይ",
     gotIt: "ተረድቻለሁ",
     selectBoardInfo: "ለመጫወት 1 ቦርድ ይምረጡ።",
+    startsAt: "በየቀኑ ከሰዓት በ 9:00 ሰዓት ይጀምራል",
     chooseStake: "ውርርድዎን ይምረጡ",
     premiumExp: "ልዩ ተሞክሮ"
   },
@@ -125,6 +127,7 @@ export const translations = {
     redirecting: "Gara Taphaatti deemaa jira",
     gotIt: "Garee",
     selectBoardInfo: "Taphaaf gabatee 1 filadhu.",
+    startsAt: "Guyyuu sa'aatii 9:00 irratti jalqaba",
     chooseStake: "Stake Kee Filadhu",
     premiumExp: "Muuxannoo Addaa"
   }

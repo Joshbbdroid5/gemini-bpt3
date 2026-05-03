@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Play, Eye, Timer, Trophy, History, Copy, Check, Wallet, ArrowLeft } from 'lucide-react';
+import { Users, Play, Eye, Timer, Trophy, History, Copy, Check, Wallet, ArrowLeft, Clock } from 'lucide-react';
 import { Language } from '../types';
 import { translations } from '../translations';
 
 interface Props {
   onPlay: () => void;
   onWatch: () => void;
-  stats: { pool: number; players: number; gameId: string };
+  stats: { pool: number; players: number; gameId: string; nextStartTime?: number; isLive?: boolean };
   winningHistory: any[];
   language: Language;
   onBack: () => void;
@@ -16,11 +16,41 @@ interface Props {
 }
 
 const MIN_DEPOSIT_AMOUNT = 10;
-
+// The onPlay prop now directly calls the startSelection logic from App.tsx
 export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, language, onBack, myId, onTopUp }: Props) {
   const t = translations[language];
   const [copied, setCopied] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(10);
+  const [countdown, setCountdown] = useState<string>('');
+  const [isPlayButtonDisabled, setIsPlayButtonDisabled] = useState(false);
+
+  useEffect(() => {
+    if (!stats.nextStartTime || stats.isLive) {
+      setCountdown('');
+      return;
+    }
+    
+    const updateCountdown = () => {
+      const remaining = stats.nextStartTime! - Date.now();
+      if (remaining <= 0) {
+        setCountdown('Starting...');
+      } else {
+        const h = Math.floor(remaining / 3600000);
+        const m = Math.floor((remaining % 3600000) / 60000);
+        const s = Math.floor((remaining % 60000) / 1000);
+        setCountdown(`${h}h ${m}m ${s}s`);
+        // Disable if more than 30 minutes away
+        setIsPlayButtonDisabled(remaining > 30 * 60 * 1000);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [stats.nextStartTime, stats.isLive, language]); // Added language to dependencies for completeness
+
+  // Also disable if the game is live, as onPlay will redirect to watch
+  const finalPlayButtonDisabled = isPlayButtonDisabled || stats.isLive;
 
   const copyId = () => {
     if (!myId) return;
@@ -70,10 +100,17 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
             <span className="text-[10px] font-black uppercase text-yellow-300 tracking-widest">{t.gameId}</span>
             <span className="text-lg font-black italic tracking-tight">{stats.gameId}</span>
           </div>
-          <div className="bg-red-500 px-3 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-1.5 animate-pulse">
-            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-            Live Now
-          </div>
+          {stats.isLive ? (
+            <div className="bg-red-500 px-3 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-1.5 animate-pulse">
+              <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+              Live Now
+            </div>
+          ) : (
+            <div className="bg-indigo-600 px-3 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-1.5">
+              <Clock size={10} />
+              {countdown || 'Scheduled'}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -114,8 +151,9 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
 
         <div className="space-y-3 pt-4 border-t border-white/10">
           <button 
-            onClick={onPlay}
-            className="w-full p-6 bg-yellow-400 hover:bg-yellow-300 active:scale-[0.98] transition-all rounded-3xl flex items-center justify-between group shadow-lg"
+            onClick={finalPlayButtonDisabled ? undefined : onPlay}
+            disabled={finalPlayButtonDisabled}
+            className="w-full p-6 bg-yellow-400 hover:bg-yellow-300 active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition-all rounded-3xl flex items-center justify-between group shadow-lg"
           >
             <div className="flex items-center gap-3">
               <div className="p-2 bg-indigo-950 rounded-xl text-yellow-400">
@@ -221,7 +259,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
       >
         <div className="flex items-center gap-2">
           <Timer size={14} />
-          Starts Every 10m
+          {t.startsAt}
         </div>
         <div className="flex items-center gap-2">
           <Trophy size={14} />

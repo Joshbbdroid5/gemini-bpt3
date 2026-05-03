@@ -341,6 +341,17 @@ let totalProfit = 0;
 let isMaintenanceMode = false;
 let activePlayers = 0;
 
+// Helper to get the next occurrence of 9:00 Afternoon Ethiopian Time (15:00 EAT / 12:00 UTC)
+const getNextStartTime = () => {
+  const now = new Date();
+  const target = new Date(now);
+  target.setUTCHours(12, 0, 0, 0); // 12:00 UTC is 15:00 EAT
+  if (now.getTime() > target.getTime()) {
+    target.setUTCDate(target.getUTCDate() + 1);
+  }
+  return target.getTime();
+};
+
 interface RoomState {
   stake: number;
   currentBalls: number[];
@@ -386,12 +397,15 @@ const verifiedUsers = new Set<string>();
 // If you find the server lagging, you can increase this to 7s or 10s
 const broadcastPoolUpdate = () => {
   const allRoomStats: Record<number, any> = {};
+  const nextStartTime = getNextStartTime();
   STAKES.forEach(stake => {
     const room = roomStates.get(stake)!;
     allRoomStats[stake] = {
       pool: room.globalPool,
       players: room.playerBoards.size,
-      gameId: room.currentGameId
+      gameId: room.currentGameId,
+      nextStartTime,
+      isLive: room.currentBalls.length > 0 && !room.isGameOver
     };
   });
 
@@ -406,8 +420,18 @@ const runGameLoop = (stake: number) => {
   const room = roomStates.get(stake)!;
 
   // Only suspend the loop if maintenance is enabled and we are NOT in the middle of an active round
-  if (isMaintenanceMode && room.currentBalls.length === 0 && room.globalPool === 0) {
+  if (isMaintenanceMode && room.currentBalls.length === 0 && room.globalPool === 0 && !room.isGameOver) {
     console.log(`Game loop [${stake}] suspended: Maintenance Mode is active and system is idle.`);
+    return;
+  }
+  
+  const now = Date.now();
+  const nextScheduledStartTime = getNextStartTime();
+
+  if (now < nextScheduledStartTime && room.currentBalls.length === 0 && !room.isGameOver) {
+    console.log(`Game [${stake}] waiting to start. Next scheduled start: ${new Date(nextScheduledStartTime).toLocaleString()} UTC`);
+    if (room.gameLoopTimeout) clearTimeout(room.gameLoopTimeout);
+    room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), nextScheduledStartTime - now);
     return;
   }
 
@@ -487,12 +511,18 @@ const resetGame = (stake: number) => {
   room.currentGameId = generateGameId(stake);
   io.to(`room_${stake}`).emit('game:reset');
   broadcastPoolUpdate();
-  runGameLoop(stake); // Restart the loop
+  const delay = getNextStartTime() - Date.now();
+  room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), Math.max(0, delay)); // Ensure delay is not negative
 };
 
 // Start the first game
 syncCache().then(async () => {
-  STAKES.forEach(stake => runGameLoop(stake));
+  STAKES.forEach(stake => {
+    const room = roomStates.get(stake)!;
+    const delay = getNextStartTime() - Date.now();
+    console.log(`Initial game [${stake}] scheduled for ${new Date(getNextStartTime()).toLocaleString()} UTC (in ${delay / 1000} seconds).`);
+    room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), Math.max(0, delay)); // Ensure delay is not negative
+  });
 
   // Launch the Telegram Bot alongside the server
   bot.launch()

@@ -30,7 +30,6 @@ export default function App() {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [connectionError, setConnectionError] = useState(false);
   const [myId, setMyId] = useState<string>('');
-  const [isGameActive, setIsGameActive] = useState(false);
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
   const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
@@ -39,7 +38,9 @@ export default function App() {
   const currentRoomStats = allRoomStats[stake] || {
     pool: 0,
     players: 0,
-    gameId: '---'
+    gameId: '---',
+    nextStartTime: 0,
+    isLive: false
   };
 
   // Initialize language from localStorage or default to 'en'
@@ -75,7 +76,7 @@ export default function App() {
         ...prev, 
         [stake]: { ...prev[stake], gameId: data.gameId } 
       }));
-      setIsGameActive(data.balls && data.balls.length > 0);
+      // isLive status is now handled by the server's broadcastPoolUpdate
     };
 
     const handleConnectError = (err: Error) => {
@@ -88,8 +89,8 @@ export default function App() {
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on('game:init', handleInit);
-    socket.on('game:ball', () => setIsGameActive(true));
-    socket.on('game:reset', () => setIsGameActive(false));
+    socket.on('game:ball', () => { /* isLive is updated via pool_sync */ });
+    socket.on('game:reset', () => { /* isLive is updated via pool_sync */ });
     socket.on('connect_error', handleConnectError);
 
     // Set a timeout to catch connection failures
@@ -145,10 +146,9 @@ export default function App() {
     setStake(choice);
     socket.emit('room:join', choice);
 
-    const isRoomActive = allRoomStats[choice]?.balls?.length > 0;
-    if (isRoomActive || isGameActive) {
+    // Use the isLive status from the specific room's stats
+    if (allRoomStats[choice]?.isLive) {
       startWatching();
-      return;
     }
     setPhase('selection');
   };
@@ -296,12 +296,8 @@ export default function App() {
             >
               <LobbyPage
                 onPlay={() => {
-                  // Immediate check from lobby
-                  if (isGameActive) {
-                    startWatching();
-                  } else {
-                    setPhase('home');
-                  }
+                  // onPlay will now always lead to startSelection, which handles the logic
+                  startSelection(stake);
                 }} 
                 onWatch={startWatching} 
                 stats={currentRoomStats}
@@ -325,8 +321,8 @@ export default function App() {
               <Dashboard 
                 onPlay={startSelection} 
                 language={language} 
-                onLanguageChange={setLanguage} 
-                isGameActive={isGameActive}
+                onLanguageChange={setLanguage}
+                isGameActive={currentRoomStats.isLive} // Pass the room's live status
               />
             </motion.div>
           )}

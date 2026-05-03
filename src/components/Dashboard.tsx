@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Language } from '../types';
 import { translations } from '../translations';
-
+// isGameActive prop now reflects the current room's live status
 interface Props {
   onPlay: (stake: number) => void;
   language: Language;
