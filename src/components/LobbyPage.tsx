@@ -7,7 +7,7 @@ import { translations } from '../translations';
 interface Props {
   onPlay: () => void;
   onWatch: () => void;
-  stats: { pool: number; players: number; gameId: string; nextStartTime?: number; isLive?: boolean };
+  stats: { pool: number; players: number; gameId: string; isLive?: boolean };
   winningHistory: any[];
   language: Language;
   onBack: () => void;
@@ -21,36 +21,10 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
   const t = translations[language];
   const [copied, setCopied] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(10);
-  const [countdown, setCountdown] = useState<string>('');
-  const [isPlayButtonDisabled, setIsPlayButtonDisabled] = useState(false);
 
-  useEffect(() => {
-    if (!stats.nextStartTime || stats.isLive) {
-      setCountdown('');
-      return;
-    }
-    
-    const updateCountdown = () => {
-      const remaining = stats.nextStartTime! - Date.now();
-      if (remaining <= 0) {
-        setCountdown('Starting...');
-      } else {
-        const h = Math.floor(remaining / 3600000);
-        const m = Math.floor((remaining % 3600000) / 60000);
-        const s = Math.floor((remaining % 60000) / 1000);
-        setCountdown(`${h}h ${m}m ${s}s`);
-        // Disable if more than 30 minutes away
-        setIsPlayButtonDisabled(remaining > 30 * 60 * 1000);
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [stats.nextStartTime, stats.isLive, language]); // Added language to dependencies for completeness
-
-  // Also disable if the game is live, as onPlay will redirect to watch
-  const finalPlayButtonDisabled = isPlayButtonDisabled || stats.isLive;
+  // The play button should only be disabled if the game is currently live,
+  // as onPlay will redirect to watch in that case.
+  const finalPlayButtonDisabled = stats.isLive;
 
   const copyId = () => {
     if (!myId) return;
@@ -107,8 +81,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
             </div>
           ) : (
             <div className="bg-indigo-600 px-3 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-1.5">
-              <Clock size={10} />
-              {countdown || 'Scheduled'}
+              <Clock size={10} /> Game Ready
             </div>
           )}
         </div>
@@ -257,10 +230,6 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
         transition={{ delay: 0.4 }}
         className="mt-12 flex items-center gap-8 opacity-40 text-[10px] font-black uppercase tracking-tighter"
       >
-        <div className="flex items-center gap-2">
-          <Timer size={14} />
-          {t.startsAt}
-        </div>
         <div className="flex items-center gap-2">
           <Trophy size={14} />
           Certified Provable Fair

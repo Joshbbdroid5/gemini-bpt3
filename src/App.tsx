@@ -43,7 +43,7 @@ export default function App() {
     pool: 0,
     players: 0,
     gameId: '---',
-    nextStartTime: 0,
+    // nextStartTime is removed as games start immediately
     isLive: false
   };
 
