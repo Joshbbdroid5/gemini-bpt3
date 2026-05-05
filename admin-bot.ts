@@ -72,21 +72,32 @@ bot.start(async (ctx) => {
     }
   }
 
-  if (!startPayload || !startPayload.startsWith('topup_')) {
-    const welcomeImageUrl = "https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920";
+  if (startPayload === 'deposit') {
+    return ctx.reply("💰 Enter the amount you wish to deposit (Minimum 10 ETB):", {
+      reply_markup: { force_reply: true }
+    });
+  }
 
-    return ctx.replyWithPhoto(
-      { url: welcomeImageUrl },
+  if (startPayload === 'withdraw') {
+    return ctx.reply("💸 Enter the amount you wish to withdraw (Minimum 50 ETB):", {
+      reply_markup: { force_reply: true }
+    });
+  }
+
+  if (!startPayload || !startPayload.startsWith('topup_')) {
+    return ctx.reply(
+      "✨ *Welcome to Lomi Bingo!* 🍋\n\nRefreshingly lucky! Select an option from the menu below to start winning:",
       {
-        caption: "Welcome to Lomi Bingo! 🍋\nSelect an option from the menu below:",
-        reply_markup: Markup.inlineKeyboard([
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
           [Markup.button.callback(' My Profile', 'my_profile'), Markup.button.callback('🎮 Play', 'play')],
           [Markup.button.callback('📝 Register', 'register'), Markup.button.callback('💳 Deposit', 'deposit')],
           [Markup.button.callback('💸 Withdraw', 'withdraw'), Markup.button.callback('🤝 Invite', 'invite')],
           [Markup.button.callback('ℹ️ Instruction', 'show_rules')],
           [Markup.button.callback('📞 Contact Support', 'help_support')]
-        ]).reply_markup
-      });
+        ])
+      }
+    );
   }
 
   // Parse payload: topup_100_guest_1234

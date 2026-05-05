@@ -12,12 +12,14 @@ interface Props {
   language: Language;
   onBack: () => void;
   myId: string;
-  onTopUp: (amount: number) => void; // New prop for top-up
+  onTopUp: (amount: number) => void;
+  onDeposit: () => void;
+  onWithdraw: () => void;
 }
 
 const MIN_DEPOSIT_AMOUNT = 10;
 // The onPlay prop now directly calls the startSelection logic from App.tsx
-export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, language, onBack, myId, onTopUp }: Props) {
+export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, language, onBack, myId, onTopUp, onDeposit, onWithdraw }: Props) {
   const t = translations[language];
   const [copied, setCopied] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(10);

@@ -121,9 +121,12 @@ export default function App() {
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.expand(); // Open full screen in Telegram
+      const user = tg.initDataUnsafe?.user;
+      if (user?.id) setMyId(user.id.toString());
+
       connectToGame({
         initData: tg.initData,
-        user: tg.initDataUnsafe?.user
+        user: user
       });
       socket.emit('room:join', 10); // Default to room 10
     } else {
@@ -353,6 +356,8 @@ export default function App() {
                 onBack={handleBackToHome}
                 myId={myId}
                 onTopUp={handleTopUp}
+                onDeposit={handleDeposit}
+                onWithdraw={handleWithdraw}
               />
             </motion.div>
           )}
