@@ -22,7 +22,7 @@ services:
         sync: false # Prevent syncing to git, manage in Render dashboard
       # Frontend URL (public, used by bot for WebApp link)
       - key: FRONTEND_URL
-        value:  #https://gemini-bpt3.onrender.com Replace with your actual Render URL
+        value:  https://gemini-bpt3.onrender.com #Replace with your actual Render URL 
       # VITE_API_URL (used by frontend to connect to backend)
       - key: VITE_API_URL
         value: https://gemini-bpt3.onrender.com # Usually same as FRONTEND_URL
