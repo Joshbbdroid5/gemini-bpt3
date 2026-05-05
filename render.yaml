@@ -4,6 +4,28 @@ services:
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm start
+    # Environment variables for the web service (backend and frontend build)
     envVars:
       - key: NODE_VERSION
         value: 20
+      # Telegram Bot Token (secret)
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false # Prevent syncing to git, manage in Render dashboard
+      # Admin Chat ID (secret)
+      - key: ADMIN_CHAT_ID
+        sync: false # Prevent syncing to git, manage in Render dashboard
+      # Admin Secret (secret)
+      - key: ADMIN_SECRET
+        sync: false # Prevent syncing to git, manage in Render dashboard
+      # MongoDB URI (secret)
+      - key: MONGODB_URI
+        sync: false # Prevent syncing to git, manage in Render dashboard
+      # Frontend URL (public, used by bot for WebApp link)
+      - key: FRONTEND_URL
+        value:  #https://gemini-bpt3.onrender.com Replace with your actual Render URL
+      # VITE_API_URL (used by frontend to connect to backend)
+      - key: VITE_API_URL
+        value: https://gemini-bpt3.onrender.com # Usually same as FRONTEND_URL
+      # VITE_TELEGRAM_BOT_USERNAME (used by frontend for bot deep links)
+      - key: VITE_TELEGRAM_BOT_USERNAME
+        value: LomyBingo75_bot # Replace with your actual bot username (without @)
