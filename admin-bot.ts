@@ -43,7 +43,7 @@ if (!ADMIN_CHAT_ID) {
   console.warn("⚠️ WARNING: ADMIN_CHAT_ID is not set. Admin commands will be inaccessible.");
 } else {
   console.log(`🚀 Admin Bot initialized. Authorized Admin ID: ${ADMIN_CHAT_ID}`);
-}
+} 
 
 export const bot = new Telegraf(BOT_TOKEN);
 
@@ -59,7 +59,7 @@ bot.start(async (ctx) => {
     try {
       // Only set referrer if user doesn't exist yet
       const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
-      const data = await response.json();
+      const data = response.ok ? await response.json() : { exists: false };
       if (!data.exists) {
         await fetch(`${API_URL}/admin/create-user`, {
           method: 'POST',
@@ -138,8 +138,8 @@ bot.action('my_profile', async (ctx) => {
   const userId = ctx.from.id.toString();
   try {
     const response = await fetch(`${API_URL}/admin/user-info?userId=${userId}&secret=${ADMIN_SECRET}`);
-    if (!response.ok) throw new Error("Failed to fetch user info");
-    const data = await response.json();
+    if (!response.ok) throw new Error(`Failed to fetch user info: ${response.status} ${response.statusText}`);
+    const data = await response.json().catch(() => ({ balance: 0, isVerified: false })); // Handle JSON parse error
     
     const inviteLink = `https://t.me/${ctx.botInfo.username}?start=ref_${userId}`;
     
@@ -153,7 +153,7 @@ bot.action('my_profile', async (ctx) => {
 
     await ctx.reply(message, { parse_mode: 'Markdown' });
     return ctx.answerCbQuery();
-  } catch (err) {
+  } catch (err: any) {
     console.error("Profile fetch error:", err);
     return ctx.answerCbQuery("❌ Error fetching profile.");
   }
@@ -198,7 +198,7 @@ bot.action(/maint_(on|off)/, async (ctx) => {
     });
     const data = await response.json();
     await ctx.editMessageText(`Status: ${data.isMaintenanceMode ? '🛑 Maintenance Mode Active' : '✅ Game Server Running'}`);
-  } catch (err) {
+  } catch (err: any) {
     await ctx.reply("❌ Error: Could not reach the game server.");
   }
 });
@@ -218,7 +218,7 @@ bot.action('view_pending', async (ctx) => {
       msg += `${index + 1}. User: \`${req.userId}\` - *${req.amount} ETB*\n`;
     });
     await ctx.reply(msg, { parse_mode: 'Markdown' });
-  } catch (err) {
+  } catch (err: any) {
     await ctx.reply("❌ Error fetching pending deposits from the server.");
   }
 });
@@ -241,7 +241,7 @@ bot.on('contact', async (ctx) => {
     }
 
     // Check if the user was already verified to give appropriate feedback
-    const userData = await response.json(); // Assuming the backend returns user data or status
+    const userData = await response.json().catch(() => ({ isNewUser: false })); // Assuming the backend returns user data or status
     const message = userData.isNewUser ? `✅ Thank you! Registered with: ${phone}` : `✅ Your registration details have been updated to: ${phone}`;
 
     await ctx.reply(message, Markup.removeKeyboard());
@@ -262,7 +262,7 @@ bot.action('play', async (ctx) => {
   const userId = ctx.from.id.toString();
   
   // Check registration status from backend
-  const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
+  const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`).catch(err => { console.error("Error checking user status:", err); return { ok: false, json: () => ({ isVerified: false }) } as Response; });
   const data = await response.json();
 
   if (!data.isVerified) {
@@ -405,7 +405,7 @@ bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
     } else {
       await ctx.reply("❌ Error: Could not connect to game server API.");
     }
-  } catch (err) {
+  } catch (err: any) {
     await ctx.reply("❌ Error: Server is offline.");
   }
 });
@@ -429,6 +429,6 @@ bot.action(/reject_(.+)/, async (ctx) => {
       `❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.`
     );
   } catch (err) {
-    await ctx.reply("❌ Error notifying server of rejection.");
+    await ctx.reply(`❌ Error notifying server of rejection: ${err instanceof Error ? err.message : String(err)}`);
   }
 });

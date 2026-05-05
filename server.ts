@@ -20,7 +20,9 @@ const __dirname = path.dirname(__filename);
 const server = http.createServer(app);
 
 // Configure CORS for Socket.io
-const io = new SocketIOServer(server, {
+let io: SocketIOServer; // Declare io here, initialize after DB connection
+
+const corsOptions = {
   cors: {
     // CRITICAL: Prevent other sites from connecting to your socket
     origin: process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
@@ -29,7 +31,7 @@ const io = new SocketIOServer(server, {
     methods: ["GET", "POST"],
     credentials: true
   }
-});
+};
 
 app.use(cors()); // Enable CORS for Express routes as well
 app.use(express.json());
@@ -145,7 +147,7 @@ async function syncCache() {
     if (stats) {
       totalVolume = stats.totalVolume;
       totalProfit = stats.totalProfit;
-    }
+    } else await GlobalStats.create({ key: 'main_stats', totalVolume: 0, totalProfit: 0 }); // Ensure stats exist
   } catch (err) {
     console.error('Failed to sync cache from MongoDB:', err);
   }
@@ -243,8 +245,6 @@ app.post('/admin/update-wallet', async (req, res) => {
       { $inc: { balance: amount } },
       { upsert: true, new: true, runValidators: true }
     );
-    
-    if (user) userWallets.set(userId, user.balance);
 
     // REFERRAL LOGIC: Reward the inviter with 5% of the deposit
     if (user?.referredBy) {
@@ -254,7 +254,6 @@ app.post('/admin/update-wallet', async (req, res) => {
         { $inc: { balance: bonus } },
         { new: true }
       );
-      if (referrer) userWallets.set(user.referredBy, referrer.balance);
     }
 
     // Remove from pending list upon approval
@@ -548,14 +547,17 @@ const resetGame = (stake: number) => {
 };
 
 // Start the first game
-dbPromise.then(() => syncCache()).then(async () => {
+dbPromise.then(async () => {
   try {
+    await syncCache(); // Ensure cache is synced after DB connection
+
+    io = new SocketIOServer(server, corsOptions); // Initialize Socket.io after DB is ready
+
     STAKES.forEach(stake => {
       // Start all game rooms immediately
       runGameLoop(stake);
     });
 
-    // Launch the Telegram Bot alongside the server
     await bot.launch();
     console.log("Telegram Bot initialized");
     
@@ -595,27 +597,26 @@ io.on('connection', (socket) => {
 
   // Fetch or Create User in DB
   User.findOne({ userId }).then(async (user: any) => {
+    let currentBalance = 0;
+    let isUserVerified = false;
     if (!user) {
-      const newUser = await User.create({ userId, balance: 1000, isVerified });
-      userWallets.set(userId, newUser.balance);
-      socket.emit('wallet:update', newUser.balance);
+      const newUser = await User.create({ userId, balance: 1000, isVerified: initData && verifyTelegramData(initData) });
+      currentBalance = newUser.balance;
+      isUserVerified = newUser.isVerified;
     } else {
       // Update verification status if it changed
-      if (isVerified && !user.isVerified) {
-        await User.updateOne({ userId }, { isVerified: true });
+      if (initData && verifyTelegramData(initData) && !user.isVerified) {
+        await User.updateOne({ userId }, { isVerified: true }); // Update DB if now verified
       }
-      userWallets.set(userId, user.balance);
-      socket.emit('wallet:update', user.balance);
+      currentBalance = user.balance;
+      isUserVerified = user.isVerified;
     }
-  });
-  
-  // Sync balance with client immediately
+    socket.emit('wallet:update', currentBalance);
+    socket.emit('user:status', { isVerified: isUserVerified });
+  }).catch(err => console.error(`Error fetching/creating user for socket ${socket.id}:`, err));
   
   activePlayers++;
   broadcastPoolUpdate();
-
-  // Inform the user of their verification status
-  socket.emit('user:status', { isVerified: verifiedUsers.has(userId) });
 
   // Joining a specific room
   socket.on('room:join', (stake: number) => {
@@ -646,14 +647,14 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const currentBalance = userWallets.get(userId) || 0;
+    const userRecord = await User.findOne({ userId });
+    const currentBalance = userRecord?.balance || 0;
 
     // SECURITY: Ensure user is verified before accepting bets
-    if (!verifiedUsers.has(userId)) {
+    if (!userRecord?.isVerified) {
       socket.emit('message', 'Please verify your account to place bets.');
       return;
     }
-
     // SECURITY: Validate data and balance
     if (typeof data.stake !== 'number' || !Array.isArray(data.boardIds) || data.stake <= 0) {
       console.log(`Blocked suspicious bet from ${userId}: ${data.stake}`);
@@ -668,7 +669,6 @@ io.on('connection', (socket) => {
     // Deduct from wallet
     const user = await User.findOneAndUpdate({ userId }, { $inc: { balance: -data.stake } }, { new: true });
     if (user) {
-      userWallets.set(userId, user.balance);
       socket.emit('wallet:update', user.balance);
     }
 

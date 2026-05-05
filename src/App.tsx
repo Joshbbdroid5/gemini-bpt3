@@ -191,7 +191,7 @@ export default function App() {
 
   const handleTopUp = (amount: number) => {
     const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME; // e.g., @your_bingo_bot
-    if (!botUsername) {
+    if (!botUsername || botUsername === 'YOUR_BOT_USERNAME_HERE') { // Added check for placeholder
       alert("Telegram bot username is not configured. Please set VITE_TELEGRAM_BOT_USERNAME.");
       return;
     }
@@ -205,8 +205,8 @@ export default function App() {
   };
 
   const handleDeposit = () => {
-    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
-    if (!botUsername) return alert("Bot username not set.");
+    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME; // e.g., @your_bingo_bot
+    if (!botUsername || botUsername === 'YOUR_BOT_USERNAME_HERE') return alert("Bot username not set. Please set VITE_TELEGRAM_BOT_USERNAME.");
     if (window.Telegram?.WebApp) {
        window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=deposit`);
     } else {
@@ -215,8 +215,8 @@ export default function App() {
   };
 
   const handleWithdraw = () => {
-    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
-    if (!botUsername) return alert("Bot username not set.");
+    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME; // e.g., @your_bingo_bot
+    if (!botUsername || botUsername === 'YOUR_BOT_USERNAME_HERE') return alert("Bot username not set. Please set VITE_TELEGRAM_BOT_USERNAME.");
     if (window.Telegram?.WebApp) {
        window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=withdraw`);
     } else {

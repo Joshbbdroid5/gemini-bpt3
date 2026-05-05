@@ -23,9 +23,7 @@
       "@/*": [
         "./src/*"
       ]
-    },
-    "allowImportingTsExtensions": true,
-    "noEmit": true
+    }
   },
-  "include": ["src"]
+  "include": ["src", "server.ts", "admin-bot.ts"]
 }
