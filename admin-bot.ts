@@ -55,34 +55,37 @@ bot.start(async (ctx) => {
   if (startPayload && startPayload.startsWith('ref_')) {
     const referrerId = startPayload.replace('ref_', '');
     const userId = ctx.from.id.toString();
-    
-    // Only set referrer if user doesn't exist yet
-    const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
-    const data = await response.json();
-    if (!data.exists) {
-      await fetch(`${API_URL}/admin/create-user`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, referredBy: referrerId, secret: ADMIN_SECRET })
-      }).catch(err => console.error("Failed to register referral:", err));
+
+    try {
+      // Only set referrer if user doesn't exist yet
+      const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
+      const data = await response.json();
+      if (!data.exists) {
+        await fetch(`${API_URL}/admin/create-user`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, referredBy: referrerId, secret: ADMIN_SECRET })
+        });
+      }
+    } catch (err) {
+      console.error("Referral processing failed:", err);
     }
   }
 
   if (!startPayload || !startPayload.startsWith('topup_')) {
-    // Placeholder for your welcome image URL
-    const welcomeImageUrl = "https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920"; // Replace with your actual welcome image URL
+    const welcomeImageUrl = "https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920";
 
     return ctx.replyWithPhoto(
       { url: welcomeImageUrl },
       {
         caption: "Welcome to Lomi Bingo! 🍋\nSelect an option from the menu below:",
-        ...Markup.inlineKeyboard([
+        reply_markup: Markup.inlineKeyboard([
           [Markup.button.callback(' My Profile', 'my_profile'), Markup.button.callback('🎮 Play', 'play')],
           [Markup.button.callback('📝 Register', 'register'), Markup.button.callback('💳 Deposit', 'deposit')],
           [Markup.button.callback('💸 Withdraw', 'withdraw'), Markup.button.callback('🤝 Invite', 'invite')],
-          [Markup.button.callback('ℹ️ Instruction', 'show_rules'), Markup.button.callback('🤝 Invite', 'invite')],
+          [Markup.button.callback('ℹ️ Instruction', 'show_rules')],
           [Markup.button.callback('📞 Contact Support', 'help_support')]
-        ])
+        ]).reply_markup
       });
   }
 
