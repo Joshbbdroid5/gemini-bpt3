@@ -23,8 +23,8 @@ services:
       # Frontend URL (public, used by bot for WebApp link)
       - key: FRONTEND_URL
         value:  https://gemini-bpt3.onrender.com #Replace with your actual Render URL 
-      # VITE_API_URL (used by frontend to connect to backend)
-      - key: VITE_API_URL
+      # VITE_BACKEND_URL (used by frontend to connect to backend)
+      - key: VITE_BACKEND_URL
         value: https://gemini-bpt3.onrender.com # Usually same as FRONTEND_URL
       # VITE_TELEGRAM_BOT_USERNAME (used by frontend for bot deep links)
       - key: VITE_TELEGRAM_BOT_USERNAME

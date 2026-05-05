@@ -50,12 +50,13 @@ if (process.env.NODE_ENV === 'production' && MONGODB_URI.includes('localhost')) 
 }
 
 console.log('Attempting to connect to MongoDB...');
-mongoose.connect(MONGODB_URI, {
+const dbPromise = mongoose.connect(MONGODB_URI, {
   serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of hanging
 })
   .then((conn) => {
     console.log(`✅ Connected to MongoDB: ${conn.connection.host}`);
     console.log(`📂 Database Name: ${conn.connection.name}`);
+    return conn;
   })
   .catch(err => {
     console.error('❌ MongoDB Connection Error Details:');
@@ -66,6 +67,7 @@ mongoose.connect(MONGODB_URI, {
       console.error('👉 TIP: SRV connection strings (mongodb+srv://) must not include a port number. Remove ":27017" or any other port from your URI string in Render.');
     }
     console.error(`Error Message: ${err.message}`);
+    throw err; // Re-throw to prevent further initialization
   });
 
 // TopUpHistory Schema
@@ -300,6 +302,11 @@ app.post('/admin/verify-user', async (req, res) => {
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
 
   try {
+    if (mongoose.connection.readyState !== 1) {
+      throw new Error("Database not connected");
+    }
+
+    const existingUser = await User.findOne({ userId });
     const user = await User.findOneAndUpdate(
       { userId },
       { isVerified: true, phone }, // Assuming you might want to add a phone field to User schema
@@ -312,10 +319,10 @@ app.post('/admin/verify-user', async (req, res) => {
       io.to(socketId).emit('user:status', { isVerified: true });
     }
 
-    res.json({ success: true });
+    res.json({ success: true, isNewUser: !existingUser?.phone });
   } catch (err) {
     console.error("Verification Route Error:", err); // Log the real error
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : String(err) });
   }
 });
 
@@ -541,23 +548,27 @@ const resetGame = (stake: number) => {
 };
 
 // Start the first game
-syncCache().then(async () => {
-  STAKES.forEach(stake => {
-    // Start all game rooms immediately
-    runGameLoop(stake);
-  });
+dbPromise.then(() => syncCache()).then(async () => {
+  try {
+    STAKES.forEach(stake => {
+      // Start all game rooms immediately
+      runGameLoop(stake);
+    });
 
-  // Launch the Telegram Bot alongside the server
-  bot.launch()
-    .then(() => {
-      console.log("Telegram Bot initialized");
-      const adminId = process.env.ADMIN_CHAT_ID;
-      if (adminId) {
-        bot.telegram.sendMessage(adminId, "🚀 *Bot Online*\nThe game server and admin bot have started successfully.", { parse_mode: 'Markdown' })
-          .catch(e => console.error("Failed to send startup message to admin:", e.message));
-      }
-    })
-    .catch(err => console.error("Failed to launch Telegram Bot:", err));
+    // Launch the Telegram Bot alongside the server
+    await bot.launch();
+    console.log("Telegram Bot initialized");
+    
+    const adminId = process.env.ADMIN_CHAT_ID;
+    if (adminId) {
+      bot.telegram.sendMessage(adminId, "🚀 *Bot Online*\nThe game server and admin bot have started successfully.", { parse_mode: 'Markdown' })
+        .catch(e => console.error("Failed to send startup message to admin:", e.message));
+    }
+  } catch (err) {
+    console.error("Failed to start application services:", err);
+  }
+}).catch(err => {
+  console.error("Critical: Application failed to start due to MongoDB connection failure.");
 });
 
 // Socket.io Logic
@@ -688,11 +699,19 @@ io.on('connection', (socket) => {
 });
 
 // Serve static files from the Vite build directory
-app.use(express.static(path.join(__dirname, 'dist')));
+const distPath = path.join(__dirname, 'dist');
+const indexPath = path.join(distPath, 'index.html');
+
+app.use(express.static(distPath));
 
 // Handle SPA routing: serve index.html for any unknown routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    console.error(`❌ Deployment Error: index.html not found at ${indexPath}`);
+    res.status(404).send("Frontend build files not found. Please ensure 'npm run build' completed successfully.");
+  }
 });
 
 // Handle Graceful Shutdown for Render
