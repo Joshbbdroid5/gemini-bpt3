@@ -21,6 +21,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.546.0",
