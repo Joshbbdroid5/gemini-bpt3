@@ -1,3 +1,5 @@
+/// <reference types="react" />
+
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { Info, X, Trophy, RefreshCcw } from 'lucide-react';
@@ -18,6 +20,10 @@ declare global {
     Telegram?: any;
   }
 }
+
+// Access environment variables once at the top level
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
+const IS_BOT_CONFIGURED = BOT_USERNAME && BOT_USERNAME !== 'YOUR_BOT_USERNAME_HERE' && BOT_USERNAME !== '';
 
 export default function App() {
   const [phase, setPhase] = useState<AppPhase>('home');
@@ -190,37 +196,34 @@ export default function App() {
   };
 
   const handleTopUp = (amount: number) => {
-    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME; // e.g., @your_bingo_bot
-    if (!botUsername || botUsername === 'YOUR_BOT_USERNAME_HERE') { // Added check for placeholder
-      alert("Telegram bot username is not configured. Please set VITE_TELEGRAM_BOT_USERNAME.");
+    if (!IS_BOT_CONFIGURED) {
+      alert(`Configuration Error: VITE_TELEGRAM_BOT_USERNAME is not set (Current: ${BOT_USERNAME})`);
       return;
     }
     if (window.Telegram?.WebApp) {
       // Using the 'start' parameter to pass structured data to the bot
       const payload = `topup_${amount}_${myId}`; // Example payload: topup_100_guest_1234
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=${encodeURIComponent(payload)}`);
+      window.Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(payload)}`);
     } else {
       alert("This feature is only available in Telegram WebApp.");
     }
   };
 
   const handleDeposit = () => {
-    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME; // e.g., @your_bingo_bot
-    if (!botUsername || botUsername === 'YOUR_BOT_USERNAME_HERE') return alert("Bot username not set. Please set VITE_TELEGRAM_BOT_USERNAME.");
+    if (!IS_BOT_CONFIGURED) return alert("Bot username not set. Please check Render Environment variables.");
     if (window.Telegram?.WebApp) {
-       window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=deposit`);
+       window.Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=deposit`);
     } else {
-       window.open(`https://t.me/${botUsername}?start=deposit`, '_blank');
+       window.open(`https://t.me/${BOT_USERNAME}?start=deposit`, '_blank');
     }
   };
 
   const handleWithdraw = () => {
-    const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME; // e.g., @your_bingo_bot
-    if (!botUsername || botUsername === 'YOUR_BOT_USERNAME_HERE') return alert("Bot username not set. Please set VITE_TELEGRAM_BOT_USERNAME.");
+    if (!IS_BOT_CONFIGURED) return alert("Bot username not set. Please check Render Environment variables.");
     if (window.Telegram?.WebApp) {
-       window.Telegram.WebApp.openTelegramLink(`https://t.me/${botUsername}?start=withdraw`);
+       window.Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=withdraw`);
     } else {
-       window.open(`https://t.me/${botUsername}?start=withdraw`, '_blank');
+       window.open(`https://t.me/${BOT_USERNAME}?start=withdraw`, '_blank');
     }
   };
 
@@ -274,7 +277,7 @@ export default function App() {
           animate={{ opacity: 0.6, scale: 1, borderRadius: '0%' }}
           exit={{ opacity: 0, scale: 1.2, borderRadius: '50%' }}
           transition={{ duration: 0.7, ease: "easeOut" }}
-          className="absolute inset-0 z-[1] bg-gradient-to-br from-yellow-500/70 via-lime-500/70 to-green-700/70 pointer-events-none"
+          className="absolute inset-0 z-1 bg-linear-to-br from-yellow-500/70 via-lime-500/70 to-green-700/70 pointer-events-none"
         />
       </AnimatePresence>
 
@@ -283,7 +286,7 @@ export default function App() {
         onShowHistory={() => setPhase('history')}
       />
       
-      <main ref={mainContentRef} className="flex-1 flex flex-col relative z-[2] bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar">
+      <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar">
         {/* Loading state while verification status is unknown */}
         {isVerified === null && (
           <motion.div
@@ -291,7 +294,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[150] bg-[#1a1b2e] flex flex-col items-center justify-center p-8 text-center"
+            className="fixed inset-0 z-150 bg-primary flex flex-col items-center justify-center p-8 text-center"
           >
             {!connectionError ? (
               <>
@@ -321,7 +324,7 @@ export default function App() {
           {isVerified === false && (
             <motion.div
               key="verify"
-              className="fixed inset-0 z-[150] bg-[#1a1b2e] flex flex-col items-center justify-center p-8 text-center"
+              className="fixed inset-0 z-150 bg-primary flex flex-col items-center justify-center p-8 text-center"
             >
               <div className="w-20 h-20 bg-orange-500/20 rounded-full flex items-center justify-center mb-6">
                 <Info size={40} className="text-orange-500" />
@@ -449,7 +452,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-indigo-900/90 backdrop-blur-xl text-center"
+              className="fixed inset-0 z-100 flex items-center justify-center p-6 bg-indigo-900/90 backdrop-blur-xl text-center"
             >
               <motion.div
                 initial={{ scale: 0.8, y: 20 }}
@@ -513,7 +516,7 @@ export default function App() {
         {/* Rules Modal */}
         <AnimatePresence>
           {showRules && (
-            <div className="fixed inset-0 z-[101] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <div className="fixed inset-0 z-101 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}

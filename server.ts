@@ -22,18 +22,20 @@ const server = http.createServer(app);
 // Configure CORS for Socket.io
 let io: SocketIOServer; // Declare io here, initialize after DB connection
 
+const allowedOrigins = process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, ""))
+  : ["http://localhost:5173", "http://127.0.0.1:5173"];
+
 const corsOptions = {
   cors: {
     // CRITICAL: Prevent other sites from connecting to your socket
-    origin: process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
-      ? process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, "")) // Support multiple origins
-      : ["http://localhost:5173", "http://127.0.0.1:5173"], // Specific origins for dev
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
 };
 
-app.use(cors()); // Enable CORS for Express routes as well
+app.use(cors(corsOptions.cors)); // Match REST API CORS policy to Socket.io
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
@@ -552,6 +554,7 @@ dbPromise.then(async () => {
     await syncCache(); // Ensure cache is synced after DB connection
 
     io = new SocketIOServer(server, corsOptions); // Initialize Socket.io after DB is ready
+    registerSocketHandlers();
 
     STAKES.forEach(stake => {
       // Start all game rooms immediately
@@ -574,8 +577,9 @@ dbPromise.then(async () => {
 });
 
 // Socket.io Logic
-io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+function registerSocketHandlers() {
+  io.on('connection', (socket) => {
+    console.log(`User connected: ${socket.id}`);
 
   const { initData, user, userId: fallbackId } = socket.handshake.auth;
   let userId = fallbackId || `guest_${socket.id.substring(0, 4)}`;
@@ -683,20 +687,14 @@ io.on('connection', (socket) => {
     broadcastPoolUpdate();
   });
 
-  // Example: Join a game room
-  socket.on('room:join', (roomId: string) => {
-    socket.join(roomId);
-    console.log(`${userId} joined room: ${roomId}`);
-    io.to(roomId).emit('message', `${userId} has joined the room.`);
+    socket.on('disconnect', () => {
+      console.log(`User disconnected: ${socket.id}`);
+      socketMapping.delete(userId);
+      activePlayers = Math.max(0, activePlayers - 1);
+      broadcastPoolUpdate();
+    });
   });
-
-  socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
-    socketMapping.delete(userId);
-    activePlayers = Math.max(0, activePlayers - 1);
-    broadcastPoolUpdate();
-  });
-});
+}
 
 // Serve static files from the Vite build directory
 const distPath = path.join(__dirname, 'dist');
