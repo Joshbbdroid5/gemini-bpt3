@@ -96,7 +96,7 @@ export default function AdminDashboard({ onBack }: Props) {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#1a1b2e]">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-primary">
         <Shield size={48} className="text-indigo-500 mb-4" />
         <h2 className="text-xl font-black text-white uppercase italic mb-6 text-center">Admin Access</h2>
         <input 
@@ -118,7 +118,7 @@ export default function AdminDashboard({ onBack }: Props) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-[#1a1b2e] overflow-hidden">
+    <div className="flex-1 flex flex-col bg-primary overflow-hidden">
       <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-2 bg-white/5 rounded-full" aria-label="Go back"><ArrowLeft size={18} /></button>

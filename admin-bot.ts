@@ -15,6 +15,9 @@ const FRONTEND_URL = process.env.FRONTEND_URL || process.env.VITE_BACKEND_URL;
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
+// Payment Details
+const PAYMENT_PHONE = process.env.PAYMENT_PHONE || '0978015131';
+
 /**
  * Helper to safely notify a user. 
  * Telegram Chat IDs are numbers. Guest IDs (e.g., 'guest_1234') cannot receive bot messages.
@@ -261,9 +264,27 @@ bot.on('contact', async (ctx) => {
 bot.action('play', async (ctx) => {
   const userId = ctx.from.id.toString();
   
-  // Check registration status from backend
-  const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`).catch(err => { console.error("Error checking user status:", err); return { ok: false, json: () => ({ isVerified: false }) } as Response; });
-  const data = await response.json();
+  let data: { isVerified: boolean }; // Define the expected type for data
+  try {
+    // Check registration status from backend
+    const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
+    
+    if (!response.ok) {
+      // If the response itself indicates an error (e.g., 404, 500 from backend)
+      console.error(`Backend responded with an error for user ${userId}: ${response.status} ${response.statusText}`);
+      data = { isVerified: false }; // Treat as unverified on backend error
+    } else {
+      // Attempt to parse JSON
+      data = await response.json().catch(jsonErr => {
+        console.error(`Error parsing user status JSON for user ${userId}:`, jsonErr);
+        return { isVerified: false }; // Treat as unverified on JSON parse error
+      });
+    }
+  } catch (fetchErr) {
+    // This catch block handles network errors or other issues preventing the fetch call
+    console.error(`Error checking user status for user ${userId}:`, fetchErr);
+    data = { isVerified: false }; // Treat as unverified on fetch error
+  }
 
   if (!data.isVerified) {
     return ctx.reply("⚠️ You must register first before playing.", Markup.inlineKeyboard([
@@ -302,8 +323,7 @@ bot.on('text', async (ctx) => {
       return ctx.replyWithMarkdown(
         `💳 *DEPOSIT INSTRUCTIONS*\n\n` +
         `1. Send exactly *${amount} ETB* to our Telebirr account:\n` +
-        `Number: \`0978015131\`\n` +
-        `Name: *Lomi Bingo*\n\n` +
+        `Number: \`${PAYMENT_PHONE}\`\n` +
         `(_Tap the number above to copy it_)\n\n` +
         `2. After paying, *copy* the Telebirr confirmation SMS and *paste* it here as a reply to this message.`
       );
