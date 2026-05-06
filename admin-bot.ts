@@ -3,17 +3,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID; // 1307241885
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID?.trim(); // 1307241885
 const PORT = process.env.PORT || 3001;
 
 // For internal requests within the same Render service
-const API_URL = process.env.VITE_API_URL || `http://127.0.0.1:${PORT}`;
+const API_URL = process.env.INTERNAL_API_URL || process.env.VITE_API_URL || `http://127.0.0.1:${PORT}`;
 
 // The public URL used to launch the WebApp (Must be HTTPS)
-const FRONTEND_URL = process.env.FRONTEND_URL || process.env.VITE_BACKEND_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL?.trim() || process.env.VITE_BACKEND_URL?.trim();
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
+const ADMIN_SECRET = process.env.ADMIN_SECRET?.trim();
 
 // Payment Details
 const PAYMENT_PHONE = process.env.PAYMENT_PHONE || '0978015131';
@@ -49,6 +49,12 @@ if (!ADMIN_CHAT_ID) {
 } 
 
 export const bot = new Telegraf(BOT_TOKEN);
+
+function requireAdminSecret(ctx: any): boolean {
+  if (ADMIN_SECRET) return true;
+  ctx.reply("❌ Bot configuration error: ADMIN_SECRET is missing on the server.");
+  return false;
+}
 
 // 1. Handle user clicking "Top Up" in the WebApp
 bot.start(async (ctx) => {
@@ -93,7 +99,7 @@ bot.start(async (ctx) => {
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.callback(' My Profile', 'my_profile'), Markup.button.callback('🎮 Play', 'play')],
+          [Markup.button.callback('👤 My Profile', 'my_profile'), Markup.button.callback('🎮 Play', 'play')],
           [Markup.button.callback('📝 Register', 'register'), Markup.button.callback('💳 Deposit', 'deposit')],
           [Markup.button.callback('💸 Withdraw', 'withdraw'), Markup.button.callback('🤝 Invite', 'invite')],
           [Markup.button.callback('ℹ️ Instruction', 'show_rules')],
@@ -138,6 +144,7 @@ bot.start(async (ctx) => {
 
 // --- My Profile Handler ---
 bot.action('my_profile', async (ctx) => {
+  if (!requireAdminSecret(ctx)) return;
   const userId = ctx.from.id.toString();
   try {
     const response = await fetch(`${API_URL}/admin/user-info?userId=${userId}&secret=${ADMIN_SECRET}`);
@@ -191,6 +198,7 @@ bot.command('manage', (ctx) => {
 
 bot.action(/maint_(on|off)/, async (ctx) => {
   if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery("Unauthorized");
+  if (!requireAdminSecret(ctx)) return;
   const enable = ctx.match[1] === 'on';
   
   try {
@@ -208,6 +216,7 @@ bot.action(/maint_(on|off)/, async (ctx) => {
 
 bot.action('view_pending', async (ctx) => {
   if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery("Unauthorized");
+  if (!requireAdminSecret(ctx)) return;
   try {
     const response = await fetch(`${API_URL}/admin/pending-deposits?secret=${ADMIN_SECRET}`);
     const pending = await response.json();
@@ -228,6 +237,7 @@ bot.action('view_pending', async (ctx) => {
 
 // Handle Phone Number Sharing
 bot.on('contact', async (ctx) => {
+  if (!requireAdminSecret(ctx)) return;
   const userId = ctx.from.id;
   const phone = ctx.message.contact.phone_number;
   
@@ -262,6 +272,7 @@ bot.on('contact', async (ctx) => {
 
 // --- 2nd Button: Play ---
 bot.action('play', async (ctx) => {
+  if (!requireAdminSecret(ctx)) return;
   const userId = ctx.from.id.toString();
   
   let data: { isVerified: boolean }; // Define the expected type for data
@@ -290,6 +301,10 @@ bot.action('play', async (ctx) => {
     return ctx.reply("⚠️ You must register first before playing.", Markup.inlineKeyboard([
       [Markup.button.callback('📝 Register Now', 'register')]
     ]));
+  }
+
+  if (!FRONTEND_URL) {
+    return ctx.reply("❌ Bot configuration error: FRONTEND_URL is missing.");
   }
   
   return ctx.reply("Good luck! 🎮", Markup.inlineKeyboard([
@@ -405,6 +420,7 @@ bot.action('invite', (ctx) => {
 
 // 2. Handle Admin Approval
 bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
+  if (!requireAdminSecret(ctx)) return;
   const amount = parseInt(ctx.match[1]);
   const userId = ctx.match[2];
 
@@ -432,6 +448,7 @@ bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
 
 // 3. Handle Admin Rejection
 bot.action(/reject_(.+)/, async (ctx) => {
+  if (!requireAdminSecret(ctx)) return;
   const userId = ctx.match[1];
 
   try {
@@ -451,4 +468,8 @@ bot.action(/reject_(.+)/, async (ctx) => {
   } catch (err) {
     await ctx.reply(`❌ Error notifying server of rejection: ${err instanceof Error ? err.message : String(err)}`);
   }
+});
+
+bot.catch((err) => {
+  console.error("Unhandled Telegram bot error:", err);
 });
