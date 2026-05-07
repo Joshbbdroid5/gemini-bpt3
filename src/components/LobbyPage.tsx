@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Play, Eye, Timer, Trophy, History, Copy, Check, Wallet, ArrowLeft, Clock } from 'lucide-react';
+import { Users, Play, Timer, Trophy, History, Copy, Check, Wallet, ArrowLeft, Clock, } from 'lucide-react';
 import { Language } from '../types';
 import { translations } from '../translations';
 
 interface Props {
   onPlay: () => void;
-  onWatch: () => void;
   stats: { pool: number; players: number; gameId: string; isLive?: boolean };
   winningHistory: any[];
   language: Language;
@@ -19,7 +18,7 @@ interface Props {
 
 const MIN_DEPOSIT_AMOUNT = 10;
 // The onPlay prop now directly calls the startSelection logic from App.tsx
-export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, language, onBack, myId, onTopUp, onDeposit, onWithdraw }: Props) {
+export default function LobbyPage({ onPlay, stats, winningHistory, language, onBack, myId, onTopUp, onDeposit, onWithdraw }: Props) {
   const t = translations[language];
   const [copied, setCopied] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(10);
@@ -142,13 +141,7 @@ export default function LobbyPage({ onPlay, onWatch, stats, winningHistory, lang
             <ArrowRightIcon className="text-indigo-950 group-hover:translate-x-1 transition-transform" />
           </button>
 
-          <button 
-            onClick={onWatch}
-            className="w-full p-4 bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all rounded-3xl border border-white/10 flex items-center justify-center gap-3 text-white font-black uppercase tracking-widest text-[10px]"
-          >
-            <Eye size={16} />
-            Watch Without Staking
-          </button>
+
         </div>
 
         {/* Top Up Button */}

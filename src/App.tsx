@@ -163,11 +163,15 @@ export default function App() {
   };
 
   const startSelection = () => {
+    // If game is already live, send user directly to GamePage in watching-only mode.
     if (currentRoomStats.isLive) {
-      startWatching();
-    } else {
-      setPhase('selection');
+      setSelectedBoardIds([]);
+      setPhase('game');
+      return;
     }
+
+    // Otherwise, allow board selection and betting.
+    setPhase('selection');
   };
 
   const completeSelection = (ids: number[]) => {
@@ -357,7 +361,7 @@ export default function App() {
             >
               <LobbyPage 
                 onPlay={startSelection}
-                onWatch={startWatching} 
+
                 stats={currentRoomStats}
                 winningHistory={winningHistory}
                 language={language}

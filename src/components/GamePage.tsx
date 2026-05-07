@@ -251,14 +251,14 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
           {/* Board or Watching Only */}
           <div className="flex-1 bg-[#23243d] rounded-xl border border-white/10 overflow-hidden flex flex-col">
-            {selectedBoardIds.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-4">
-                <h3 className="text-xl font-black tracking-tight text-white">{t.watchingOnly}</h3>
-                <div className="text-[10px] font-bold text-indigo-300 leading-relaxed uppercase">
-                  {t.watchingText}
+          {selectedBoardIds.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-4">
+                  <h3 className="text-xl font-black tracking-tight text-white">{t.watchingOnly}</h3>
+                  <div className="text-[10px] font-bold text-indigo-300 leading-relaxed uppercase">
+                    {t.watchingText}
+                  </div>
                 </div>
-              </div>
-            ) : (
+              ) : (
                 <div className="flex-1 overflow-hidden p-2 space-y-4">
                 {boardsData.map(({ id, grid }: { id: number, grid: BingoBoardData }) => (
                   <div key={id} className="p-2 bg-indigo-900/50 rounded-lg border border-white/5">
