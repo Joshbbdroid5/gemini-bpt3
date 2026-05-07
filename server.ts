@@ -410,7 +410,7 @@ interface RoomState {
 }
 
 const roomStates = new Map<number, RoomState>();
-const STAKES = [10, 20];
+const STAKES = [10];
 
 function generateGameId(stake: number) {
   return `LB-${stake}-${Math.floor(100000 + Math.random() * 900000)}`;

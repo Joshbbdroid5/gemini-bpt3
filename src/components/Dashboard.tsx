@@ -95,7 +95,7 @@ export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allSt
 
       {/* Entry Fee Buttons */}
       <div className="flex flex-col gap-6 w-full max-w-xs">
-        {[10, 20].map((amount) => (
+        {[10].map((amount) => (
           <motion.button
             key={amount}
             whileHover={{ scale: 1.02 }}
