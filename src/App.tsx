@@ -265,7 +265,14 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
       {/* Static background image */}
-      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920')] bg-cover bg-center opacity-35 pointer-events-none z-0"></div>
+      {/* Telegram WebView sometimes renders/streams remote images poorly, causing a "disturbing" look.
+          Disable heavy remote background inside Telegram. */}
+      {!(window.Telegram?.WebApp) ? (
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920')] bg-cover bg-center opacity-35 pointer-events-none z-0" />
+      ) : null}
+
+
+
 
       {/* Animated background overlay for transitions */}
       <AnimatePresence>
