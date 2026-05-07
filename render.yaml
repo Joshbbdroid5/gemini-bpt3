@@ -22,7 +22,8 @@ services:
         sync: false # Prevent syncing to git, manage in Render dashboard
       # Frontend URL (public, used by bot for WebApp link)
       - key: FRONTEND_URL
-        value:  https://lomybingo75.onrender.com # Replace with your actual Render URL
+        value: https://lomybingo75.onrender.com # Replace with your actual Render URL
+
       # VITE_BACKEND_URL (used by the frontend to connect to the backend)
       - key: VITE_BACKEND_URL
         value: https://lomybingo75.onrender.com # Usually same as FRONTEND_URL
