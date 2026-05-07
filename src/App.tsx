@@ -8,9 +8,13 @@ import Dashboard from './components/Dashboard';
 import SelectionPage from './components/SelectionPage';
 import GamePage from './components/GamePage';
 import HistoryPage from './components/HistoryPage';
-import LobbyPage from './components/LobbyPage'; // Ensure this import is correct
+
 import AdminDashboard from './components/AdminDashboard';
+import ProfilePage from './components/ProfilePage';
+import BottomTabs, { BottomTabKey } from './components/BottomTabs';
 import { AppPhase, HistoryEntry, Language } from './types';
+
+
 import { connectToGame, disconnectFromGame, socket, socketEvents } from './components/socket';
 import { translations } from './translations';
 
@@ -27,6 +31,8 @@ const IS_BOT_CONFIGURED = BOT_USERNAME && BOT_USERNAME !== 'YOUR_BOT_USERNAME_HE
 
 export default function App() {
   const [phase, setPhase] = useState<AppPhase>('home');
+  const [bottomTab, setBottomTab] = useState<BottomTabKey>('game');
+
   const [stake, setStake] = useState(10);
   const [wallet, setWallet] = useState(1000);
   const [selectedBoardIds, setSelectedBoardIds] = useState<number[]>([]);
@@ -49,20 +55,33 @@ export default function App() {
     pool: 0,
     players: 0,
     gameId: '---',
-    // nextStartTime is removed as games start immediately
     isLive: false
   };
 
-  // Initialize language from localStorage or default to 'en'
+  // Homepage Play uses only stake=10 and decides between selection vs watching.
+  const handleHomePlay = () => {
+    if (currentRoomStats.isLive) {
+      setSelectedBoardIds([]); // watching-only
+      setPhase('game');
+      return;
+    }
+    setPhase('selection');
+  };
+
+
+  // Initialize language from Telegram bot payload (start_param=lang_xx) or fallback to 'en'
   const [language, setLanguage] = useState<Language>(() => {
-    const savedLanguage = localStorage.getItem('bingoLanguage');
-    return (savedLanguage as Language) || 'en';
+    try {
+      const sp = (window.Telegram?.WebApp as any)?.initDataUnsafe?.start_param;
+      if (typeof sp === 'string' && sp.startsWith('lang_')) {
+        const lang = sp.replace('lang_', '') as Language;
+        if (lang === 'en' || lang === 'am' || lang === 'om') return lang;
+      }
+    } catch (_) {}
+    return 'en';
   });
 
-  // Save language to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('bingoLanguage', language);
-  }, [language]);
+
 
   // Handle Socket Connection
   useEffect(() => {
@@ -130,12 +149,20 @@ export default function App() {
       const user = tg.initDataUnsafe?.user;
       if (user?.id) setMyId(user.id.toString());
 
+      const startPayload = (window.Telegram?.WebApp as any)?.initDataUnsafe?.start_param;
+      // Prefer explicit language coming from bot start payload (e.g. lang_am)
+      if (typeof startPayload === 'string' && startPayload.startsWith('lang_')) {
+        const lang = startPayload.replace('lang_', '') as Language;
+        if (lang === 'en' || lang === 'am' || lang === 'om') setLanguage(lang);
+      }
+
       connectToGame({
         initData: tg.initData,
         user: user
       });
       socket.emit('room:join', 10); // Default to room 10
     } else {
+
       // Fallback for browser testing
       // Persist guestId in localStorage to prevent balance reset on refresh
       let guestId = localStorage.getItem('bingoGuestId');
@@ -155,12 +182,7 @@ export default function App() {
 
   const t = translations[language];
 
-  const goToRoom = (choice: number) => {
-    setStake(choice);
-    socket.emit('room:join', choice);
 
-    setPhase('lobby');
-  };
 
   const startSelection = () => {
     // If game is already live, send user directly to GamePage in watching-only mode.
@@ -231,10 +253,7 @@ export default function App() {
     }
   };
 
-  const startWatching = () => {
-    setSelectedBoardIds([]);
-    setPhase('game');
-  };
+
 
   const addHistoryEntry = (entry: HistoryEntry) => {
     setHistory(prev => [...prev, entry]);
@@ -290,12 +309,15 @@ export default function App() {
         />
       </AnimatePresence>
 
-      <Header 
-        onShowRules={() => setShowRules(true)} 
-        onShowHistory={() => setPhase('history')}
+      <Header
+        onShowRules={() => setShowRules(true)}
+        onShowHistory={() => {
+          setPhase('history');
+          setBottomTab('history');
+        }}
       />
-      
-      <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar">
+
+      <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
         {/* Loading state while verification status is unknown */}
         {isVerified === null && (
           <motion.div
@@ -351,28 +373,9 @@ export default function App() {
             </motion.div>
           )}
 
-          {phase === 'lobby' && (
-            <motion.div
-              key="lobby"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col min-h-0"
-            >
-              <LobbyPage 
-                onPlay={startSelection}
 
-                stats={currentRoomStats}
-                winningHistory={winningHistory}
-                language={language}
-                onBack={handleBackToHome}
-                myId={myId}
-                onTopUp={handleTopUp}
-                onDeposit={handleDeposit}
-                onWithdraw={handleWithdraw}
-              />
-            </motion.div>
-          )}
+
+
 
           {phase === 'home' && (
             <motion.div
@@ -383,21 +386,22 @@ export default function App() {
               className="flex-1 flex flex-col min-h-0"
             >
               <Dashboard
-                onPlay={goToRoom}
+                onPlay={handleHomePlay}
                 onDeposit={handleDeposit}
                 onWithdraw={handleWithdraw}
                 allStats={allRoomStats}
-                language={language} 
-                onLanguageChange={setLanguage}
-                // isGameActive prop removed from Dashboard
+                language={language}
                 wallet={wallet}
               />
             </motion.div>
           )}
 
           {phase === 'selection' && (
+
+
             <motion.div
               key="selection"
+
               initial={{ x: 300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -300, opacity: 0 }}

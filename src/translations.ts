@@ -42,7 +42,17 @@ export const translations = {
     gotIt: "Got it",
     selectBoardInfo: "Select 1 Board to play.",
     chooseStake: "Choose Your Stake",
-    premiumExp: "Premium Experience"
+    premiumExp: "Premium Experience",
+
+    tabGame: "Game",
+    tabHistory: "History",
+    tabWallet: "Wallet",
+    tabProfile: "Profile",
+
+    myBalance: "My Balance",
+    profileWalletBalance: "Wallet Balance",
+    gamesWon: "Games Won",
+    totalEarnings: "Total Earnings"
   },
   am: {
     back: "ተመለስ",
@@ -87,7 +97,17 @@ export const translations = {
     gotIt: "ተረድቻለሁ",
     selectBoardInfo: "ለመጫወት 1 ቦርድ ይምረጡ።",
     chooseStake: "ውርርድዎን ይምረጡ",
-    premiumExp: "ልዩ ተሞክሮ"
+    premiumExp: "ልዩ ተሞክሮ",
+
+    tabGame: "ጨዋታ",
+    tabHistory: "ታሪክ",
+    tabWallet: "ዋሌት",
+    tabProfile: "ፕሮፋይል",
+
+    myBalance: "የኔ ገንዘብ",
+    profileWalletBalance: "የዋሌት መጠን",
+    gamesWon: "የተሳካ ጨዋታዎች",
+    totalEarnings: "ጠቅላላ ገቢ"
   },
   om: {
     back: "Duubatti",
@@ -132,6 +152,16 @@ export const translations = {
     gotIt: "Garee",
     selectBoardInfo: "Taphaaf gabatee 1 filadhu.",
     chooseStake: "Stake Kee Filadhu",
-    premiumExp: "Muuxannoo Addaa"
+    premiumExp: "Muuxannoo Addaa",
+
+    tabGame: "Taphataa",
+    tabHistory: "Seenaa",
+    tabWallet: "Boorsaa",
+    tabProfile: "Profaayilii",
+
+    myBalance: "Gatii Kootii",
+    profileWalletBalance: "Gatii Boorsaa",
+    gamesWon: "Taphataawwan Mobe",
+    totalEarnings: "Galii Walitti"
   }
 };

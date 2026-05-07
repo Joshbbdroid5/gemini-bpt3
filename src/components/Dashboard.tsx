@@ -11,8 +11,8 @@ interface Props {
   wallet: number; // Added wallet prop
   allStats: Record<number, any>;
   language: Language;
-  onLanguageChange: (lang: Language) => void;
 }
+
 
 const LANGUAGES = [
   { id: 'en', label: 'English', flag: '🇺🇸' },
@@ -20,28 +20,12 @@ const LANGUAGES = [
   { id: 'om', label: 'Oromoo', flag: '🇪🇹' }
 ] as const;
 
-export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats, language, onLanguageChange }: Props) {
+export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats, language }: Props) {
   const t = translations[language];
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-      {/* Language Selection Tabs with Flags */}
-      <div className="mb-12 flex bg-white/5 p-1.5 rounded-2xl border border-white/10 shadow-2xl backdrop-blur-md">
-        {LANGUAGES.map((lang) => (
-          <button
-            key={lang.id}
-            onClick={() => onLanguageChange(lang.id)}
-            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-              language === lang.id 
-                ? 'bg-indigo-600 text-white shadow-lg' 
-                : 'text-yellow-200 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <span className="text-sm leading-none">{lang.flag}</span>
-            {lang.label}
-          </button>
-        ))}
-      </div>
+
 
       {/* Wallet Actions */}
       <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10 mb-6 w-full max-w-xs">

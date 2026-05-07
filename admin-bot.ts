@@ -60,6 +60,43 @@ function requireAdminSecret(ctx: any): boolean {
 bot.start(async (ctx) => {
   const startPayload = (ctx as any).startPayload;
 
+  // Language selection entrypoint
+  if (!startPayload) {
+    return ctx.reply('🌐 Select your language to continue', {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: 'English', callback_data: 'lang_en' },
+            { text: 'አማርኛ', callback_data: 'lang_am' }
+          ],
+          [
+            { text: 'Oromoo', callback_data: 'lang_om' }
+          ]
+        ]
+      }
+    });
+  }
+
+  // If user selected a language via inline button, launch the WebApp with start_param=lang_xx
+  if (typeof startPayload === 'string' && startPayload.startsWith('lang_')) {
+    const lang = startPayload.replace('lang_', '');
+
+    if (lang === 'en' || lang === 'am' || lang === 'om') {
+      if (!FRONTEND_URL) {
+        return ctx.reply('❌ Bot configuration error: FRONTEND_URL is missing.');
+      }
+
+      // Pass language into the WebApp so App.tsx can localize
+      return ctx.reply(
+        '✅ Language selected. Opening the game…',
+        Markup.inlineKeyboard([
+          [Markup.button.webApp('Launch Lomi Bingo', `${FRONTEND_URL}?start_param=lang_${lang}`)]
+        ])
+      );
+    }
+  }
+
+
   // Handle Referrals: /start ref_12345
   if (startPayload && startPayload.startsWith('ref_')) {
     const referrerId = startPayload.replace('ref_', '');
