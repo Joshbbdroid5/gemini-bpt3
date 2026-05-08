@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Timer, Wallet, Volume2, VolumeX, RotateCcw, LogOut } from 'lucide-react';
-import { generateBoard, checkWin, WinningPattern } from '../logic';
+import { Trophy, Volume2, VolumeX, RotateCcw, LogOut } from 'lucide-react';
+import { generateBoard, WinningPattern } from '../logic';
 import { BingoBoardData, GameStats, HistoryEntry, Language } from '../types';
 import { translations } from '../translations';
 import { socket, socketEvents } from './socket';
@@ -116,19 +116,20 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
   // Winner Popup Timer Logic
   useEffect(() => {
-    if (showWinnerPopup) {
-      const timer = setInterval(() => {
-        setPopupTimeLeft((prev: number) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            onRestart();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
+    if (!showWinnerPopup) return;
+
+    const timer = setInterval(() => {
+      setPopupTimeLeft((prev: number) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          onRestart();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, [showWinnerPopup, onRestart]);
 
   const toggleMark = (num: number) => {
