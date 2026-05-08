@@ -15,6 +15,7 @@ import BottomTabs, { BottomTabKey } from './components/BottomTabs';
 import { AppPhase, HistoryEntry, Language } from './types';
 
 
+
 import { connectToGame, disconnectFromGame, socket, socketEvents } from './components/socket';
 import { translations } from './translations';
 
@@ -285,8 +286,29 @@ export default function App() {
     setPhase('home');
   }, []);
 
+  const handleTabChange = useCallback(
+    (tab: BottomTabKey) => {
+      setBottomTab(tab);
+
+      if (tab === 'game') {
+        // If user is in selection, keep it. Otherwise go to game.
+        if (phase === 'selection') return;
+        setPhase('game');
+      } else if (tab === 'history') {
+        setPhase('history');
+      } else if (tab === 'wallet') {
+        // Wallet is handled inside profile for now.
+        setPhase('profile' as any);
+      } else if (tab === 'profile') {
+        setPhase('profile' as any);
+      }
+    },
+    [phase]
+  );
+
   return (
     <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
+
       {/* Remote background disabled by default; Telegram WebView renders remote images poorly.
           If you want to re-enable later, add it back behind a stronger WebView detection. */}
       {/* <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920')] bg-cover bg-center opacity-35 pointer-events-none z-0" /> */}
@@ -312,6 +334,8 @@ export default function App() {
       <Header
         language={language}
         onShowRules={() => setShowRules(true)}
+
+
         onShowHistory={() => {
           setPhase('history');
           setBottomTab('history');
@@ -319,7 +343,16 @@ export default function App() {
       />
 
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
+
         {/* Loading state while verification status is unknown */}
+
+
+
+
+
+
+        {/* Loading state while verification status is unknown */}
+
         {isVerified === null && (
           <motion.div
             key="loading"
@@ -569,6 +602,14 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      <BottomTabs
+        active={bottomTab}
+        onTabChange={handleTabChange}
+        language={language}
+        walletBalance={wallet}
+      />
+
     </div>
   );
 }
