@@ -96,6 +96,35 @@ bot.start(async (ctx) => {
     }
   }
 
+  // Language callbacks (when the user taps inline keyboard buttons)
+  // Telegram will send a callback query with callback_data like `lang_en`.
+  bot.action(/lang_(en|am|om)/, async (ctx) => {
+    const lang = ctx.match[1] as 'en' | 'am' | 'om';
+
+    if (!FRONTEND_URL) {
+      await ctx.answerCbQuery('❌ FRONTEND_URL missing');
+      return;
+    }
+
+    await ctx.answerCbQuery();
+
+    // Replace the inline keyboard message so the user immediately sees the next actions
+    // (deposit/withdraw/register/play).
+    const text = '✅ Language selected. Choose an option:';
+
+    return ctx.editMessageText(
+      text,
+      {
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('👤 My Profile', 'my_profile'), Markup.button.callback('🎮 Play', 'play')],
+          [Markup.button.callback('📝 Register', 'register'), Markup.button.callback('💳 Deposit', 'deposit')],
+          [Markup.button.callback('💸 Withdraw', 'withdraw'), Markup.button.callback('🤝 Invite', 'invite')],
+          [Markup.button.callback('ℹ️ Instruction', 'show_rules'), Markup.button.callback('📞 Contact Support', 'help_support')],
+        ])
+      }
+    );
+  });
+
 
   // Handle Referrals: /start ref_12345
   if (startPayload && startPayload.startsWith('ref_')) {

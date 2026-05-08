@@ -1,8 +1,9 @@
-- [ ] Inspect current phase flow: home -> lobby -> selection -> game
-- [x] Remove Dashboard language picker, remove LobbyPage usage/phase
-- [ ] Add Telegram-driven language selection (inline keyboard) and pass chosen lang to WebApp
-- [ ] Update App to accept language from Telegram initData/start payload and remove app-side language selection UI
-- [ ] Change homepage copy: stake 10 ETB + “Welcome to LOMy bingo” message + play opens board selection or watching mode depending on live status
-- [ ] Ensure “Play” works even when game is live (watching only)
+# TODO
+
+- [x] Identify why inline keyboard disappears after language selection (Telegram bot flow)
+- [x] Update language-selection handler to keep/replace keyboard correctly
+- [x] Ensure WebApp/open flow doesn’t suppress subsequent inline UI
+- [x] Add `bot.action('lang_*')` handling for language callbacks
+- [ ] Validate with Telegram + WebApp flow after build/deploy
 
 

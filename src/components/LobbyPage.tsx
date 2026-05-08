@@ -1,4 +1,9 @@
 import React, { useState, useEffect } from 'react';
+
+// Fix TSX intrinsic element type errors in strict configs
+// (ensures JSX understands <div>, <span>, <svg>, etc.)
+import type * as ReactTypes from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Play, Timer, Trophy, History, Copy, Check, Wallet, ArrowLeft, Clock, } from 'lucide-react';
 import { Language } from '../types';
