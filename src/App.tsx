@@ -11,8 +11,11 @@ import HistoryPage from './components/HistoryPage';
 
 import AdminDashboard from './components/AdminDashboard';
 import ProfilePage from './components/ProfilePage';
+import WalletPage from './components/WalletPage';
 import BottomTabs, { BottomTabKey } from './components/BottomTabs';
-import { AppPhase, HistoryEntry, Language } from './types';
+import { HistoryEntry, Language, AppPhase } from './types';
+
+
 
 
 
@@ -45,6 +48,7 @@ export default function App() {
   const [myId, setMyId] = useState<string>('');
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
+
   const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
   const [totalActivePlayers, setTotalActivePlayers] = useState(0);
 
@@ -297,8 +301,7 @@ export default function App() {
       } else if (tab === 'history') {
         setPhase('history');
       } else if (tab === 'wallet') {
-        // Wallet is handled inside profile for now.
-        setPhase('profile' as any);
+        setPhase('wallet' as any);
       } else if (tab === 'profile') {
         setPhase('profile' as any);
       }
@@ -334,12 +337,6 @@ export default function App() {
       <Header
         language={language}
         onShowRules={() => setShowRules(true)}
-
-
-        onShowHistory={() => {
-          setPhase('history');
-          setBottomTab('history');
-        }}
       />
 
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
@@ -462,6 +459,7 @@ export default function App() {
                 selectedBoardIds={selectedBoardIds} 
                 stakedPerBoard={stake} 
                 onRestart={() => setPhase('selection')}
+                onLeaveToHome={handleBackToHome}
                 onGameEnd={addHistoryEntry}
                 language={language}
               />
@@ -477,6 +475,36 @@ export default function App() {
               className="flex-1 flex flex-col min-h-0"
             >
               <HistoryPage history={history} onBack={() => setPhase('home')} language={language} />
+            </motion.div>
+          )}
+
+          {phase === 'wallet' && (
+            <motion.div
+              key="wallet"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <WalletPage language={language} walletBalance={wallet} telegramName={myId} onBack={() => setPhase('home')} />
+            </motion.div>
+          )}
+
+          {phase === 'profile' && (
+            <motion.div
+              key="profile"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <ProfilePage
+                language={language}
+                telegramName={myId}
+                walletBalance={wallet}
+                gamesWon={0}
+                totalEarnings={0}
+              />
             </motion.div>
           )}
 
