@@ -60,45 +60,7 @@ function requireAdminSecret(ctx: any): boolean {
 bot.start(async (ctx) => {
   const startPayload = (ctx as any).startPayload;
 
-  // Language selection entrypoint
-  if (!startPayload) {
-    return ctx.reply('🌐 Select your language to continue', {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: 'English', callback_data: 'lang_en' },
-            { text: 'አማርኛ', callback_data: 'lang_am' }
-          ],
-          [
-            { text: 'Oromoo', callback_data: 'lang_om' }
-          ]
-        ]
-      }
-    });
-  }
 
-  // If user selected a language via inline button, launch the WebApp with start_param=lang_xx
-  if (typeof startPayload === 'string' && startPayload.startsWith('lang_')) {
-    const lang = startPayload.replace('lang_', '');
-
-    if (lang === 'en' || lang === 'am' || lang === 'om') {
-      if (!FRONTEND_URL) {
-        return ctx.reply('❌ Bot configuration error: FRONTEND_URL is missing.');
-      }
-
-      // Pass language into the WebApp so App.tsx can localize
-      return ctx.reply(
-        '✅ Language selected. Opening the game…',
-        Markup.inlineKeyboard([
-          [Markup.button.webApp('Launch Lomi Bingo', `${FRONTEND_URL}?start_param=lang_${lang}`)]
-        ])
-      );
-    }
-  }
-
-  // NOTE:
-  // Language callbacks should NOT be defined inside bot.start.
-  // They must be registered at top-level so Telegraf can handle callback queries.
 
 
 
@@ -184,43 +146,7 @@ bot.start(async (ctx) => {
   }
 });
 
-// Language callbacks (when the user taps language inline buttons)
-bot.action(/lang_(en|am|om)/, async (ctx) => {
-  if (!FRONTEND_URL) {
-    await ctx.answerCbQuery('❌ FRONTEND_URL missing');
-    return;
-  }
 
-  const lang = ctx.match[1] as 'en' | 'am' | 'om';
-
-  await ctx.answerCbQuery();
-
-  // Keep the UX simple: show the main inline keyboard after selecting language.
-  // (WebApp language is still passed via start_param when user taps Play.)
-  return ctx.editMessageText(
-    '✅ Language selected. Choose an option:',
-    {
-      ...Markup.inlineKeyboard([
-        [
-          Markup.button.callback('👤 My Profile', 'my_profile'),
-          Markup.button.callback('🎮 Play', 'play')
-        ],
-        [
-          Markup.button.callback('📝 Register', 'register'),
-          Markup.button.callback('💳 Deposit', 'deposit')
-        ],
-        [
-          Markup.button.callback('💸 Withdraw', 'withdraw'),
-          Markup.button.callback('🤝 Invite', 'invite')
-        ],
-        [
-          Markup.button.callback('ℹ️ Instruction', 'show_rules'),
-          Markup.button.callback('📞 Contact Support', 'help_support')
-        ],
-      ])
-    }
-  );
-});
 
 // --- My Profile Handler ---
 bot.action('my_profile', async (ctx) => {

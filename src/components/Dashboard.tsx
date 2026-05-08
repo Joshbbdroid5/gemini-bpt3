@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import { Language } from '../types';
 import { translations } from '../translations';
-import { Users, Trophy, DollarSign, MessageCircle } from 'lucide-react';
+import { Users, Trophy, MessageCircle } from 'lucide-react';
+
 
 // isGameActive prop now reflects the current room's live status
 interface Props {
@@ -14,11 +15,7 @@ interface Props {
 }
 
 
-const LANGUAGES = [
-  { id: 'en', label: 'English', flag: '🇺🇸' },
-  { id: 'am', label: 'አማርኛ', flag: '🇪🇹' },
-  { id: 'om', label: 'Oromoo', flag: '🇪🇹' }
-] as const;
+
 
 export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats, language }: Props) {
   const t = translations[language];
@@ -27,23 +24,7 @@ export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allSt
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
 
 
-      {/* Wallet Actions */}
-      <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10 mb-6 w-full max-w-xs">
-        <div className="p-2 bg-lime-600 rounded-lg text-white">
-          <DollarSign size={16} />
-        </div>
-        <div className="flex flex-col items-start">
-          <span className="text-[9px] font-black uppercase tracking-widest text-yellow-100 opacity-50">My Balance</span>
-          <span className="text-sm font-bold text-white">{wallet} ETB</span>
-        </div>
-      </div>
-      {/* Deposit / Withdraw are now only available via Telegram bot */}
-      <div className="flex gap-4 mb-8 w-full max-w-xs">
-        <div className="flex-1 flex items-center justify-center py-3 bg-white/5 rounded-2xl border border-white/10 text-white font-black uppercase text-[10px] tracking-widest transition-all backdrop-blur-md">
-          {t.deposit} & {t.withdraw}
-          <span className="text-[9px] text-white/80 ml-2">via Bot</span>
-        </div>
-      </div>
+
 
 
       {/* Community Link */}
@@ -55,19 +36,20 @@ export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allSt
         Join Official Channel
       </button>
 
-      {/* Stake Selection Section */}
+      {/* Welcome */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="mb-12"
-      > 
+        className="mb-8"
+      >
         <span className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-200 mb-2 block">
-          {t.premiumExp}
+          Welcome to Lomi Bingo
         </span>
         <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-tight whitespace-pre-line drop-shadow-lg">
-          {t.chooseStake}
+          Stake 10 ETB & Play
         </h2>
       </motion.div>
+
 
       {/* Entry Fee Buttons */}
       <div className="flex flex-col gap-6 w-full max-w-xs">

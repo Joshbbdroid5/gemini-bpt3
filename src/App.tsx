@@ -19,6 +19,7 @@ import { HistoryEntry, Language, AppPhase } from './types';
 
 
 
+
 import { connectToGame, disconnectFromGame, socket, socketEvents } from './components/socket';
 import { translations } from './translations';
 
@@ -74,17 +75,9 @@ export default function App() {
   };
 
 
-  // Initialize language from Telegram bot payload (start_param=lang_xx) or fallback to 'en'
-  const [language, setLanguage] = useState<Language>(() => {
-    try {
-      const sp = (window.Telegram?.WebApp as any)?.initDataUnsafe?.start_param;
-      if (typeof sp === 'string' && sp.startsWith('lang_')) {
-        const lang = sp.replace('lang_', '') as Language;
-        if (lang === 'en' || lang === 'am' || lang === 'om') return lang;
-      }
-    } catch (_) {}
-    return 'en';
-  });
+  // Language selection removed; game uses a single language.
+  const language: Language = 'en';
+
 
 
 
@@ -154,14 +147,8 @@ export default function App() {
       const user = tg.initDataUnsafe?.user;
       if (user?.id) setMyId(user.id.toString());
 
-      const startPayload = (window.Telegram?.WebApp as any)?.initDataUnsafe?.start_param;
-      // Prefer explicit language coming from bot start payload (e.g. lang_am)
-      if (typeof startPayload === 'string' && startPayload.startsWith('lang_')) {
-        const lang = startPayload.replace('lang_', '') as Language;
-        if (lang === 'en' || lang === 'am' || lang === 'om') setLanguage(lang);
-      }
-
       connectToGame({
+
         initData: tg.initData,
         user: user
       });
@@ -186,6 +173,7 @@ export default function App() {
   }, []);
 
   const t = translations[language];
+
 
 
 
@@ -335,9 +323,10 @@ export default function App() {
       </AnimatePresence>
 
       <Header
-        language={language}
+        language={'en'}
         onShowRules={() => setShowRules(true)}
       />
+
 
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
 
@@ -515,9 +504,11 @@ export default function App() {
               animate={{ opacity: 1 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <AdminDashboard onBack={() => setPhase('lobby')} />
+              <AdminDashboard onBack={() => setPhase('home')} />
             </motion.div>
           )}
+
+
         </AnimatePresence>
 
         {/* Global Loading / Good Luck Overlay */}

@@ -18,7 +18,9 @@ interface Props {
 
 const MIN_DEPOSIT_AMOUNT = 10;
 // The onPlay prop now directly calls the startSelection logic from App.tsx
-export default function LobbyPage({ onPlay, stats, winningHistory, language, onBack, myId, onTopUp, onDeposit, onWithdraw }: Props) {
+// Deprecated: lobby page removed (game has a single room).
+export default function LobbyPage(_props: Props) {
+
   const t = translations[language];
   const [copied, setCopied] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(10);
