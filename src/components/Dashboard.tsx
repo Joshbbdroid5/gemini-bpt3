@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Language } from '../types';
 import { translations } from '../translations';
-import { Users, Trophy, Wallet, Landmark, DollarSign, MessageCircle } from 'lucide-react';
+import { Users, Trophy, DollarSign, MessageCircle } from 'lucide-react';
 
 // isGameActive prop now reflects the current room's live status
 interface Props {
@@ -37,22 +37,14 @@ export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allSt
           <span className="text-sm font-bold text-white">{wallet} ETB</span>
         </div>
       </div>
+      {/* Deposit / Withdraw are now only available via Telegram bot */}
       <div className="flex gap-4 mb-8 w-full max-w-xs">
-        <button 
-          onClick={onDeposit}
-          className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 text-white font-black uppercase text-[10px] tracking-widest transition-all backdrop-blur-md"
-        >
-          <Wallet size={16} className="text-yellow-400" />
-          {t.deposit}
-        </button>
-        <button 
-          onClick={onWithdraw}
-          className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 text-white font-black uppercase text-[10px] tracking-widest transition-all backdrop-blur-md"
-        >
-          <Landmark size={16} className="text-yellow-400" />
-          {t.withdraw}
-        </button>
+        <div className="flex-1 flex items-center justify-center py-3 bg-white/5 rounded-2xl border border-white/10 text-white font-black uppercase text-[10px] tracking-widest transition-all backdrop-blur-md">
+          {t.deposit} & {t.withdraw}
+          <span className="text-[9px] text-white/80 ml-2">via Bot</span>
+        </div>
       </div>
+
 
       {/* Community Link */}
       <button 

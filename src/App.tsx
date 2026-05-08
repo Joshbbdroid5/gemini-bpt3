@@ -310,6 +310,7 @@ export default function App() {
       </AnimatePresence>
 
       <Header
+        language={language}
         onShowRules={() => setShowRules(true)}
         onShowHistory={() => {
           setPhase('history');
@@ -387,8 +388,8 @@ export default function App() {
             >
               <Dashboard
                 onPlay={handleHomePlay}
-                onDeposit={handleDeposit}
-                onWithdraw={handleWithdraw}
+                onDeposit={() => {}}
+                onWithdraw={() => {}}
                 allStats={allRoomStats}
                 language={language}
                 wallet={wallet}
