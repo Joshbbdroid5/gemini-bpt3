@@ -1,9 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { History, Trophy, UserRound, Wallet } from 'lucide-react';
+import { History, Trophy, UserRound, Wallet, Shield } from 'lucide-react';
 
 
-export type BottomTabKey = 'game' | 'history' | 'wallet' | 'profile';
+
+
+
+export type BottomTabKey = 'game' | 'history' | 'wallet' | 'profile' | 'admin';
+
 
 interface Props {
   active: BottomTabKey;
@@ -59,6 +63,7 @@ export default function BottomTabs({ active, onTabChange, walletBalance }: Props
     tabHistory: 'History',
     tabWallet: 'Wallet',
     tabProfile: 'Profile',
+    tabAdmin: 'Admin',
     myBalance: 'My Balance',
   };
 
@@ -69,7 +74,7 @@ export default function BottomTabs({ active, onTabChange, walletBalance }: Props
       animate={{ y: 0, opacity: 1 }}
       className="fixed bottom-0 left-0 right-0 z-60 bg-[#2d2e4d] border-t border-white/10 backdrop-blur-md"
     >
-      <div className="grid grid-cols-4 h-16">
+      <div className="grid grid-cols-5 h-16">
         <TabButton
           tab="game"
           icon={<Trophy size={18} className={active === 'game' ? 'text-yellow-300' : 'text-gray-300'} />}
@@ -98,7 +103,15 @@ export default function BottomTabs({ active, onTabChange, walletBalance }: Props
           active={active === 'profile'}
           onClick={() => onTabChange('profile')}
         />
+        <TabButton
+          tab="admin"
+          icon={<Shield size={18} className={active === 'admin' ? 'text-yellow-300' : 'text-gray-300'} />}
+          label={t.tabAdmin}
+          active={active === 'admin'}
+          onClick={() => onTabChange('admin')}
+        />
       </div>
+
 
       {/* small balance hint (keeps UI light) */}
       <div className="absolute -top-2 left-0 right-0 flex justify-center pointer-events-none">

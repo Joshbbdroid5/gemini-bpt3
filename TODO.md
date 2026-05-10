@@ -1,12 +1,19 @@
-# TODO - Admin-controlled START/STOP for Bingo
+## Telegram Deposit/Withdraw Method Selection - TODO
 
-- [x] Create server-side `isGameRunning` flag and stop/start helpers
-- [x] Gate `runGameLoop` and room reset so loops only run when admin has started (will implement now)
-- [ ] Add REST endpoints: `POST /admin/start-game` and `POST /admin/stop-game` (missing)
-- [ ] Add socket broadcasts for game status: `game:status` and `game:stopped`
-- [ ] Update AdminDashboard UI with Start/Stop buttons
-- [ ] Update client socket listeners and UI states (waiting/ended)
-- [ ] Prevent auto-submission from SelectionPage unless game is running
-- [ ] Ensure server accepts bets only when admin has started
-- [ ] Run TypeScript build / sanity checks
+- [ ] Update `admin-bot.ts` deposit flow:
+  - [ ] Replace current `deposit` handler to show inline keyboard: “Choose your deposit method”
+  - [ ] Add `deposit_method_telebirr` action handler to display Telebirr account details
+  - [ ] After Telebirr selection, request amount with `force_reply` using a reply token like `deposit_amount:`
+
+- [ ] Update `admin-bot.ts` withdraw flow:
+  - [ ] Replace current `withdraw` handler to show inline keyboard: “Choose your withdrawal method”
+  - [ ] Add `withdraw_method_telebirr` action handler to display Telebirr withdrawal account details
+  - [ ] After Telebirr selection, request amount with `force_reply` using a reply token like `withdraw_amount:`
+
+- [ ] Update `bot.on('text')` amount parsing:
+  - [ ] Detect replies by message text tokens (`deposit_amount:` / `withdraw_amount:`)
+  - [ ] Ensure existing pending deposit creation (Telebirr SMS) still works for deposit confirmations
+
+- [ ] TypeScript/build validation (`npm run build`)
+- [ ] Manual Telegram test: Deposit → Telebirr → amount → Telebirr SMS → admin approve
 

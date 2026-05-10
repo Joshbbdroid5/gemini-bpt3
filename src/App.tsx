@@ -312,6 +312,12 @@ export default function App() {
     (tab: BottomTabKey) => {
       setBottomTab(tab);
 
+      if (tab === 'admin') {
+        setPhase('admin');
+        return;
+      }
+
+
       if (tab === 'game') {
         // If user is in selection, keep it. Otherwise go to game.
         if (phase === 'selection') return;

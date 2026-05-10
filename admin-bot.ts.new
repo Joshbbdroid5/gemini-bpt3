@@ -16,6 +16,8 @@ const FRONTEND_URL = process.env.FRONTEND_URL?.trim() || process.env.VITE_BACKEN
 const ADMIN_SECRET = process.env.ADMIN_SECRET?.trim();
 
 // Payment Details
+// Telebirr account details shown to users for deposits/withdrawals.
+// If you add multiple accounts later, convert these to an array and extend the keyboard flow.
 const PAYMENT_PHONE = process.env.PAYMENT_PHONE || '0978015131';
 const TELEBIRR_ACCOUNT_NUMBER = PAYMENT_PHONE;
 
@@ -56,12 +58,7 @@ function requireAdminSecret(ctx: any): boolean {
   return false;
 }
 
-function parseAmount(text: string): number {
-  const m = text.match(/(\d+)/);
-  return m ? parseInt(m[1], 10) : NaN;
-}
-
-// --- 1. Start / Welcome ---
+// 1. Handle user clicking "Top Up" in the WebApp
 bot.start(async (ctx) => {
   const startPayload = (ctx as any).startPayload;
 
@@ -73,7 +70,6 @@ bot.start(async (ctx) => {
     try {
       const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
       const data = response.ok ? await response.json() : { exists: false };
-
       if (!data.exists) {
         await fetch(`${API_URL}/admin/create-user`, {
           method: 'POST',
@@ -86,24 +82,22 @@ bot.start(async (ctx) => {
     }
   }
 
-  // New deposit/withdraw flows from menu inline buttons
   if (startPayload === 'deposit') {
-    await ctx.reply(
+    // New flow: choose method
+    return ctx.reply(
       '💰 Choose your deposit method:',
       Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'deposit_method_telebirr')]])
     );
-    return;
   }
 
   if (startPayload === 'withdraw') {
-    await ctx.reply(
+    // New flow: choose method
+    return ctx.reply(
       '💸 Choose your withdrawal method:',
       Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'withdraw_method_telebirr')]])
     );
-    return;
   }
 
-  // If user came from webapp topup_...
   if (!startPayload || !startPayload.startsWith('topup_')) {
     return ctx.reply(
       '✨ *Welcome to Lomi Bingo!* 🍋\n\nRefreshingly lucky! Select an option from the menu below to start winning:',
@@ -122,8 +116,8 @@ bot.start(async (ctx) => {
 
   // Parse payload: topup_100_guest_1234
   const parts = startPayload.split('_');
-  const amount = parseInt(parts[1], 10);
-  const userId = parts.slice(2).join('_');
+  const amount = parseInt(parts[1]);
+  const userId = parts.slice(2).join('_'); // Handles IDs with underscores
 
   if (isNaN(amount) || !userId) {
     return ctx.reply('Invalid top-up request.');
@@ -133,7 +127,6 @@ bot.start(async (ctx) => {
     `✅ Request Received!\n\nYou want to top up ${amount} ETB.\nPlease send the payment now via [Your Payment Method Info].\n\nWaiting for admin approval...`
   );
 
-  // Notify Admin
   if (ADMIN_CHAT_ID) {
     await bot.telegram.sendMessage(
       ADMIN_CHAT_ID,
@@ -176,7 +169,7 @@ bot.action('my_profile', async (ctx) => {
   }
 });
 
-// --- Register ---
+// --- 1st Button: Register ---
 bot.action('register', (ctx) => {
   return ctx.reply(
     'To register, please confirm your phone number by clicking the button below.',
@@ -245,10 +238,8 @@ bot.action('view_pending', async (ctx) => {
   }
 });
 
-// Handle Phone Number Sharing
 bot.on('contact', async (ctx) => {
   if (!requireAdminSecret(ctx)) return;
-
   const userId = ctx.from.id;
   const phone = ctx.message.contact.phone_number;
 
@@ -273,10 +264,12 @@ bot.on('contact', async (ctx) => {
     return ctx.reply('❌ Sorry, there was an error saving your registration. Please try again later.');
   }
 
-  return ctx.reply('You can now play Lomi Bingo!', Markup.inlineKeyboard([[Markup.button.callback('🎮 Play Now', 'play')]]));
+  return ctx.reply(
+    'You can now play Lomi Bingo!',
+    Markup.inlineKeyboard([[Markup.button.callback('🎮 Play Now', 'play')]])
+  );
 });
 
-// --- Play ---
 bot.action('play', async (ctx) => {
   if (!requireAdminSecret(ctx)) return;
   const userId = ctx.from.id.toString();
@@ -284,12 +277,13 @@ bot.action('play', async (ctx) => {
   let data: { isVerified: boolean };
   try {
     const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
+
     if (!response.ok) {
       data = { isVerified: false };
     } else {
       data = await response.json().catch(() => ({ isVerified: false }));
     }
-  } catch {
+  } catch (fetchErr) {
     data = { isVerified: false };
   }
 
@@ -301,10 +295,13 @@ bot.action('play', async (ctx) => {
     return ctx.reply('❌ Bot configuration error: FRONTEND_URL is missing.');
   }
 
-  return ctx.reply('Good luck! 🎮', Markup.inlineKeyboard([[Markup.button.webApp('Launch Lomi Bingo', FRONTEND_URL as string)]]));
+  return ctx.reply(
+    'Good luck! 🎮',
+    Markup.inlineKeyboard([[Markup.button.webApp('Launch Lomi Bingo', FRONTEND_URL as string)]])
+  );
 });
 
-// --- Deposit (method selection) ---
+// --- Deposit/Withdraw method selection ---
 bot.action('deposit', async (ctx) => {
   await ctx.answerCbQuery();
   return ctx.reply('💰 Choose your deposit method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'deposit_method_telebirr')]]));
@@ -318,7 +315,6 @@ bot.action('deposit_method_telebirr', async (ctx) => {
   );
 });
 
-// --- Withdraw (method selection) ---
 bot.action('withdraw', async (ctx) => {
   await ctx.answerCbQuery();
   return ctx.reply('💸 Choose your withdrawal method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'withdraw_method_telebirr')]]));
@@ -339,9 +335,11 @@ bot.on('text', async (ctx) => {
 
   if (!isReply || !('text' in isReply) || typeof isReply.text !== 'string') return;
 
-  // Deposit amount after selecting method
+  // Deposit amount
   if (isReply.text.includes('deposit_amount:')) {
-    const amount = parseAmount(text);
+    const amountMatch = text.match(/(\d+)/);
+    const amount = amountMatch ? parseInt(amountMatch[1]) : NaN;
+
     if (isNaN(amount) || amount < 10) return ctx.reply('❌ Invalid amount. Minimum deposit is 10 ETB.');
 
     return ctx.replyWithMarkdown(
@@ -353,15 +351,17 @@ bot.on('text', async (ctx) => {
     );
   }
 
-  // Withdraw amount after selecting method
+  // Withdraw amount
   if (isReply.text.includes('withdraw_amount:')) {
-    const amount = parseAmount(text);
+    const amountMatch = text.match(/(\d+)/);
+    const amount = amountMatch ? parseInt(amountMatch[1]) : NaN;
+
     if (isNaN(amount) || amount < 50) return ctx.reply('❌ Invalid amount. Minimum withdrawal is 50 ETB.');
 
     return ctx.reply(`✅ Withdrawal request for ${amount} ETB received. Our team will process it within 24 hours.`);
   }
 
-  // Telebirr confirmation SMS paste (deposit)
+  // Deposit confirmation SMS
   if (isReply.text.includes('DEPOSIT INSTRUCTIONS')) {
     const amountMatch = isReply.text.match(/\*(\d+) ETB\*/);
     const amountFromMsg = amountMatch ? amountMatch[1] : '0';
@@ -372,7 +372,7 @@ bot.on('text', async (ctx) => {
     await fetch(`${API_URL}/admin/add-pending-deposit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, amount: parseInt(amountFromMsg, 10), telebirrSms: text, secret: ADMIN_SECRET }),
+      body: JSON.stringify({ userId, amount: parseInt(amountFromMsg), telebirrSms: text, secret: ADMIN_SECRET }),
     }).catch((err) => console.error('Failed to register pending deposit:', err));
 
     await bot.telegram.sendMessage(
@@ -394,7 +394,6 @@ bot.on('text', async (ctx) => {
   }
 });
 
-// Contact Support
 bot.action('help_support', async (ctx) => {
   await ctx.answerCbQuery();
   return ctx.reply(
@@ -405,7 +404,6 @@ bot.action('help_support', async (ctx) => {
   );
 });
 
-// Rules
 bot.action('show_rules', (ctx) => {
   return ctx.reply(
     '📜 *BINGO RULES*\n\n' +
@@ -417,16 +415,18 @@ bot.action('show_rules', (ctx) => {
   );
 });
 
-// Invite
 bot.action('invite', (ctx) => {
   const inviteLink = `https://t.me/share/url?url=https://t.me/${ctx.botInfo.username}?start=ref_${ctx.from.id}&text=Join me on Lomi Bingo and win big! 🍋`;
-  return ctx.reply('Invite your friends and earn bonuses!', Markup.inlineKeyboard([[Markup.button.url('📤 Share Invite Link', inviteLink)]]));
+  return ctx.reply(
+    'Invite your friends and earn bonuses!',
+    Markup.inlineKeyboard([[Markup.button.url('📤 Share Invite Link', inviteLink)]])
+  );
 });
 
-// Admin Approval
+// 2. Handle Admin Approval
 bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
   if (!requireAdminSecret(ctx)) return;
-  const amount = parseInt(ctx.match[1], 10);
+  const amount = parseInt(ctx.match[1]);
   const userId = ctx.match[2];
 
   try {
@@ -437,17 +437,17 @@ bot.action(/approve_(\d+)_(.+)/, async (ctx) => {
     });
 
     if (response.ok) {
-      await ctx.editMessageText(`✅ *Approved!*\nCredited ${amount} ETB to \`${userId}\`.`, { parse_mode: 'Markdown' });
+      await ctx.editMessageText(`✅ *Approved!*\nCredited ${amount} ETB to \`${userId}\`.' , { parse_mode: 'Markdown' });
       await notifyUser(userId, `🎊 *Payment Approved!*\nYour balance has been updated with ${amount} ETB. Good luck!`);
     } else {
       await ctx.reply('❌ Error: Could not connect to game server API.');
     }
-  } catch {
+  } catch (err: any) {
     await ctx.reply('❌ Error: Server is offline.');
   }
 });
 
-// Admin Rejection
+// 3. Handle Admin Rejection
 bot.action(/reject_(.+)/, async (ctx) => {
   if (!requireAdminSecret(ctx)) return;
   const userId = ctx.match[1];
@@ -459,7 +459,8 @@ bot.action(/reject_(.+)/, async (ctx) => {
       body: JSON.stringify({ userId, secret: ADMIN_SECRET }),
     });
 
-    await ctx.editMessageText(`❌ *Rejected* top-up for \`${userId}\`.`, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(`❌ *Rejected* top-up for \`${userId}\`.' , { parse_mode: 'Markdown' });
+
     await notifyUser(userId, '❌ *Top-up Rejected*\nYour payment could not be verified. Please contact support.');
   } catch (err) {
     await ctx.reply(`❌ Error notifying server of rejection: ${err instanceof Error ? err.message : String(err)}`);
