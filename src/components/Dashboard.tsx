@@ -1,8 +1,5 @@
 import { motion } from 'framer-motion';
-import { Language } from '../types';
-import { translations } from '../translations';
 import { Users, Trophy, MessageCircle } from 'lucide-react';
-
 
 // isGameActive prop now reflects the current room's live status
 interface Props {
@@ -11,16 +8,11 @@ interface Props {
   onWithdraw: () => void;
   wallet: number; // Added wallet prop
   allStats: Record<number, any>;
-  language: Language;
 }
 
-
-
-
-export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats, language }: Props) {
-  const t = translations[language];
-
+export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats }: Props) {
   return (
+
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
 
 

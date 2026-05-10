@@ -1,17 +1,28 @@
 import { motion } from 'framer-motion';
 import { History, ArrowLeft, Trophy, Users, Wallet, Calendar } from 'lucide-react';
 import { ReactNode } from 'react';
-import { HistoryEntry, Language } from '../types';
-import { translations } from '../translations';
+import { HistoryEntry } from '../types';
 
 interface Props {
   history: HistoryEntry[];
   onBack: () => void;
-  language: Language;
 }
 
-export default function HistoryPage({ history, onBack, language }: Props) {
-  const t = translations[language];
+export default function HistoryPage({ history, onBack }: Props) {
+  const t = {
+    back: 'Back',
+    gameHistory: 'Game History',
+    noGames: 'No games recorded yet',
+    myWin: 'MY WIN',
+    gameId: 'Game ID',
+    winners: 'Winners',
+    totalPool: 'Total Pool',
+    payout: 'Payout',
+    myBoards: 'My Boards',
+    congratulations: 'Big Congratulations',
+    betterLuck: 'Better luck next time',
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-transparent overflow-hidden">
       <div className="p-4 bg-white/5 border-b border-white/5 flex items-center gap-4">

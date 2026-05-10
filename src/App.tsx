@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
+
 import { Info, X, Trophy, RefreshCcw } from 'lucide-react';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -13,15 +14,20 @@ import AdminDashboard from './components/AdminDashboard';
 import ProfilePage from './components/ProfilePage';
 import WalletPage from './components/WalletPage';
 import BottomTabs, { BottomTabKey } from './components/BottomTabs';
-import { HistoryEntry, Language, AppPhase } from './types';
-
-
-
-
-
-
+import { HistoryEntry, AppPhase } from './types';
 import { connectToGame, disconnectFromGame, socket, socketEvents } from './components/socket';
-import { translations } from './translations';
+
+const t = {
+  boardsRegistered: 'Boards Registered',
+  redirecting: 'Redirecting to Game',
+};
+
+
+
+
+
+
+
 
 // Declare Telegram WebApp global
 declare global {
@@ -75,8 +81,7 @@ export default function App() {
   };
 
 
-  // Language selection removed; game uses a single language.
-  const language: Language = 'en';
+
 
 
 
@@ -172,7 +177,7 @@ export default function App() {
     };
   }, []);
 
-  const t = translations[language];
+
 
 
 
@@ -300,9 +305,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
 
-      {/* Remote background disabled by default; Telegram WebView renders remote images poorly.
-          If you want to re-enable later, add it back behind a stronger WebView detection. */}
-      {/* <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1590505677148-f2910793134d?auto=format&fit=crop&q=80&w=1920')] bg-cover bg-center opacity-35 pointer-events-none z-0" /> */}
+
 
 
 
@@ -322,10 +325,8 @@ export default function App() {
         />
       </AnimatePresence>
 
-      <Header
-        language={'en'}
-        onShowRules={() => setShowRules(true)}
-      />
+      <Header onShowRules={() => setShowRules(true)} />
+
 
 
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
@@ -410,7 +411,6 @@ export default function App() {
                 onDeposit={() => {}}
                 onWithdraw={() => {}}
                 allStats={allRoomStats}
-                language={language}
                 wallet={wallet}
               />
             </motion.div>
@@ -427,12 +427,11 @@ export default function App() {
               exit={{ x: -300, opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <SelectionPage 
+<SelectionPage 
                 staked={stake} 
                 wallet={wallet} 
                 onComplete={completeSelection} 
                 onBack={handleBackToHome}
-                language={language} 
               />
             </motion.div>
           )}
@@ -444,14 +443,14 @@ export default function App() {
               animate={{ y: 0, opacity: 1 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <GamePage 
+                <GamePage 
                 selectedBoardIds={selectedBoardIds} 
                 stakedPerBoard={stake} 
-                onRestart={() => setPhase('selection')}
+                onRestart={() => setPhase('selection')} 
                 onLeaveToHome={handleBackToHome}
                 onGameEnd={addHistoryEntry}
-                language={language}
               />
+
             </motion.div>
           )}
 
@@ -463,7 +462,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <HistoryPage history={history} onBack={() => setPhase('home')} language={language} />
+              <HistoryPage history={history} onBack={() => setPhase('home')} />
             </motion.div>
           )}
 
@@ -475,7 +474,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <WalletPage language={language} walletBalance={wallet} telegramName={myId} onBack={() => setPhase('home')} />
+              <WalletPage walletBalance={wallet} telegramName={myId} onBack={() => setPhase('home')} />
             </motion.div>
           )}
 
@@ -488,7 +487,6 @@ export default function App() {
               className="flex-1 flex flex-col min-h-0"
             >
               <ProfilePage
-                language={language}
                 telegramName={myId}
                 walletBalance={wallet}
                 gamesWon={0}
@@ -528,11 +526,13 @@ export default function App() {
                 <div className="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center mb-6 shadow-2xl">
                    <Trophy size={40} className="text-white" />
                 </div>
-                <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-2">{t.goodLuck}</h2>
+                <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-2">Good Luck!</h2>
+
                 <p className="text-indigo-200 font-bold uppercase tracking-widest text-xs">
-                  {selectedBoardIds.length} {t.boardsRegistered} <br />
-                  {t.redirecting}
+                  {selectedBoardIds.length} Boards Registered <br />
+                  Redirecting to Game
                 </p> 
+
                 
                 <div className="mt-8 flex gap-2">
                    {[1, 2, 3].map(i => (
@@ -592,7 +592,8 @@ export default function App() {
                   <div className="flex items-center justify-between mb-8">
                     <h3 className="text-2xl font-black text-indigo-950 uppercase italic tracking-tighter flex items-center gap-2">
                       <Info className="text-indigo-600" />
-                      {t.rules} 
+                      Game Rules 
+
                     </h3>
                     <button 
                       onClick={() => setShowRules(false)} 
@@ -604,17 +605,18 @@ export default function App() {
                   </div>
                   
                   <div className="space-y-6">
-                    <RuleItem number="1" text={t.rule1} />
-                    <RuleItem number="2" text={t.rule2} />
-                    <RuleItem number="3" text={t.rule3} />
-                    <RuleItem number="4" text={t.rule4} />
+                    <RuleItem number="1" text="Select your entry fee (10 ETB or 20 ETB) to start." />
+                    <RuleItem number="2" text="Pick your board from the 600 available options within 60 seconds." />
+                    <RuleItem number="3" text="Wait for the system to call a ball every 3 seconds." />
+                    <RuleItem number="4" text="Numbers are marked automatically. Complete a row, column, diagonal, or four corners to win." />
                   </div>
 
                   <button 
                     onClick={() => setShowRules(false)}
                     className="mt-10 px-6 py-4 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-colors"
                   > 
-                    {t.gotIt}
+                    Got it
+
                   </button>
                 </motion.div>
             </div>
@@ -625,7 +627,6 @@ export default function App() {
       <BottomTabs
         active={bottomTab}
         onTabChange={handleTabChange}
-        language={language}
         walletBalance={wallet}
       />
 
@@ -633,13 +634,14 @@ export default function App() {
   );
 }
 
-function RuleItem({ number, text }: { number: string, text: string }) {
+function RuleItem({ number, text }: { number: string; text: string }) {
   return (
     <div className="flex gap-4">
       <div className="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600 border border-indigo-100">
         {number}
-      </div> 
+      </div>
       <p className="text-gray-600 text-sm font-medium leading-normal">{text}</p>
     </div>
   );
 }
+

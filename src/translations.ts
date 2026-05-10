@@ -1,3 +1,5 @@
+// NOTE: translations retained for now to avoid breaking UI imports.
+// If you want this file removed entirely, update all imports and the Language typing first.
 export const translations = {
   en: {
     back: "Back",

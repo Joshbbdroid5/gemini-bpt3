@@ -2,18 +2,15 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { History, Trophy, UserRound, Wallet } from 'lucide-react';
 
-import { Language } from '../types';
-import { translations } from '../translations';
-
 
 export type BottomTabKey = 'game' | 'history' | 'wallet' | 'profile';
 
 interface Props {
   active: BottomTabKey;
   onTabChange: (tab: BottomTabKey) => void;
-  language: Language;
   walletBalance: number;
 }
+
 
 const TabButton = ({
   tab,
@@ -56,10 +53,17 @@ const TabButton = ({
   );
 };
 
-export default function BottomTabs({ active, onTabChange, language, walletBalance }: Props) {
-  const t = translations[language];
+export default function BottomTabs({ active, onTabChange, walletBalance }: Props) {
+  const t = {
+    tabGame: 'Game',
+    tabHistory: 'History',
+    tabWallet: 'Wallet',
+    tabProfile: 'Profile',
+    myBalance: 'My Balance',
+  };
 
   return (
+
     <motion.nav
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}

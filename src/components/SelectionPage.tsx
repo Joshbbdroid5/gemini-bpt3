@@ -1,21 +1,32 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, Timer, ShoppingCart, ArrowLeft } from 'lucide-react';
-import { TOTAL_BOARDS, Language } from '../types';
-import { translations } from '../translations';
+import { TOTAL_BOARDS } from '../types';
 
 interface Props {
   staked: number;
   wallet: number;
   onComplete: (selectedIds: number[]) => void;
   onBack: () => void;
-  language: Language;
 }
 
-export default function SelectionPage({ staked, wallet, onComplete, onBack, language }: Props) {
+export default function SelectionPage({ staked, wallet, onComplete, onBack }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [timeLeft, setTimeLeft] = useState(60);
-  const t = translations[language];
+
+  const t = {
+    back: 'Back',
+    wallet: 'Wallet',
+    staked: 'Staked',
+    timeRemaining: 'Time Remaining',
+    boardsAvailable: 'Boards Available',
+    selectBoardInfo: 'Select 1 Board to play.',
+    selectionStatus: 'Selection Status',
+    boardsRegistered: 'Boards Registered',
+    selecting: 'Selecting Board...',
+    gameStarting: 'Game Starting Soon',
+  };
+
 
   useEffect(() => {
     const timer = setInterval(() => {

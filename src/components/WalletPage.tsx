@@ -1,17 +1,18 @@
 import { motion } from 'framer-motion';
 import { Wallet, ArrowLeft } from 'lucide-react';
-import { Language } from '../types';
-import { translations } from '../translations';
-
 interface Props {
-  language: Language;
   walletBalance: number;
   telegramName?: string;
   onBack?: () => void;
 }
 
-export default function WalletPage({ language, walletBalance, telegramName, onBack }: Props) {
-  const t = translations[language];
+export default function WalletPage({ walletBalance, telegramName, onBack }: Props) {
+  const t = {
+    back: 'Back',
+    wallet: 'Wallet',
+    myBalance: 'My Balance',
+  };
+
 
   return (
     <div className="flex-1 flex flex-col bg-transparent overflow-hidden">

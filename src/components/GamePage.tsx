@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Volume2, VolumeX, RotateCcw, LogOut } from 'lucide-react';
 import { generateBoard, WinningPattern } from '../logic';
-import { BingoBoardData, GameStats, HistoryEntry, Language } from '../types';
-import { translations } from '../translations';
+import { BingoBoardData, GameStats, HistoryEntry } from '../types';
 import { socket, socketEvents } from './socket';
 
 interface Props {
@@ -12,10 +11,10 @@ interface Props {
   onRestart: () => void;
   onLeaveToHome: () => void;
   onGameEnd: (entry: HistoryEntry) => void;
-  language: Language;
 }
 
-export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, onLeaveToHome, onGameEnd, language }: Props) {
+export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, onLeaveToHome, onGameEnd }: Props) {
+
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[] }[]>([]);
@@ -24,9 +23,26 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   const [isMuted, setIsMuted] = useState(false);
   const [autoMarkMode, setAutoMarkMode] = useState(true);
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
-  const t = translations[language];
+
+  const t = {
+    gameId: 'Game ID',
+    players: 'Players',
+    bet: 'Bet',
+    derash: 'Derash',
+    called: 'Called',
+    watchingOnly: 'Watching Only',
+    watchingText: 'The game has started. Please wait for the next round.',
+    leave: 'Leave',
+    refresh: 'Refresh',
+    winners: 'Winners',
+    playAgain: 'Play Again',
+    nextGameIn: 'Next game in',
+    boardNum: 'Board #',
+    myWin: 'MY WIN',
+  };
 
   const [gameMetadata, setGameMetadata] = useState({ 
+
     pool: 0, 
     players: 0, 
     gameId: '---'

@@ -7,7 +7,6 @@ export type BingoBoardData = BingoCell[][];
 
 export type AppPhase = 'lobby' | 'home' | 'selection' | 'game' | 'history' | 'wallet' | 'profile' | 'verifying' | 'admin';
 
-
 export interface GameStats {
   gameId: string;
   players: number;
@@ -16,6 +15,7 @@ export interface GameStats {
 }
 
 export interface HistoryEntry {
+
   gameId: string;
   date: string;
   totalStaked: number;
@@ -35,4 +35,5 @@ export const BINGO_COLUMNS = {
 
 export const TOTAL_BOARDS = 600;
 
-export type Language = 'en' | 'am' | 'om';
+
+
