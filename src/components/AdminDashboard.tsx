@@ -32,10 +32,16 @@ export default function AdminDashboard({ onBack }: Props) {
         setStats(data.stats);
         setIsAuthenticated(true);
       } else {
-        alert('Unauthorized or server error');
+        let details = '';
+        try {
+          details = ` (${response.status} ${response.statusText})`; 
+        } catch {}
+        alert(`Unauthorized or server error${details}. Check ADMIN_SECRET on Render and VITE_BACKEND_URL.`);
       }
     } catch (err) {
-      alert('Connection failed');
+      // Helps you distinguish "wrong URL" vs "backend down"
+      console.error('Admin login fetch error:', err);
+      alert('Connection failed. Check VITE_BACKEND_URL and server health (/health).');
     } finally {
       setLoading(false);
     }

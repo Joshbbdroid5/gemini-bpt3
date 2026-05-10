@@ -311,7 +311,12 @@ bot.action('deposit', async (ctx) => {
 });
 
 bot.action('deposit_method_telebirr', async (ctx) => {
+  // Telegraf v4 typings: callback query payload is in ctx.callbackQuery.data but types can vary.
+  // Avoid strict access to keep TS build green.
+  console.log('[bot] deposit_method_telebirr callback received', { from: ctx.from?.id });
   await ctx.answerCbQuery();
+  // store mode so next user text can be handled even if reply_to_message parsing fails
+  setState(ctx.from.id.toString(), { mode: 'deposit' });
   return ctx.reply(
     `🏦 *Deposit via Telebirr*\n\nPay to this Telebirr number:\n*${TELEBIRR_ACCOUNT_NUMBER}*\n\nNow enter the deposit amount (Minimum 10 ETB).\n\n_Format: deposit_amount:100_`,
     { parse_mode: 'Markdown', reply_markup: { force_reply: true } }
@@ -332,15 +337,36 @@ bot.action('withdraw_method_telebirr', async (ctx) => {
   );
 });
 
+// Telebirr conversation state (fixes missing next step due to force_reply reply_to_message mismatch)
+const depositWithdrawState = new Map<string, { mode: 'deposit' | 'withdraw' | null; pendingAmount?: number }>();
+
+function getState(userId: string) {
+  return depositWithdrawState.get(userId) || { mode: null as 'deposit' | 'withdraw' | null };
+}
+
+function setState(userId: string, state: { mode: 'deposit' | 'withdraw' | null; pendingAmount?: number }) {
+  depositWithdrawState.set(userId, state);
+}
+
 // Handle Inputs for Deposit/Withdraw
 bot.on('text', async (ctx) => {
   const text = ctx.message.text;
+  const userId = ctx.from.id.toString();
   const isReply = ctx.message.reply_to_message;
+  const replyText = isReply && typeof (isReply as any).text === 'string' ? (isReply as any).text : '';
+  const replyTextSafe = replyText || '';
 
-  if (!isReply || !('text' in isReply) || typeof isReply.text !== 'string') return;
+  const state = getState(userId);
+
+  // Detect mode from prompt (when Telegram provides it), otherwise fallback to saved state
+  const effectiveMode: 'deposit' | 'withdraw' | null =
+    replyText.includes('deposit_amount:') ? 'deposit' :
+    replyText.includes('withdraw_amount:') ? 'withdraw' :
+    state.mode;
+
 
   // Deposit amount after selecting method
-  if (isReply.text.includes('deposit_amount:')) {
+  if (effectiveMode === 'deposit') {
     const amount = parseAmount(text);
     if (isNaN(amount) || amount < 10) return ctx.reply('❌ Invalid amount. Minimum deposit is 10 ETB.');
 
@@ -354,7 +380,7 @@ bot.on('text', async (ctx) => {
   }
 
   // Withdraw amount after selecting method
-  if (isReply.text.includes('withdraw_amount:')) {
+  if (replyTextSafe.includes('withdraw_amount:')) {
     const amount = parseAmount(text);
     if (isNaN(amount) || amount < 50) return ctx.reply('❌ Invalid amount. Minimum withdrawal is 50 ETB.');
 
@@ -362,8 +388,8 @@ bot.on('text', async (ctx) => {
   }
 
   // Telebirr confirmation SMS paste (deposit)
-  if (isReply.text.includes('DEPOSIT INSTRUCTIONS')) {
-    const amountMatch = isReply.text.match(/\*(\d+) ETB\*/);
+  if (replyTextSafe.includes('DEPOSIT INSTRUCTIONS')) {
+    const amountMatch = replyTextSafe.match(/\*(\d+) ETB\*/);
     const amountFromMsg = amountMatch ? amountMatch[1] : '0';
     const userId = ctx.from.id.toString();
 

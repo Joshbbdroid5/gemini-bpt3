@@ -1,19 +1,8 @@
-# Fixes needed to complete Admin START/STOP gating
+# TODO
 
-## Must-fix right now
-- [ ] Implement `POST /admin/start-game` and `POST /admin/stop-game` in `server.ts`
-- [ ] Emit socket events from those endpoints:
-  - `game:status`
-  - `game:stopped`
-- [ ] Add Start/Stop buttons to `src/components/AdminDashboard.tsx`
-- [ ] Fix `src/components/AdminDashboard.tsx` TSX issues (earlier tool flagged a TS error: “Cannot find name 'div'”)
-
-## Also required for full behavior
-- [ ] Ensure `resetGame()` does NOT schedule next loop when admin stopped
-- [ ] Ensure clients cannot auto-submit selections when admin hasn’t started
-  - currently `SelectionPage` calls `onComplete` at timer end regardless
-
-## Validation
-- [ ] Run `npm run build`
-- [ ] Smoke test: admin start => users allowed to bet & see balls; admin stop => no more balls and clients show ended state
+## Admin login / Telebirr flow fixes
+- [ ] Improve AdminDashboard error messages (show HTTP status + response body)
+- [ ] Fix Telebirr next-step parsing: remove dependence on `reply_to_message.text.includes(...)` for `force_reply`
+- [ ] Implement per-user conversation state in `admin-bot.ts` for deposit/withdraw amount prompts
+- [ ] Add a debug fallback reply when input doesn’t match expected format
 
