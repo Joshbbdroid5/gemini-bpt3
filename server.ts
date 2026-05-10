@@ -396,6 +396,7 @@ app.post('/admin/toggle-maintenance', (req, res) => {
 let totalVolume = 0;
 let totalProfit = 0;
 let isMaintenanceMode = false;
+let isGameRunning = false;
 let activePlayers = 0;
 
 interface RoomState {
@@ -462,6 +463,11 @@ const broadcastPoolUpdate = () => {
 // Global interval for drawing balls
 const runGameLoop = (stake: number) => {
   const room = roomStates.get(stake)!;
+
+  if (!isGameRunning) {
+    // Admin has stopped the game.
+    return;
+  }
 
   // Only suspend the loop if maintenance is enabled and we are NOT in the middle of an active round
   if (isMaintenanceMode && room.currentBalls.length === 0 && room.globalPool === 0 && !room.isGameOver) {
@@ -548,7 +554,8 @@ const resetGame = (stake: number) => {
   room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 0); // Start next game immediately
 };
 
-// Start the first game
+// Game starts only when admin explicitly starts it.
+
 dbPromise.then(async () => {
   try {
     await syncCache(); // Ensure cache is synced after DB connection
@@ -556,9 +563,16 @@ dbPromise.then(async () => {
     io = new SocketIOServer(server, corsOptions); // Initialize Socket.io after DB is ready
     registerSocketHandlers();
 
+    // Wait for admin to START the game via /admin/start-game.
+    // Game loops will not run until isGameRunning=true.
     STAKES.forEach(stake => {
-      // Start all game rooms immediately
-      runGameLoop(stake);
+      const room = roomStates.get(stake)!;
+      // Ensure room is idle on startup.
+      room.currentBalls = [];
+      room.globalPool = 0;
+      room.playerBoards.clear();
+      room.isGameOver = false;
+      room.currentGameId = generateGameId(stake);
     });
 
     await bot.launch();
@@ -636,6 +650,10 @@ function registerSocketHandlers() {
 
   // Handle Betting/Joining Pool
   socket.on('game:bet', async (data: { stake: number; boardIds: number[] }) => {
+    if (!isGameRunning) {
+      socket.emit('message', 'Game has not started yet. Please wait for admin to start.');
+      return;
+    }
     const roomStake = data.stake / data.boardIds.length;
     const room = roomStates.get(roomStake);
 

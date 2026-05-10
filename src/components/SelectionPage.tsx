@@ -25,6 +25,8 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
     boardsRegistered: 'Boards Registered',
     selecting: 'Selecting Board...',
     gameStarting: 'Game Starting Soon',
+    waitingForAdmin: 'Waiting for admin to start...',
+    betsBlocked: 'Bets are paused by admin.',
   };
 
 

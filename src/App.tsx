@@ -116,6 +116,29 @@ export default function App() {
       setConnectionError(true);
     };
 
+    // Admin-controlled game lifecycle
+    const handleGameStatus = (status: { isGameRunning: boolean; gameId: string }) => {
+      setAllRoomStats(prev => {
+        const next = { ...prev };
+        next[stake] = {
+          ...next[stake],
+          gameId: status.gameId,
+          isLive: status.isGameRunning,
+        };
+        return next;
+      });
+    };
+
+    const handleGameStopped = () => {
+      setAllRoomStats(prev => {
+        const next = { ...prev };
+        if (next[stake]) {
+          next[stake] = { ...next[stake], isLive: false };
+        }
+        return next;
+      });
+    };
+
     socket.on('user:status', handleStatus);
     socket.on(socketEvents.WALLET_UPDATE, handleWallet);
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
@@ -123,6 +146,8 @@ export default function App() {
     socket.on('game:init', handleInit);
     socket.on('game:ball', () => { /* isLive is updated via pool_sync */ });
     socket.on('game:reset', () => { /* isLive is updated via pool_sync */ });
+    socket.on(socketEvents.GAME_STATUS, handleGameStatus);
+    socket.on(socketEvents.GAME_STOPPED, handleGameStopped);
     socket.on('connect_error', handleConnectError);
 
     // Set a timeout to catch connection failures

@@ -14,6 +14,9 @@ export const socketEvents = {
   PLACE_BET: 'game:bet',
   
   // Incoming Events (Server -> Player)
+  GAME_STATUS: 'game:status',
+  GAME_STOPPED: 'game:stopped',
+  GAME_RESET: 'game:reset',
   BALL_DRAWN: 'game:ball',
   NEW_WINNER: 'game:winner',
   POOL_UPDATE: 'game:pool_sync',
