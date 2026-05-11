@@ -60,6 +60,19 @@ export default function AdminDashboard({ onBack }: Props) {
     }
   };
 
+  // Auto-refresh wallets and stats every 30 seconds if authenticated
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    if (isAuthenticated) {
+      intervalId = setInterval(() => {
+        fetchWallets();
+      }, 30000); // Refresh every 30 seconds
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isAuthenticated, secret, backendUrl]); // Re-run effect if isAuthenticated or secret changes
+
   const handleUpdateBalance = async (userId: string, amount: number) => {
     if (isNaN(amount) || amount === 0) return;
     

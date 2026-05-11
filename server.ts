@@ -306,6 +306,63 @@ app.post('/admin/update-wallet', async (req, res) => {
   }
 });
 
+
+// ADMIN ENDPOINT: Request a withdrawal
+app.post('/admin/withdraw-request', async (req, res) => {
+  const { userId, amount, secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const user = await User.findOne({ userId });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.balance < amount) return res.status(400).json({ error: 'Insufficient balance' });
+
+    // Deduct immediately to prevent double spending
+    user.balance -= amount;
+    await user.save();
+    
+    // Update cache and sync sockets
+    userWallets.set(userId, user.balance);
+    const socketId = socketMapping.get(userId);
+    if (socketId) io.to(socketId).emit('wallet:update', user.balance);
+
+    const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+    if (ADMIN_CHAT_ID) {
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, 
+        `💸 <b>NEW WITHDRAWAL REQUEST</b>\n\n👤 <b>User:</b> <code>${userId}</code>\n💰 <b>Amount:</b> ${amount} ETB\n📱 <b>Phone:</b> <code>${user.phone || 'N/A'}</code>`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('✅ Paid', `w_paid_${amount}_${userId}`), Markup.button.callback('❌ Reject & Refund', `w_ref_${amount}_${userId}`)],
+          ])
+        }
+      ).catch(e => console.error("Admin notify error:", e));
+    }
+    res.json({ success: true, newBalance: user.balance });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// ADMIN ENDPOINT: Refund a withdrawal
+app.post('/admin/refund-withdrawal', async (req, res) => {
+  const { userId, amount, secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const user = await User.findOneAndUpdate({ userId }, { $inc: { balance: amount } }, { new: true });
+    if (user) {
+      userWallets.set(userId, user.balance);
+      const socketId = socketMapping.get(userId);
+      if (socketId) io.to(socketId).emit('wallet:update', user.balance);
+      await notifyUser(userId, `❌ <b>Withdrawal Rejected</b>\nYour request for ${amount} ETB was rejected. The amount has been refunded to your wallet.`);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
 // ADMIN ENDPOINT: Reject a deposit (cleanup)
 app.post('/admin/reject-deposit', async (req, res) => {
   const { userId, secret } = req.body;

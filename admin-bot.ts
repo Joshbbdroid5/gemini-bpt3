@@ -121,4 +121,29 @@ adminBot.action(/reject_(.+)/, async (ctx: Context & { match: RegExpExecArray })
     await ctx.reply(`❌ Error notifying server of rejection: ${err instanceof Error ? err.message : String(err)}`);
   }
 });
+
+// Admin Withdrawal Paid
+adminBot.action(/w_paid_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
+  if (!requireAdminSecret(ctx)) return;
+  const amount = ctx.match[1];
+  const userId = ctx.match[2];
+  await ctx.editMessageText(`✅ <b>Withdrawal Paid</b>\nUser: <code>${userId}</code>\nAmount: ${amount} ETB`, { parse_mode: 'HTML' });
+});
+
+// Admin Withdrawal Reject/Refund
+adminBot.action(/w_ref_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
+  if (!requireAdminSecret(ctx)) return;
+  const amount = parseInt(ctx.match[1], 10);
+  const userId = ctx.match[2];
+  try {
+    await fetch(`${API_URL}/admin/refund-withdrawal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, amount, secret: ADMIN_SECRET }),
+    });
+    await ctx.editMessageText(`❌ <b>Withdrawal Rejected & Refunded</b>\nUser: <code>${userId}</code>`, { parse_mode: 'HTML' });
+  } catch (err) {
+    await ctx.reply('❌ Error contacting server.');
+  }
+});
 adminBot.catch((err) => console.error('Admin Bot Error:', err));

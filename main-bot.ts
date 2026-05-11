@@ -165,7 +165,23 @@ mainBot.on('text', async (ctx) => {
     clearState(userId);
     const amount = parseAmount(text);
     if (isNaN(amount) || amount < 50) return ctx.reply('❌ Minimum 50 ETB.');
-    return ctx.reply(`✅ Withdrawal request for ${amount} ETB received.`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/withdraw-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, amount, secret: ADMIN_SECRET }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        return ctx.reply(`✅ Withdrawal request for ${amount} ETB received. Admin has been notified.`);
+      } else {
+        return ctx.reply(`❌ Request failed: ${data.error || 'Server error'}`);
+      }
+    } catch (err) {
+      console.error('Withdrawal request error:', err);
+      return ctx.reply('❌ Connection error. Please try again later.');
+    }
   }
 
   if (replyText.includes('DEPOSIT INSTRUCTIONS')) {
