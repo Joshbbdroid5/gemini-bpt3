@@ -21,11 +21,20 @@ export default function AdminDashboard({ onBack }: Props) {
   const fetchWallets = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${backendUrl}/admin/wallets`, {
+      const healthUrl = `${backendUrl}/health`;
+      // First: prove backend is reachable from the browser
+      const healthResp = await fetch(healthUrl, { method: 'GET' });
+      if (!healthResp.ok) {
+        throw new Error(`Health check failed: ${healthResp.status} ${healthResp.statusText}`);
+      }
+
+      const walletsUrl = `${backendUrl}/admin/wallets`;
+      const response = await fetch(walletsUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret })
       });
+
       if (response.ok) {
         const data = await response.json();
         setWallets(data.wallets);
@@ -34,14 +43,14 @@ export default function AdminDashboard({ onBack }: Props) {
       } else {
         let details = '';
         try {
-          details = ` (${response.status} ${response.statusText})`; 
+          details = ` (${response.status} ${response.statusText})`;
         } catch {}
-        alert(`Unauthorized or server error${details}. Check ADMIN_SECRET on Render and VITE_BACKEND_URL.`);
+        alert(`Unauthorized or server error${details}.\n\nBackend URL: ${backendUrl}\nHealth URL: ${healthUrl}\nWallets URL: ${walletsUrl}`);
       }
     } catch (err) {
-      // Helps you distinguish "wrong URL" vs "backend down"
       console.error('Admin login fetch error:', err);
-      alert('Connection failed. Check VITE_BACKEND_URL and server health (/health).');
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Connection failed.\n\n${msg}\n\nBackend URL: ${backendUrl}\nHealth URL: ${backendUrl}/health`);
     } finally {
       setLoading(false);
     }
