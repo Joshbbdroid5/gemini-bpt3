@@ -175,12 +175,14 @@ function verifyTelegramData(initData: string): boolean {
 }
 
 // Health check endpoint for Render monitoring
+// Render may hit /health without any API routes being mounted yet; also avoid crashing if io isn't ready.
 app.get('/health', (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  const clientsCount = io ? io.engine.clientsCount : 0;
   res.json({
     status: 'ok',
     database: dbStatus,
-    clients: io.engine.clientsCount,
+    clients: clientsCount,
     uptime: process.uptime()
   });
 });
