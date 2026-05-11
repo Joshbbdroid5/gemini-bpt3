@@ -320,7 +320,7 @@ bot.action('deposit_method_telebirr', async (ctx) => {
   // store mode so next user text can be handled even if reply_to_message parsing fails
   setState(ctx.from.id.toString(), { mode: 'deposit' });
   return ctx.reply(
-    `🏦 <b>Deposit via Telebirr</b>\n\nPay to this Telebirr number:\n<code>${TELEBIRR_ACCOUNT_NUMBER}</code>\n\nNow enter the deposit amount (Minimum 10 ETB).\n\n<i>Format: deposit_amount:100</i>`,
+    `🏦 <b>Deposit via Telebirr</b>\n\nPay to this Telebirr number:\n<code>${TELEBIRR_ACCOUNT_NUMBER}</code>\n\nNow enter the deposit amount (Minimum 10 ETB).`,
     { parse_mode: 'HTML', reply_markup: { force_reply: true } }
   );
 });
@@ -333,8 +333,9 @@ bot.action('withdraw', async (ctx) => {
 
 bot.action('withdraw_method_telebirr', async (ctx) => {
   await ctx.answerCbQuery();
+  setState(ctx.from.id.toString(), { mode: 'withdraw' });
   return ctx.reply(
-    `🏦 <b>Withdraw via Telebirr</b>\n\nUse this Telebirr number for your withdrawal:\n<code>${TELEBIRR_ACCOUNT_NUMBER}</code>\n\nNow enter the withdrawal amount (Minimum 50 ETB).\n\n<i>Format: withdraw_amount:50</i>`,
+    `🏦 <b>Withdraw via Telebirr</b>\n\nNow enter the withdrawal amount (Minimum 50 ETB).`,
     { parse_mode: 'HTML', reply_markup: { force_reply: true } }
   );
 });
@@ -366,14 +367,12 @@ bot.on('text', async (ctx) => {
   const state = getState(userId);
 
   // Detect mode from prompt (when Telegram provides it), otherwise fallback to saved state
-  const effectiveMode: 'deposit' | 'withdraw' | null =
-    replyText.includes('deposit_amount:') ? 'deposit' :
-    replyText.includes('withdraw_amount:') ? 'withdraw' :
-    state.mode;
+  const effectiveMode: 'deposit' | 'withdraw' | null = state.mode;
 
 
   // Deposit amount after selecting method
   if (effectiveMode === 'deposit') {
+    clearState(userId);
     const amount = parseAmount(text);
     if (isNaN(amount) || amount < 10) return ctx.reply('❌ Invalid amount. Minimum deposit is 10 ETB.');
 
@@ -388,7 +387,8 @@ bot.on('text', async (ctx) => {
   }
 
   // Withdraw amount after selecting method
-  if (replyTextSafe.includes('withdraw_amount:')) {
+  if (effectiveMode === 'withdraw') {
+    clearState(userId);
     const amount = parseAmount(text);
     if (isNaN(amount) || amount < 50) return ctx.reply('❌ Invalid amount. Minimum withdrawal is 50 ETB.');
 
