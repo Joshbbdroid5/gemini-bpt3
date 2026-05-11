@@ -6,7 +6,9 @@ import cors from 'cors';
 import crypto from 'crypto';
 import { generateBoard, checkWin } from './src/logic';
 import fs from 'fs';
-import { bot } from './admin-bot';
+import { mainBot, notifyUser } from './main-bot';
+import { adminBot } from './admin-bot';
+import { Markup } from 'telegraf';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose, { Error as MongooseError } from 'mongoose';
@@ -212,6 +214,20 @@ app.post('/admin/add-pending-deposit', async (req, res) => {
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
   try {
     await PendingDeposit.create({ userId, amount, telebirrSms });
+    
+    // Use adminBot to notify admin
+    const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+    if (ADMIN_CHAT_ID) {
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, 
+        `🚨 <b>NEW TOP-UP REQUEST</b>\n\n👤 <b>User:</b> <code>${userId}</code>\n💰 <b>Amount:</b> ${amount} ETB\n🧾 <b>SMS:</b>\n${telebirrSms}`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('✅ Approve', `approve_${amount}_${userId}`), Markup.button.callback('❌ Reject', `reject_${userId}`)],
+          ])
+        }
+      );
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save pending deposit' });
@@ -276,6 +292,10 @@ app.post('/admin/update-wallet', async (req, res) => {
       adminSecretUsed: secret,
       timestamp: new Date()
     });
+
+    // Notify User via Main Bot
+    await notifyUser(userId, `🎊 <b>Payment Approved!</b>\nYour balance has been updated with <b>${amount} ETB</b>. Good luck!`);
+
     res.json({ success: true, newBalance: user?.balance });
   } catch (err) {
     console.error("Wallet Update Error:", err); // Log the real error
@@ -577,12 +597,15 @@ dbPromise.then(async () => {
       room.currentGameId = generateGameId(stake);
     });
 
-    await bot.launch();
-    console.log("Telegram Bot initialized");
+    await Promise.all([
+      mainBot.launch(),
+      adminBot.launch()
+    ]);
+    console.log("✅ User and Admin Bots initialized");
     
     const adminId = process.env.ADMIN_CHAT_ID;
     if (adminId) {
-      bot.telegram.sendMessage(adminId, "🚀 *Bot Online*\nThe game server and admin bot have started successfully.", { parse_mode: 'Markdown' })
+      adminBot.telegram.sendMessage(adminId, "🚀 <b>Bots Online</b>\nThe game server and both bots have started successfully.", { parse_mode: 'HTML' })
         .catch(e => console.error("Failed to send startup message to admin:", e.message));
     }
   } catch (err) {
@@ -736,7 +759,8 @@ app.get('*', (req, res) => {
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
   server.close(() => {
-    bot.stop('SIGTERM');
+    mainBot.stop('SIGTERM'); // Stop main bot
+    adminBot.stop('SIGTERM'); // Stop admin bot
     mongoose.connection.close();
   });
 });

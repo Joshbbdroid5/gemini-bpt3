@@ -8,8 +8,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20
-      # Telegram Bot Token (secret)
+      # Telegram User Bot Token (secret)
       - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      # Telegram Admin/Management Bot Token (secret)
+      - key: TELEGRAM_ADMIN_BOT_TOKEN
         sync: false # Prevent syncing to git, manage in Render dashboard
       # Admin Chat ID (secret)
       - key: ADMIN_CHAT_ID
