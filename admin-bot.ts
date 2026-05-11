@@ -344,9 +344,14 @@ function getState(userId: string) {
   return depositWithdrawState.get(userId) || { mode: null as 'deposit' | 'withdraw' | null };
 }
 
-function setState(userId: string, state: { mode: 'deposit' | 'withdraw' | null; pendingAmount?: number }) {
-  depositWithdrawState.set(userId, state);
+function setState(userId: string, state: { mode: 'deposit' | 'withdraw' | null; pendingDepositAmount?: number }) {
+  depositWithdrawState.set(userId, state as any);
 }
+
+function clearState(userId: string) {
+  depositWithdrawState.delete(userId);
+}
+
 
 // Handle Inputs for Deposit/Withdraw
 bot.on('text', async (ctx) => {
