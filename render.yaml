@@ -33,4 +33,7 @@ services:
       # VITE_TELEGRAM_BOT_USERNAME (used by frontend for bot deep links)
       - key: VITE_TELEGRAM_BOT_USERNAME
         value:LomyBingo75_bot # Replace with your actual bot username (without @)
+      # Payment Phone Number (secret)
+      - key: PAYMENT_PHONE
+        sync: false # Manage in Render dashboard
     healthCheckPath: /health # Added health check path

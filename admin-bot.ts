@@ -333,7 +333,7 @@ bot.action('withdraw', async (ctx) => {
 bot.action('withdraw_method_telebirr', async (ctx) => {
   await ctx.answerCbQuery();
   return ctx.reply(
-    `🏦 *Withdraw via Telebirr*\n\nUse this Telebirr number for your withdrawal:\n*${TELEBIRR_ACCOUNT_NUMBER}*\n\nNow enter the withdrawal amount (Minimum 50 ETB).\n\n_Format: withdraw_amount:50_`,
+    `🏦 *Withdraw via Telebirr*\n\nUse this Telebirr number for your withdrawal:\n\`${TELEBIRR_ACCOUNT_NUMBER}\`\n\nNow enter the withdrawal amount (Minimum 50 ETB).\n\n_Format: withdraw_amount:50_`,
     { parse_mode: 'Markdown', reply_markup: { force_reply: true } }
   );
 });
