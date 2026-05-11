@@ -16,7 +16,8 @@ const FRONTEND_URL = process.env.FRONTEND_URL?.trim() || process.env.VITE_BACKEN
 const ADMIN_SECRET = process.env.ADMIN_SECRET?.trim();
 
 // Payment Details
-const PAYMENT_PHONE = process.env.PAYMENT_PHONE || '0978015131';
+const rawPhone = process.env.PAYMENT_PHONE?.trim();
+const PAYMENT_PHONE = rawPhone && rawPhone.length > 5 ? rawPhone : '0978015131';
 const TELEBIRR_ACCOUNT_NUMBER = PAYMENT_PHONE;
 
 /**
@@ -130,15 +131,15 @@ bot.start(async (ctx) => {
   }
 
   await ctx.reply(
-    `✅ *Request Received!*\n\nYou want to top up *${amount} ETB*.\n\n💳 *DEPOSIT INSTRUCTIONS*\n\n1. Send exactly *${amount} ETB* to our Telebirr account:\nNumber: \`${TELEBIRR_ACCOUNT_NUMBER}\`\n(_Tap the number above to copy it_)\n\n2. After paying, *copy* the Telebirr confirmation SMS and *paste* it here as a reply to this message.`,
-    { parse_mode: 'Markdown' }
+    `✅ <b>Request Received!</b>\n\nYou want to top up <b>${amount} ETB</b>.\n\n💳 <b>DEPOSIT INSTRUCTIONS</b>\n\n1. Send exactly <b>${amount} ETB</b> to our Telebirr account:\nNumber: <code>${TELEBIRR_ACCOUNT_NUMBER}</code>\n<i>(Tap the number above to copy it)</i>\n\n2. After paying, <b>copy</b> the Telebirr confirmation SMS and <b>paste</b> it here as a reply to this message.`,
+    { parse_mode: 'HTML' }
   );
 
   // Notify Admin
   if (ADMIN_CHAT_ID) {
     await bot.telegram.sendMessage(
       ADMIN_CHAT_ID,
-      `🚨 *NEW TOP-UP REQUEST*\n\n👤 *User:* \`${userId}\`\n💰 *Amount:* ${amount} ETB\n\nVerify payment manually before approving.`,
+      `🚨 <b>NEW TOP-UP REQUEST</b>\n\n👤 <b>User:</b> <code>${userId}</code>\n💰 <b>Amount:</b> ${amount} ETB\n\nVerify payment manually before approving.`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -319,8 +320,8 @@ bot.action('deposit_method_telebirr', async (ctx) => {
   // store mode so next user text can be handled even if reply_to_message parsing fails
   setState(ctx.from.id.toString(), { mode: 'deposit' });
   return ctx.reply(
-    `🏦 *Deposit via Telebirr*\n\nPay to this Telebirr number:\n\`${TELEBIRR_ACCOUNT_NUMBER}\`\n\nNow enter the deposit amount (Minimum 10 ETB).\n\n_Format: deposit_amount:100_`,
-    { parse_mode: 'Markdown', reply_markup: { force_reply: true } }
+    `🏦 <b>Deposit via Telebirr</b>\n\nPay to this Telebirr number:\n<code>${TELEBIRR_ACCOUNT_NUMBER}</code>\n\nNow enter the deposit amount (Minimum 10 ETB).\n\n<i>Format: deposit_amount:100</i>`,
+    { parse_mode: 'HTML', reply_markup: { force_reply: true } }
   );
 });
 
@@ -333,8 +334,8 @@ bot.action('withdraw', async (ctx) => {
 bot.action('withdraw_method_telebirr', async (ctx) => {
   await ctx.answerCbQuery();
   return ctx.reply(
-    `🏦 *Withdraw via Telebirr*\n\nUse this Telebirr number for your withdrawal:\n\`${TELEBIRR_ACCOUNT_NUMBER}\`\n\nNow enter the withdrawal amount (Minimum 50 ETB).\n\n_Format: withdraw_amount:50_`,
-    { parse_mode: 'Markdown', reply_markup: { force_reply: true } }
+    `🏦 <b>Withdraw via Telebirr</b>\n\nUse this Telebirr number for your withdrawal:\n<code>${TELEBIRR_ACCOUNT_NUMBER}</code>\n\nNow enter the withdrawal amount (Minimum 50 ETB).\n\n<i>Format: withdraw_amount:50</i>`,
+    { parse_mode: 'HTML', reply_markup: { force_reply: true } }
   );
 });
 
@@ -376,12 +377,13 @@ bot.on('text', async (ctx) => {
     const amount = parseAmount(text);
     if (isNaN(amount) || amount < 10) return ctx.reply('❌ Invalid amount. Minimum deposit is 10 ETB.');
 
-    return ctx.replyWithMarkdown(
-      `💳 *DEPOSIT INSTRUCTIONS*\n\n` +
-        `1. Send exactly *${amount} ETB* to our Telebirr account:\n` +
-        `Number: \`${TELEBIRR_ACCOUNT_NUMBER}\`\n` +
-        `(_Tap the number above to copy it_)\n\n` +
-        `2. After paying, *copy* the Telebirr confirmation SMS and *paste* it here as a reply to this message.`
+    return ctx.reply(
+      `💳 <b>DEPOSIT INSTRUCTIONS</b>\n\n` +
+        `1. Send exactly <b>${amount} ETB</b> to our Telebirr account:\n` +
+        `Number: <code>${TELEBIRR_ACCOUNT_NUMBER}</code>\n` +
+        `<i>(Tap the number above to copy it)</i>\n\n` +
+        `2. After paying, <b>copy</b> the Telebirr confirmation SMS and <b>paste</b> it here as a reply to this message.`,
+      { parse_mode: 'HTML' }
     );
   }
 
