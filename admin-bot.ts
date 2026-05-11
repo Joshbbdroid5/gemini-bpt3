@@ -130,7 +130,8 @@ bot.start(async (ctx) => {
   }
 
   await ctx.reply(
-    `✅ Request Received!\n\nYou want to top up ${amount} ETB.\nPlease send the payment now via [Your Payment Method Info].\n\nWaiting for admin approval...`
+    `✅ *Request Received!*\n\nYou want to top up *${amount} ETB*.\n\n💳 *DEPOSIT INSTRUCTIONS*\n\n1. Send exactly *${amount} ETB* to our Telebirr account:\nNumber: \`${TELEBIRR_ACCOUNT_NUMBER}\`\n(_Tap the number above to copy it_)\n\n2. After paying, *copy* the Telebirr confirmation SMS and *paste* it here as a reply to this message.`,
+    { parse_mode: 'Markdown' }
   );
 
   // Notify Admin
@@ -318,7 +319,7 @@ bot.action('deposit_method_telebirr', async (ctx) => {
   // store mode so next user text can be handled even if reply_to_message parsing fails
   setState(ctx.from.id.toString(), { mode: 'deposit' });
   return ctx.reply(
-    `🏦 *Deposit via Telebirr*\n\nPay to this Telebirr number:\n*${TELEBIRR_ACCOUNT_NUMBER}*\n\nNow enter the deposit amount (Minimum 10 ETB).\n\n_Format: deposit_amount:100_`,
+    `🏦 *Deposit via Telebirr*\n\nPay to this Telebirr number:\n\`${TELEBIRR_ACCOUNT_NUMBER}\`\n\nNow enter the deposit amount (Minimum 10 ETB).\n\n_Format: deposit_amount:100_`,
     { parse_mode: 'Markdown', reply_markup: { force_reply: true } }
   );
 });
@@ -500,4 +501,3 @@ bot.action(/reject_(.+)/, async (ctx) => {
 bot.catch((err) => {
   console.error('Unhandled Telegram bot error:', err);
 });
-

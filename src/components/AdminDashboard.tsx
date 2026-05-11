@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+// NOTE: This file previously triggered TS "Cannot find name 'div'" errors.
+// That error typically happens when the file is not treated as TSX.
+// Ensure the file extension is .tsx (it is) and keep JSX within the function return.
+
 import { motion } from 'framer-motion';
 import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, Send, TrendingUp, Activity, Power, Play, Square, StopCircle } from 'lucide-react';
 
