@@ -11,6 +11,11 @@ const PORT = process.env.PORT || 3001;
 const API_URL = process.env.INTERNAL_API_URL || process.env.VITE_API_URL || `http://127.0.0.1:${PORT}`;
 const ADMIN_SECRET = process.env.ADMIN_SECRET?.trim();
 
+// Simple state management for admin bot actions
+const adminState = new Map<string, { mode: 'search' | null }>();
+const getAdminState = (id: string) => adminState.get(id) || { mode: null };
+const setAdminState = (id: string, state: { mode: 'search' | null }) => adminState.set(id, state);
+
 function requireAdminSecret(ctx: Context): boolean { // Explicitly typed ctx
   if (ADMIN_SECRET) return true;
   ctx?.reply?.('❌ Bot configuration error: ADMIN_SECRET is missing on the server.');
@@ -29,12 +34,15 @@ adminBot.command('manage', (ctx) => {
   }
 
   return ctx.reply(
-    '🛠 *Server Management*\n\nToggle Maintenance Mode to start or stop game rounds.',
+    '🛠 <b>Server Management</b>\n\nSelect a management function below:',
     {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard([
         [Markup.button.callback('🛑 Stop Game', 'maint_on'), Markup.button.callback('🚀 Start Game', 'maint_off')],
-        [Markup.button.callback('📋 View Pending Deposits', 'view_pending')],
+        [Markup.button.callback('📥 Pending Deposits', 'view_pending')],
+        [Markup.button.callback('📤 Pending Withdrawals', 'view_withdrawals')],
+        [Markup.button.callback('📊 View Server Stats', 'view_stats')],
+        [Markup.button.callback('🔍 Search User', 'search_user')],
       ]),
     }
   );
@@ -69,17 +77,105 @@ adminBot.action('view_pending', async (ctx: Context) => { // Explicitly typed ct
     const pending = await response.json();
 
     if (!Array.isArray(pending) || pending.length === 0) {
-      return ctx.reply('✅ No pending deposit requests at the moment.');
+      return ctx.answerCbQuery('✅ No pending deposits.');
     }
 
-    let msg = '📋 *PENDING DEPOSIT REQUESTS*\n\n';
+    let msg = '📋 <b>PENDING DEPOSIT REQUESTS</b>\n\n';
     pending.forEach((req: any, index: number) => {
-      msg += `${index + 1}. User: \`${req.userId}\` - *${req.amount} ETB*\n`;
+      msg += `${index + 1}. User: <code>${req.userId}</code> - <b>${req.amount} ETB</b>\n`;
     });
 
-    await ctx.reply(msg, { parse_mode: 'Markdown' });
+    await ctx.reply(msg, { parse_mode: 'HTML' });
   } catch (err: any) {
     await ctx.reply('❌ Error fetching pending deposits from the server.');
+  }
+});
+
+adminBot.action('view_withdrawals', async (ctx: Context) => {
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!requireAdminSecret(ctx)) return;
+
+  try {
+    const response = await fetch(`${API_URL}/admin/pending-withdrawals?secret=${ADMIN_SECRET}`);
+    const pending = await response.json();
+
+    if (!Array.isArray(pending) || pending.length === 0) {
+      return ctx.answerCbQuery('✅ No pending withdrawals.');
+    }
+
+    let msg = '💸 <b>PENDING WITHDRAWAL REQUESTS</b>\n\n';
+    pending.forEach((req: any, index: number) => {
+      msg += `${index + 1}. User: <code>${req.userId}</code> - <b>${req.amount} ETB</b>\n`;
+    });
+
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+  } catch (err: any) {
+    await ctx.reply('❌ Error fetching pending withdrawals.');
+  }
+});
+
+adminBot.action('view_stats', async (ctx: Context) => {
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!requireAdminSecret(ctx)) return;
+
+  try {
+    const response = await fetch(`${API_URL}/admin/wallets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET })
+    });
+    const data = await response.json();
+    const s = data.stats;
+
+    const msg = `📊 <b>SERVER STATISTICS</b>\n\n` +
+                `💰 <b>Game Volume:</b> ${s.totalVolume.toFixed(2)} ETB\n` +
+                `📈 <b>Net Profit:</b> ${s.totalProfit.toFixed(2)} ETB\n` +
+                `🎮 <b>Active Bets:</b> ${s.activeBets} ETB\n` +
+                `⚙️ <b>Maintenance:</b> ${s.isMaintenanceMode ? 'ON' : 'OFF'}`;
+
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+  } catch (err: any) {
+    await ctx.reply('❌ Error fetching stats.');
+  }
+});
+
+adminBot.action('search_user', async (ctx: Context) => {
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  setAdminState(ctx.from.id.toString(), { mode: 'search' });
+  return ctx.reply('🔍 Please enter the <b>User ID</b> you want to search for:', { 
+    parse_mode: 'HTML',
+    reply_markup: { force_reply: true } 
+  });
+});
+
+adminBot.on('text', async (ctx) => {
+  if (!ctx.from) {
+    console.warn('Received text message without sender information in admin bot.');
+    return;
+  }
+  if (ctx.from.id.toString() !== ADMIN_CHAT_ID) return;
+  const state = getAdminState(ctx.from.id.toString());
+
+  if (state.mode === 'search') {
+    setAdminState(ctx.from.id.toString(), { mode: null });
+    const targetId = ctx.message.text.trim();
+
+    try {
+      const response = await fetch(`${API_URL}/admin/user-info?userId=${targetId}&secret=${ADMIN_SECRET}`);
+      if (!response.ok) throw new Error('Server error');
+      
+      const data = await response.json();
+      
+      const msg = `👤 <b>USER INFO</b>\n\n` +
+                  `🆔 <b>ID:</b> <code>${targetId}</code>\n` +
+                  `💰 <b>Balance:</b> ${data.balance.toFixed(2)} ETB\n` +
+                  `✅ <b>Verified:</b> ${data.isVerified ? 'Yes' : 'No'}`;
+      
+      await ctx.reply(msg, { parse_mode: 'HTML' });
+    } catch (err) {
+      console.error('Search error:', err);
+      await ctx.reply('❌ Error: Could not fetch user data. Make sure the ID is correct.');
+    }
   }
 });
 
@@ -125,9 +221,19 @@ adminBot.action(/reject_(.+)/, async (ctx: Context & { match: RegExpExecArray })
 // Admin Withdrawal Paid
 adminBot.action(/w_paid_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
   if (!requireAdminSecret(ctx)) return;
-  const amount = ctx.match[1];
+  const amount = parseInt(ctx.match[1], 10);
   const userId = ctx.match[2];
-  await ctx.editMessageText(`✅ <b>Withdrawal Paid</b>\nUser: <code>${userId}</code>\nAmount: ${amount} ETB`, { parse_mode: 'HTML' });
+
+  try {
+    await fetch(`${API_URL}/admin/complete-withdrawal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, amount, secret: ADMIN_SECRET }),
+    });
+    await ctx.editMessageText(`✅ <b>Withdrawal Paid</b>\nUser: <code>${userId}</code>\nAmount: ${amount} ETB`, { parse_mode: 'HTML' });
+  } catch (err) {
+    await ctx.reply('❌ Error communicating with server.');
+  }
 });
 
 // Admin Withdrawal Reject/Refund

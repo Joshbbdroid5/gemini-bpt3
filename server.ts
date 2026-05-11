@@ -15,6 +15,7 @@ import mongoose, { Error as MongooseError } from 'mongoose';
 
 dotenv.config();
 
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID?.trim();
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,6 +106,19 @@ const pendingDepositSchema = new mongoose.Schema<IPendingDeposit>({
   timestamp: { type: Date, default: Date.now }
 });
 const PendingDeposit = mongoose.model<IPendingDeposit>('PendingDeposit', pendingDepositSchema);
+
+// PendingWithdrawal Schema
+interface IPendingWithdrawal {
+  userId: string;
+  amount: number;
+  timestamp: Date;
+}
+const pendingWithdrawalSchema = new mongoose.Schema<IPendingWithdrawal>({
+  userId: { type: String, required: true },
+  amount: { type: Number, required: true },
+  timestamp: { type: Date, default: Date.now }
+});
+const PendingWithdrawal = mongoose.model<IPendingWithdrawal>('PendingWithdrawal', pendingWithdrawalSchema);
 
 // User Schema
 interface IUser {
@@ -201,6 +215,9 @@ app.post('/admin/create-user', async (req, res) => {
       { referredBy },
       { upsert: true, new: true }
     );
+    if (ADMIN_CHAT_ID) {
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `👤 <b>New User Created:</b> <code>${userId}</code>${referredBy ? ` (Referred by: ${referredBy})` : ''}`, { parse_mode: 'HTML' }).catch(console.error);
+    }
     res.json({ success: true, user });
   } catch (err) {
     console.error("User Creation Error:", err);
@@ -215,8 +232,7 @@ app.post('/admin/add-pending-deposit', async (req, res) => {
   try {
     await PendingDeposit.create({ userId, amount, telebirrSms });
     
-    // Use adminBot to notify admin
-    const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+    // Use adminBot to notify admin of the request
     if (ADMIN_CHAT_ID) {
       await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, 
         `🚨 <b>NEW TOP-UP REQUEST</b>\n\n👤 <b>User:</b> <code>${userId}</code>\n💰 <b>Amount:</b> ${amount} ETB\n🧾 <b>SMS:</b>\n${telebirrSms}`,
@@ -243,6 +259,18 @@ app.get('/admin/pending-deposits', async (req, res) => {
     res.json(pending);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch pending deposits' });
+  }
+});
+
+// ADMIN ENDPOINT: List all pending withdrawals
+app.get('/admin/pending-withdrawals', async (req, res) => {
+  const { secret } = req.query;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const pending = await PendingWithdrawal.find().sort({ timestamp: -1 });
+    res.json(pending);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch pending withdrawals' });
   }
 });
 
@@ -293,8 +321,11 @@ app.post('/admin/update-wallet', async (req, res) => {
       timestamp: new Date()
     });
 
-    // Notify User via Main Bot
-    await notifyUser(userId, `🎊 <b>Payment Approved!</b>\nYour balance has been updated with <b>${amount} ETB</b>. Good luck!`);
+    // Notify User and Admin
+    await Promise.all([
+      notifyUser(userId, `🎊 <b>Payment Approved!</b>\nYour balance has been updated with <b>${amount} ETB</b>. Good luck!`),
+      ADMIN_CHAT_ID ? adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `✅ <b>Approval Log:</b> User <code>${userId}</code> credited with ${amount} ETB.`, { parse_mode: 'HTML' }) : Promise.resolve()
+    ]).catch(console.error);
 
     res.json({ success: true, newBalance: user?.balance });
   } catch (err) {
@@ -326,7 +357,9 @@ app.post('/admin/withdraw-request', async (req, res) => {
     const socketId = socketMapping.get(userId);
     if (socketId) io.to(socketId).emit('wallet:update', user.balance);
 
-    const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+    // Persist withdrawal request
+    await PendingWithdrawal.create({ userId, amount });
+
     if (ADMIN_CHAT_ID) {
       await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, 
         `💸 <b>NEW WITHDRAWAL REQUEST</b>\n\n👤 <b>User:</b> <code>${userId}</code>\n💰 <b>Amount:</b> ${amount} ETB\n📱 <b>Phone:</b> <code>${user.phone || 'N/A'}</code>`,
@@ -350,6 +383,9 @@ app.post('/admin/refund-withdrawal', async (req, res) => {
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
 
   try {
+    // Remove from pending
+    await PendingWithdrawal.findOneAndDelete({ userId, amount });
+
     const user = await User.findOneAndUpdate({ userId }, { $inc: { balance: amount } }, { new: true });
     if (user) {
       userWallets.set(userId, user.balance);
@@ -363,12 +399,38 @@ app.post('/admin/refund-withdrawal', async (req, res) => {
   }
 });
 
+// ADMIN ENDPOINT: Mark withdrawal as paid
+app.post('/admin/complete-withdrawal', async (req, res) => {
+  const { userId, amount, secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    // Remove from pending
+    await PendingWithdrawal.findOneAndDelete({ userId, amount });
+
+    await notifyUser(userId, `💸 <b>Withdrawal Processed</b>\nYour withdrawal for ${amount} ETB has been paid! Please check your Telebirr account.`);
+    if (ADMIN_CHAT_ID) {
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `💰 <b>Withdrawal Log:</b> Marked ${amount} ETB as paid to user <code>${userId}</code>.`, { parse_mode: 'HTML' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
 // ADMIN ENDPOINT: Reject a deposit (cleanup)
 app.post('/admin/reject-deposit', async (req, res) => {
   const { userId, secret } = req.body;
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
   try {
     await PendingDeposit.findOneAndDelete({ userId });
+    
+    // Notify User and Admin
+    await notifyUser(userId, `❌ <b>Deposit Rejected</b>\nYour recent top-up request could not be verified. If you believe this is a mistake, please contact support.`);
+    if (ADMIN_CHAT_ID) {
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `❌ <b>Rejection Log:</b> Rejected top-up for <code>${userId}</code>.`, { parse_mode: 'HTML' });
+    }
+    
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reject' });
@@ -397,6 +459,10 @@ app.post('/admin/verify-user', async (req, res) => {
     const socketId = socketMapping.get(userId);
     if (socketId) {
       io.to(socketId).emit('user:status', { isVerified: true });
+    }
+
+    if (ADMIN_CHAT_ID) {
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `📱 <b>User Registered:</b> <code>${userId}</code> has verified phone: <code>${phone}</code>`, { parse_mode: 'HTML' }).catch(console.error);
     }
 
     res.json({ success: true, isNewUser: !existingUser?.phone });

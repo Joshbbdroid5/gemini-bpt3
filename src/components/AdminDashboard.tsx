@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 // NOTE: This file previously triggered TS "Cannot find name 'div'" errors.
 // That error typically happens when the file is not treated as TSX.
 // Ensure the file extension is .tsx (it is) and keep JSX within the function return.
+import toast, { Toaster } from 'react-hot-toast';
 
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, Send, TrendingUp, Activity, Power, Play, Square, StopCircle } from 'lucide-react';
 
 interface Props {
@@ -19,6 +20,8 @@ export default function AdminDashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [adjustmentValues, setAdjustmentValues] = useState<Record<string, string>>({});
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [modalData, setModalData] = useState<{ userId: string; amount: number; type: 'add' | 'subtract' } | null>(null);
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -73,11 +76,17 @@ export default function AdminDashboard({ onBack }: Props) {
     };
   }, [isAuthenticated, secret, backendUrl]); // Re-run effect if isAuthenticated or secret changes
 
-  const handleUpdateBalance = async (userId: string, amount: number) => {
-    if (isNaN(amount) || amount === 0) return;
-    
+  const triggerUpdateBalance = (userId: string, amount: number, type: 'add' | 'subtract') => {
+    if (isNaN(amount) || amount <= 0) return; // Ensure amount is positive for modal display
+    setModalData({ userId, amount, type });
+    setShowConfirmModal(true);
+  };
+
+  const confirmUpdateBalance = async () => {
+    if (!modalData) return;
+    const { userId, amount, type } = modalData;
     setIsUpdating(userId);
-    
+    setShowConfirmModal(false); // Close modal immediately
     try {
       const response = await fetch(`${backendUrl}/admin/update-wallet`, {
         method: 'POST',
@@ -89,12 +98,14 @@ export default function AdminDashboard({ onBack }: Props) {
         // Clear the input for this user
         setAdjustmentValues(prev => ({ ...prev, [userId]: '' }));
         // Refresh the list to show new balance
-        await fetchWallets();
+        await fetchWallets(); //
+        toast.success(`${type === 'add' ? 'Added' : 'Subtracted'} ${amount} ETB ${type === 'add' ? 'to' : 'from'} ${userId}`);
       } else {
-        alert('Failed to update balance');
+        const errorData = await response.json();
+        toast.error(`Failed: ${errorData.error || 'Server error'}`);
       }
     } catch (err) {
-      alert('Connection error');
+      toast.error('Connection error');
     } finally {
       setIsUpdating(null);
     }
@@ -150,6 +161,7 @@ export default function AdminDashboard({ onBack }: Props) {
   }
 
   return (
+    <>
     <div className="flex-1 flex flex-col bg-primary overflow-hidden">
       <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -254,13 +266,13 @@ export default function AdminDashboard({ onBack }: Props) {
               </div>
               <div className="flex gap-1">
                 <button 
-                  onClick={() => handleUpdateBalance(id, -Math.abs(Number(adjustmentValues[id])))}
+                  onClick={() => triggerUpdateBalance(id, Math.abs(Number(adjustmentValues[id])), 'subtract')}
                   disabled={isUpdating === id || !adjustmentValues[id]}
                   className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 disabled:opacity-30"
                   aria-label="Decrease Balance"
                 ><Minus size={14} /></button>
                 <button 
-                  onClick={() => handleUpdateBalance(id, Math.abs(Number(adjustmentValues[id])))}
+                  onClick={() => triggerUpdateBalance(id, Math.abs(Number(adjustmentValues[id])), 'add')}
                   disabled={isUpdating === id || !adjustmentValues[id]}
                   className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 disabled:opacity-30"
                   aria-label="Increase Balance"
@@ -271,5 +283,53 @@ export default function AdminDashboard({ onBack }: Props) {
         ))}
       </div>
     </div>
+    <Toaster position="bottom-center" />
+
+    {/* Confirmation Modal */}
+    <AnimatePresence>
+      {showConfirmModal && modalData && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        >
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, y: 20 }}
+            className="bg-[#2d2e4d] rounded-2xl p-6 shadow-2xl border border-white/10 w-full max-w-sm text-center"
+          >
+            <h3 className="text-xl font-black text-white uppercase italic mb-4">Confirm Balance Adjustment</h3>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to {modalData?.type === 'add' ? 'add' : 'subtract'} 
+              <span className="font-bold text-yellow-400 mx-1">{modalData?.amount} ETB</span> 
+              {modalData?.type === 'add' ? ' to' : ' from'} user 
+              <span className="font-bold text-indigo-300 mx-1">{modalData?.userId}</span>'s wallet?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold uppercase text-sm hover:bg-white/20 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmUpdateBalance}
+                className={`flex-1 py-3 rounded-xl font-black uppercase text-sm transition-colors ${
+                  modalData?.type === 'add'
+                    ? 'bg-green-600 text-white hover:bg-green-500'
+                    : 'bg-red-600 text-white hover:bg-red-500'
+                }`}
+                disabled={isUpdating !== null}
+              >
+                {isUpdating ? 'Processing...' : 'Confirm'}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   );
 }
