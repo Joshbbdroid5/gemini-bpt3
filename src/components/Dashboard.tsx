@@ -52,9 +52,7 @@ export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allSt
               </div>
               <div className="flex items-center gap-1.5">
                 <Trophy size={14} className="text-yellow-600" />
-                <span className="text-xs font-black italic">
-                  {((allStats[amount]?.pool || 0) * 0.8).toFixed(0)} ETB
-                </span>
+                <span className="text-xs font-black italic">60% PRIZE</span>
               </div>
             </div>
 

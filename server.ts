@@ -137,6 +137,18 @@ const userSchema = new mongoose.Schema<IUser>({
 });
 const User = mongoose.model<IUser>('User', userSchema);
 
+// Archive Schema for Auditing
+const gameArchiveSchema = new mongoose.Schema({
+  gameId: String,
+  winnerId: String,
+  winnerBoardId: Number,
+  prizePool: Number,
+  houseRake: Number,
+  ballsDrawn: [Number],
+  timestamp: { type: Date, default: Date.now }
+});
+const GameArchive = mongoose.model('GameArchive', gameArchiveSchema);
+
 // Global Stats Schema (To persist volume/profit on Render)
 interface IGlobalStats {
   key: string;
@@ -212,7 +224,7 @@ app.post('/admin/create-user', async (req, res) => {
   try {
     const user = await User.findOneAndUpdate(
       { userId },
-      { referredBy },
+      { $set: { referredBy } },
       { upsert: true, new: true }
     );
     if (ADMIN_CHAT_ID) {
@@ -544,14 +556,18 @@ let isMaintenanceMode = false;
 let isGameRunning = false;
 let activePlayers = 0;
 
+type GameState = 'LOBBY' | 'SELECTION' | 'GAME' | 'FINISHED';
+
 interface RoomState {
   stake: number;
   currentBalls: number[];
+  shuffledBalls: number[];
   globalPool: number;
-  isGameOver: boolean;
+  state: GameState;
   currentGameId: string;
-  winningHistory: any[];
+  selectionTimer?: NodeJS.Timeout;
   playerBoards: Map<string, number[]>; // userId -> boardIds
+  boardStatus: Map<number, string>; // boardId -> userId (concurrency control)
   gameLoopTimeout?: any;
 }
 
@@ -566,11 +582,12 @@ STAKES.forEach(stake => {
   roomStates.set(stake, {
     stake,
     currentBalls: [],
+    shuffledBalls: [],
     globalPool: 0,
-    isGameOver: false,
+    state: 'LOBBY',
     currentGameId: generateGameId(stake),
-    winningHistory: [],
     playerBoards: new Map(),
+    boardStatus: new Map(),
   });
 });
 
@@ -592,10 +609,11 @@ const broadcastPoolUpdate = () => {
   STAKES.forEach(stake => {
     const room = roomStates.get(stake)!;
     allRoomStats[stake] = {
-      pool: room.globalPool,
+      pool: room.globalPool * 0.6, // Display the 60% prize pool to users
       players: room.playerBoards.size,
       gameId: room.currentGameId,
-      isLive: room.currentBalls.length > 0 && !room.isGameOver
+      state: room.state,
+      isLive: room.state === 'GAME'
     };
   });
 
@@ -605,26 +623,24 @@ const broadcastPoolUpdate = () => {
   });
 };
 
+function shuffle(array: number[]) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 // Global interval for drawing balls
 const runGameLoop = (stake: number) => {
   const room = roomStates.get(stake)!;
 
-  if (!isGameRunning) {
-    // Admin has stopped the game.
-    return;
-  }
+  if (!isGameRunning || room.state !== 'GAME') return;
 
-  // Only suspend the loop if maintenance is enabled and we are NOT in the middle of an active round
-  if (isMaintenanceMode && room.currentBalls.length === 0 && room.globalPool === 0 && !room.isGameOver) {
-    console.log(`Game loop [${stake}] suspended: Maintenance Mode is active and system is idle.`);
-    return;
-  }
-
-  if (room.currentBalls.length < 75 && !room.isGameOver) {
-    const ball = Math.floor(Math.random() * 75) + 1;
-    if (!room.currentBalls.includes(ball)) {
-      room.currentBalls.push(ball);
-      io.to(`room_${stake}`).emit('game:ball', ball);
+  if (room.currentBalls.length < room.shuffledBalls.length) {
+    const ball = room.shuffledBalls[room.currentBalls.length];
+    room.currentBalls.push(ball);
+    io.to(`room_${stake}`).emit('game:ball', ball);
 
       // AUTO-CLAIM CHECK: Collect all winners for this specific ball
       const winnersThisRound: any[] = [];
@@ -645,13 +661,12 @@ const runGameLoop = (stake: number) => {
       });
 
       if (winnersThisRound.length > 0) {
-        room.isGameOver = true;
-        const totalPayout = room.globalPool * 0.8;
-        const profitShare = (room.globalPool - totalPayout);
+        room.state = 'FINISHED';
+        const totalPayout = room.globalPool * 0.6; // 60% to players
+        const houseShare = room.globalPool * 0.4; // 40% to house
         
-        totalProfit += profitShare;
-        // Persist profit to DB
-        GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalProfit: profitShare } }, { upsert: true }).exec();
+        totalProfit += houseShare;
+        GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalProfit: houseShare } }, { upsert: true }).exec();
 
         const splitPayout = totalPayout / winnersThisRound.length;
 
@@ -663,23 +678,25 @@ const runGameLoop = (stake: number) => {
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
 
-          room.winningHistory.unshift(winnerInfo);
-          
           const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
-          if (user) userWallets.set(w.userId, user.balance);
-          
           const sId = socketMapping.get(w.userId);
           if (sId && user) io.to(sId).emit('wallet:update', user.balance);
           io.to(`room_${stake}`).emit('game:winner', winnerInfo);
-        });
 
-        if (room.winningHistory.length > 10) room.winningHistory.splice(10);
-        io.to(`room_${stake}`).emit('game:win_history', room.winningHistory);
+          // Archive for auditing
+          await GameArchive.create({
+            gameId: room.currentGameId,
+            winnerId: w.userId,
+            winnerBoardId: w.boardId,
+            prizePool: totalPayout,
+            houseRake: houseShare,
+            ballsDrawn: room.currentBalls
+          });
+        });
       }
     }
-  }
 
-  if (room.isGameOver || room.currentBalls.length >= 75) {
+  if (room.state === 'FINISHED' || room.currentBalls.length >= 75) {
     room.gameLoopTimeout = setTimeout(() => resetGame(stake), 20000); // Give players 20 seconds to celebrate
     return; // Exit the loop
   }
@@ -690,13 +707,14 @@ const runGameLoop = (stake: number) => {
 const resetGame = (stake: number) => {
   const room = roomStates.get(stake)!;
   room.currentBalls = [];
+  room.shuffledBalls = [];
   room.globalPool = 0;
   room.playerBoards.clear();
-  room.isGameOver = false;
+  room.boardStatus.clear();
+  room.state = 'LOBBY';
   room.currentGameId = generateGameId(stake);
   io.to(`room_${stake}`).emit('game:reset');
   broadcastPoolUpdate();
-  room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 0); // Start next game immediately
 };
 
 // Game starts only when admin explicitly starts it.
@@ -714,9 +732,11 @@ dbPromise.then(async () => {
       const room = roomStates.get(stake)!;
       // Ensure room is idle on startup.
       room.currentBalls = [];
+      room.shuffledBalls = [];
       room.globalPool = 0;
       room.playerBoards.clear();
-      room.isGameOver = false;
+      room.boardStatus.clear();
+      room.state = 'LOBBY';
       room.currentGameId = generateGameId(stake);
     });
 
@@ -793,44 +813,57 @@ function registerSocketHandlers() {
     
     const room = roomStates.get(stake)!;
     socket.emit('game:init', { balls: room.currentBalls, gameId: room.currentGameId });
-    socket.emit('game:win_history', room.winningHistory);
+  });
+
+  // Concurrency-Controlled Board Selection
+  socket.on('game:pick_board', (data: { boardId: number; stake: number }) => {
+    const room = roomStates.get(data.stake);
+    if (!room || room.state !== 'SELECTION') return;
+
+    // Check if taken
+    const existingOwner = room.boardStatus.get(data.boardId);
+    if (existingOwner && existingOwner !== userId) {
+      return socket.emit('message', 'Board already taken, please choose another.');
+    }
+
+    // Clear previous choice
+    room.boardStatus.forEach((owner, id) => {
+      if (owner === userId) room.boardStatus.delete(id);
+    });
+
+    // Assign new
+    room.boardStatus.set(data.boardId, userId);
+    room.playerBoards.set(userId, [data.boardId]);
+    
+    io.to(`room_${data.stake}`).emit('game:board_sync', {
+      takenBoards: Array.from(room.boardStatus.keys())
+    });
   });
 
   // Handle Betting/Joining Pool
   socket.on('game:bet', async (data: { stake: number; boardIds: number[] }) => {
-    if (!isGameRunning) {
-      socket.emit('message', 'Game has not started yet. Please wait for admin to start.');
-      return;
-    }
-    const roomStake = data.stake / data.boardIds.length;
+    const roomStake = data.stake;
     const room = roomStates.get(roomStake);
 
-    if (!room) return socket.emit('message', 'Invalid stake room.');
-
-    if (isMaintenanceMode) {
-      socket.emit('message', 'The game is currently under maintenance. No new bets are being accepted.');
-      return;
+    if (!room || room.state !== 'LOBBY') {
+      return socket.emit('message', 'Game is already in progress or selection phase.');
     }
-
-    if (room.currentBalls.length > 0 || room.isGameOver) {
-      socket.emit('message', 'A game is currently in progress. Please wait for the next round to place bets.');
-      return;
-    }
-
+    
     const userRecord = await User.findOne({ userId });
     const currentBalance = userRecord?.balance || 0;
 
+
+
+    // Logic for 10-Player Trigger
+    if (room.playerBoards.size >= 10) {
+      return socket.emit('message', 'Lobby is full. Please wait for the next round.');
+    }
     // SECURITY: Ensure user is verified before accepting bets
     if (!userRecord?.isVerified) {
-      socket.emit('message', 'Please verify your account to place bets.');
+      socket.emit('message', 'Please verify your account to place bets. Use /start in the bot to verify.');
       return;
     }
     // SECURITY: Validate data and balance
-    if (typeof data.stake !== 'number' || !Array.isArray(data.boardIds) || data.stake <= 0) {
-      console.log(`Blocked suspicious bet from ${userId}: ${data.stake}`);
-      return;
-    }
-    
     if (currentBalance < data.stake) {
       socket.emit('message', 'Insufficient balance to place bet.');
       return;

@@ -1,3 +1,5 @@
+/// <reference types="react" />
+
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 
@@ -50,7 +52,11 @@ export default function App() {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [connectionError, setConnectionError] = useState(false);
   const [myId, setMyId] = useState<string>('');
+  
+  const [winningHistory, setWinningHistory] = useState<any[]>([]);
+
   const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
+  const [totalActivePlayers, setTotalActivePlayers] = useState(0);
 
   // For scroll buttons
   const mainContentRef = useRef<HTMLElement>(null);
@@ -92,7 +98,9 @@ export default function App() {
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: any) => {
       if (data.rooms) setAllRoomStats(data.rooms);
+      if (data.totalActive !== undefined) setTotalActivePlayers(data.totalActive);
     };
+    const handleWinHistory = (history: any[]) => setWinningHistory(history);
     
     const handleInit = (data: any) => {
       setAllRoomStats(prev => ({ 
@@ -190,6 +198,11 @@ export default function App() {
       disconnectFromGame();
     };
   }, []);
+
+
+
+
+
 
   const startSelection = () => {
     // If game is already live, send user directly to GamePage in watching-only mode.
@@ -313,6 +326,13 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
+
+
+
+
+
+
+
       {/* Animated background overlay for transitions */}
       <AnimatePresence>
         {/* Only show this animated layer when transitioning between phases, or when a specific phase needs a distinct background animation */}
@@ -332,6 +352,15 @@ export default function App() {
 
 
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
+
+        {/* Loading state while verification status is unknown */}
+
+
+
+
+
+
+        {/* Loading state while verification status is unknown */}
 
         {isVerified === null && (
           <motion.div
@@ -387,6 +416,10 @@ export default function App() {
             </motion.div>
           )}
 
+
+
+
+
           {phase === 'home' && (
             <motion.div
               key="home"
@@ -397,8 +430,8 @@ export default function App() {
             >
               <Dashboard
                 onPlay={handleHomePlay}
-                onDeposit={handleDeposit}
-                onWithdraw={handleWithdraw}
+                onDeposit={() => {}}
+                onWithdraw={() => {}}
                 allStats={allRoomStats}
                 wallet={wallet}
               />
@@ -406,8 +439,11 @@ export default function App() {
           )}
 
           {phase === 'selection' && (
+
+
             <motion.div
               key="selection"
+
               initial={{ x: 300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -300, opacity: 0 }}
