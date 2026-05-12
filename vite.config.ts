@@ -19,5 +19,10 @@ export default defineConfig(({mode}) => {
     build: {
       outDir: 'dist', // Explicitly set output directory
     },
+    rollupOptions: {
+      external: [
+        'react-hot-toast', // Add react-hot-toast to external dependencies
+      ],
+    },
   };
 });
