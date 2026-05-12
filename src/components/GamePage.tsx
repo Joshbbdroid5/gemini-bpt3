@@ -19,7 +19,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[] }[]>([]);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
-  const [popupTimeLeft, setPopupTimeLeft] = useState(5);
+  const [popupTimeLeft, setPopupTimeLeft] = useState(3);
   const [isMuted, setIsMuted] = useState(false);
   const [autoMarkMode, setAutoMarkMode] = useState(true);
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
@@ -28,7 +28,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     gameId: 'Game ID',
     players: 'Players',
     bet: 'Bet',
-    derash: 'Derash',
+    derash: 'Prize (60%)',
     called: 'Called',
     watchingOnly: 'Watching Only',
     watchingText: 'The game has started. Please wait for the next round.',
@@ -111,7 +111,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     gameId: gameMetadata.gameId,
     players: gameMetadata.players,
     staked: stakedPerBoard || 10,
-    derash: gameMetadata.pool * 0.8
+    derash: gameMetadata.pool
   }), [gameMetadata, stakedPerBoard]);
 
   // Boards data

@@ -565,6 +565,7 @@ interface RoomState {
   globalPool: number;
   state: GameState;
   currentGameId: string;
+  isFirstGameDone: boolean;
   selectionTimer?: NodeJS.Timeout;
   playerBoards: Map<string, number[]>; // userId -> boardIds
   boardStatus: Map<number, string>; // boardId -> userId (concurrency control)
@@ -585,6 +586,7 @@ STAKES.forEach(stake => {
     shuffledBalls: [],
     globalPool: 0,
     state: 'LOBBY',
+    isFirstGameDone: false,
     currentGameId: generateGameId(stake),
     playerBoards: new Map(),
     boardStatus: new Map(),
@@ -609,7 +611,7 @@ const broadcastPoolUpdate = () => {
   STAKES.forEach(stake => {
     const room = roomStates.get(stake)!;
     allRoomStats[stake] = {
-      pool: room.globalPool * 0.6, // Display the 60% prize pool to users
+      pool: room.globalPool * 0.6, // Dynamic prize calculation: 60% of current pool
       players: room.playerBoards.size,
       gameId: room.currentGameId,
       state: room.state,
@@ -697,11 +699,27 @@ const runGameLoop = (stake: number) => {
     }
 
   if (room.state === 'FINISHED' || room.currentBalls.length >= 75) {
-    room.gameLoopTimeout = setTimeout(() => resetGame(stake), 20000); // Give players 20 seconds to celebrate
+    // 3-second winner declaration window as requested for the rapid-fire loop
+    room.gameLoopTimeout = setTimeout(() => resetGame(stake), 3000);
     return; // Exit the loop
   }
 
   room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 3000);
+};
+
+const startSelectionPhase = (stake: number) => {
+  const room = roomStates.get(stake)!;
+  room.state = 'SELECTION';
+  room.isFirstGameDone = true;
+  broadcastPoolUpdate();
+  
+  // Start 40s "Quick Pick" window to finalize Total Players for this round
+  room.selectionTimer = setTimeout(() => {
+    room.state = 'GAME';
+    room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
+    broadcastPoolUpdate();
+    runGameLoop(stake);
+  }, 40000);
 };
 
 const resetGame = (stake: number) => {
@@ -711,9 +729,15 @@ const resetGame = (stake: number) => {
   room.globalPool = 0;
   room.playerBoards.clear();
   room.boardStatus.clear();
-  room.state = 'LOBBY';
   room.currentGameId = generateGameId(stake);
   io.to(`room_${stake}`).emit('game:reset');
+
+  // Lobby-Bypass: If the first game of the day is done, go straight to selection
+  if (room.isFirstGameDone) {
+    startSelectionPhase(stake);
+  } else {
+    room.state = 'LOBBY';
+  }
   broadcastPoolUpdate();
 };
 
@@ -845,19 +869,14 @@ function registerSocketHandlers() {
     const roomStake = data.stake;
     const room = roomStates.get(roomStake);
 
-    if (!room || room.state !== 'LOBBY') {
-      return socket.emit('message', 'Game is already in progress or selection phase.');
+    // Allow betting during LOBBY (to trigger game) or SELECTION (dynamic joining)
+    if (!room || (room.state !== 'LOBBY' && room.state !== 'SELECTION')) {
+      return socket.emit('message', 'Game is currently in progress. Please wait for the next round.');
     }
     
     const userRecord = await User.findOne({ userId });
     const currentBalance = userRecord?.balance || 0;
 
-
-
-    // Logic for 10-Player Trigger
-    if (room.playerBoards.size >= 10) {
-      return socket.emit('message', 'Lobby is full. Please wait for the next round.');
-    }
     // SECURITY: Ensure user is verified before accepting bets
     if (!userRecord?.isVerified) {
       socket.emit('message', 'Please verify your account to place bets. Use /start in the bot to verify.');
@@ -883,6 +902,12 @@ function registerSocketHandlers() {
 
     console.log(`Bet received from ${userId}: ${data.stake} ETB in Room ${roomStake}`);
     socket.join(`room_${roomStake}`);
+
+    // Cold Start Logic: 10th player starts the selection phase for the first time
+    if (room.state === 'LOBBY' && room.playerBoards.size === 10) {
+      startSelectionPhase(roomStake);
+    }
+
     broadcastPoolUpdate();
   });
 

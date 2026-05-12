@@ -143,7 +143,10 @@ export default function App() {
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on('game:init', handleInit);
     socket.on('game:ball', () => { /* isLive is updated via pool_sync */ });
-    socket.on('game:reset', () => { /* isLive is updated via pool_sync */ });
+    socket.on('game:reset', () => { 
+      // Automated Loop: Redirect players back to selection screen for the next round
+      setPhase('selection');
+    });
     socket.on(socketEvents.GAME_STATUS, handleGameStatus);
     socket.on(socketEvents.GAME_STOPPED, handleGameStopped);
     socket.on('connect_error', handleConnectError);
