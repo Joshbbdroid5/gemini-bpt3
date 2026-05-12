@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Timer, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { Wallet, Timer, ShoppingCart, ArrowLeft, Users, Trophy } from 'lucide-react';
 import { TOTAL_BOARDS } from '../types';
+import { socket, socketEvents } from './socket';
+
 
 interface Props {
   staked: number;
@@ -12,7 +14,13 @@ interface Props {
 
 export default function SelectionPage({ staked, wallet, onComplete, onBack }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(40);
+
+  const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
+  const [players, setPlayers] = useState(0);
+  const [prizePool60, setPrizePool60] = useState(0);
+  const [gameId, setGameId] = useState('---');
+
 
   const t = {
     back: 'Back',
@@ -31,6 +39,32 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
 
 
   useEffect(() => {
+    const handlePoolUpdate = (data: any) => {
+      // server sends: { rooms, totalActive }
+      // we only use current stake=10 in this app; pool is already 60%
+      const roomStats = data?.rooms?.[staked];
+      if (!roomStats) return;
+      setPlayers(roomStats.players ?? 0);
+      setPrizePool60(roomStats.pool ?? 0);
+      setGameId(roomStats.gameId ?? '---');
+    };
+
+    const handleBoardSync = (data: any) => {
+      const taken = new Set<number>(data?.takenBoards ?? []);
+      setTakenBoards(taken);
+    };
+
+    socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
+    socket.on('game:board_sync', handleBoardSync);
+
+    return () => {
+      socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
+      socket.off('game:board_sync', handleBoardSync);
+    };
+  }, [staked]);
+
+  // Local countdown (server finalizes at 40s). We keep UI responsive.
+  useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -44,11 +78,13 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
     return () => clearInterval(timer);
   }, []);
 
+
   useEffect(() => {
     if (timeLeft === 0) {
       onComplete(Array.from(selectedIds));
     }
-  }, [timeLeft]);
+  }, [timeLeft, onComplete, selectedIds]);
+
 
   const handleSelect = (id: number) => {
     setSelectedIds(prev => {
@@ -107,18 +143,49 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
         </div>
       </div>
 
-      {/* Info Message */}
-      <div className="px-4 py-2 bg-indigo-950/30 flex justify-between items-center border-b border-white/5">
-        <p className="text-[9px] font-black uppercase tracking-widest text-yellow-100">
-           {t.selectBoardInfo}
-        </p>
-        <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
-           <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-           <span className="text-[8px] font-black text-green-400 uppercase tracking-tighter">
-             {TOTAL_BOARDS} {t.boardsAvailable}
-           </span>
+      {/* Info / Dynamic Header */}
+      <div className="px-4 py-2 bg-indigo-950/30 flex flex-col gap-2 border-b border-white/5">
+        <div className="flex justify-between items-center">
+          <p className="text-[9px] font-black uppercase tracking-widest text-yellow-100">
+            {t.selectBoardInfo}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
+              <Users size={14} className="text-white/80" />
+              <span className="text-[9px] font-black text-white uppercase tracking-tighter">
+                {players} Players
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-yellow-400/15 px-2 py-0.5 rounded-full border border-yellow-400/25">
+              <Trophy size={14} className="text-yellow-300" />
+              <span className="text-[9px] font-black text-yellow-200 uppercase tracking-tighter">
+                Total Prize (60%)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-[8px] font-black text-green-400 uppercase tracking-tighter">
+              {TOTAL_BOARDS} {t.boardsAvailable}
+            </span>
+          </div>
+
+          <div className="px-3 py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-400/20 rounded-2xl">
+            <div className="text-[8px] font-black uppercase tracking-[0.2em] text-yellow-200/80">Current Prize Pool</div>
+            <div className="text-lg font-black italic text-yellow-100">{prizePool60.toFixed(0)} ETB</div>
+          </div>
+
+          <div className="text-[9px] font-black uppercase tracking-tighter text-white/60">
+            Game & Board ID
+            <span className="text-white/90 ml-2">{gameId}</span>
+          </div>
         </div>
       </div>
+
 
       {/* Grid of 600 Boards */}
       <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar scroll-smooth">
@@ -136,10 +203,13 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
                 className={`
                   aspect-square flex items-center justify-center text-[10px] font-black rounded-full border-2 transition-all duration-200 relative overflow-hidden
                   ${isSelected
-                    ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10' 
-                    : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
+                    ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
+                    : takenBoards.has(id)
+                      ? 'bg-white/5 text-gray-500 border-white/5 cursor-not-allowed opacity-60'
+                      : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
                   }
                 `}
+                disabled={!isSelected && takenBoards.has(id)}
               >
                 {!isSelected && (
                   <div className="absolute top-0 right-0 w-3 h-3 bg-white/5 blur-sm rounded-full -translate-x-1 translate-y-1"></div>
