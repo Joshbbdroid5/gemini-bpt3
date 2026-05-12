@@ -49,7 +49,7 @@ adminBot.command('manage', (ctx) => {
 });
 
 adminBot.action(/maint_(on|off)/, async (ctx: Context & { match: RegExpExecArray }) => { // Correctly typed ctx for regex match
-  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   if (!requireAdminSecret(ctx)) return;
  
   const enable = ctx.match[1] === 'on';
@@ -69,7 +69,7 @@ adminBot.action(/maint_(on|off)/, async (ctx: Context & { match: RegExpExecArray
 });
 
 adminBot.action('view_pending', async (ctx: Context) => { // Explicitly typed ctx
-  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   if (!requireAdminSecret(ctx)) return;
 
   try {
@@ -92,7 +92,7 @@ adminBot.action('view_pending', async (ctx: Context) => { // Explicitly typed ct
 });
 
 adminBot.action('view_withdrawals', async (ctx: Context) => {
-  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   if (!requireAdminSecret(ctx)) return;
 
   try {
@@ -115,7 +115,7 @@ adminBot.action('view_withdrawals', async (ctx: Context) => {
 });
 
 adminBot.action('view_stats', async (ctx: Context) => {
-  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   if (!requireAdminSecret(ctx)) return;
 
   try {
@@ -140,8 +140,10 @@ adminBot.action('view_stats', async (ctx: Context) => {
 });
 
 adminBot.action('search_user', async (ctx: Context) => {
-  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
-  setAdminState(ctx.from.id.toString(), { mode: 'search' });
+  const adminId = ctx.from?.id.toString();
+  if (!adminId || adminId !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  
+  setAdminState(adminId, { mode: 'search' });
   return ctx.reply('🔍 Please enter the <b>User ID</b> you want to search for:', { 
     parse_mode: 'HTML',
     reply_markup: { force_reply: true } 
