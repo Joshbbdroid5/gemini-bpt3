@@ -1,5 +1,3 @@
-/// <reference types="react" />
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 
@@ -10,7 +8,6 @@ import SelectionPage from './components/SelectionPage';
 import GamePage from './components/GamePage';
 import HistoryPage from './components/HistoryPage';
 
-import AdminDashboard from './components/AdminDashboard';
 import ProfilePage from './components/ProfilePage';
 import WalletPage from './components/WalletPage';
 import BottomTabs, { BottomTabKey } from './components/BottomTabs';
@@ -53,11 +50,7 @@ export default function App() {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [connectionError, setConnectionError] = useState(false);
   const [myId, setMyId] = useState<string>('');
-  
-  const [winningHistory, setWinningHistory] = useState<any[]>([]);
-
   const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
-  const [totalActivePlayers, setTotalActivePlayers] = useState(0);
 
   // For scroll buttons
   const mainContentRef = useRef<HTMLElement>(null);
@@ -99,9 +92,7 @@ export default function App() {
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: any) => {
       if (data.rooms) setAllRoomStats(data.rooms);
-      if (data.totalActive !== undefined) setTotalActivePlayers(data.totalActive);
     };
-    const handleWinHistory = (history: any[]) => setWinningHistory(history);
     
     const handleInit = (data: any) => {
       setAllRoomStats(prev => ({ 
@@ -142,7 +133,6 @@ export default function App() {
     socket.on('user:status', handleStatus);
     socket.on(socketEvents.WALLET_UPDATE, handleWallet);
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
-    socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on('game:init', handleInit);
     socket.on('game:ball', () => { /* isLive is updated via pool_sync */ });
     socket.on('game:reset', () => { /* isLive is updated via pool_sync */ });
@@ -163,7 +153,6 @@ export default function App() {
       socket.off('user:status', handleStatus);
       socket.off(socketEvents.WALLET_UPDATE, handleWallet);
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
-      socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
       socket.off('game:init', handleInit);
       socket.off('game:ball');
       socket.off('game:reset');
@@ -201,11 +190,6 @@ export default function App() {
       disconnectFromGame();
     };
   }, []);
-
-
-
-
-
 
   const startSelection = () => {
     // If game is already live, send user directly to GamePage in watching-only mode.
@@ -312,12 +296,6 @@ export default function App() {
     (tab: BottomTabKey) => {
       setBottomTab(tab);
 
-      if (tab === 'admin') {
-        setPhase('admin');
-        return;
-      }
-
-
       if (tab === 'game') {
         // If user is in selection, keep it. Otherwise go to game.
         if (phase === 'selection') return;
@@ -335,13 +313,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
-
-
-
-
-
-
-
       {/* Animated background overlay for transitions */}
       <AnimatePresence>
         {/* Only show this animated layer when transitioning between phases, or when a specific phase needs a distinct background animation */}
@@ -361,15 +332,6 @@ export default function App() {
 
 
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
-
-        {/* Loading state while verification status is unknown */}
-
-
-
-
-
-
-        {/* Loading state while verification status is unknown */}
 
         {isVerified === null && (
           <motion.div
@@ -425,10 +387,6 @@ export default function App() {
             </motion.div>
           )}
 
-
-
-
-
           {phase === 'home' && (
             <motion.div
               key="home"
@@ -439,8 +397,8 @@ export default function App() {
             >
               <Dashboard
                 onPlay={handleHomePlay}
-                onDeposit={() => {}}
-                onWithdraw={() => {}}
+                onDeposit={handleDeposit}
+                onWithdraw={handleWithdraw}
                 allStats={allRoomStats}
                 wallet={wallet}
               />
@@ -448,11 +406,8 @@ export default function App() {
           )}
 
           {phase === 'selection' && (
-
-
             <motion.div
               key="selection"
-
               initial={{ x: 300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -300, opacity: 0 }}
@@ -525,18 +480,6 @@ export default function App() {
               />
             </motion.div>
           )}
-
-          {phase === 'admin' && (
-            <motion.div
-              key="admin"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex-1 flex flex-col min-h-0"
-            >
-              <AdminDashboard onBack={() => setPhase('home')} />
-            </motion.div>
-          )}
-
 
         </AnimatePresence>
 
@@ -675,4 +618,3 @@ function RuleItem({ number, text }: { number: string; text: string }) {
     </div>
   );
 }
-

@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, Send, TrendingUp, Activity, Power, Play, Square, StopCircle } from 'lucide-react';
+import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power } from 'lucide-react';
 
 interface Props {
   onBack: () => void;

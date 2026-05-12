@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Users, Trophy, MessageCircle } from 'lucide-react';
+import { Users, Trophy } from 'lucide-react';
 
 // isGameActive prop now reflects the current room's live status
 interface Props {
@@ -12,29 +12,14 @@ interface Props {
 
 export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allStats }: Props) {
   return (
-
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-
-
-
-
-
-      {/* Community Link */}
-      <button 
-        onClick={() => window.open('https://t.me/your_channel', '_blank')}
-        className="mb-8 flex items-center gap-2 px-4 py-2 bg-indigo-600/20 text-indigo-300 rounded-full border border-indigo-500/30 text-[9px] font-black uppercase tracking-widest animate-bounce"
-      >
-        <MessageCircle size={14} />
-        Join Official Channel
-      </button>
-
       {/* Welcome */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         className="mb-8"
       >
-        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-200 mb-2 block">
+        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-400 mb-2 block">
           Welcome to Lomi Bingo
         </span>
         <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-tight whitespace-pre-line drop-shadow-lg">

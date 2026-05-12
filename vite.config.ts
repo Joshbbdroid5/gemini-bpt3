@@ -18,7 +18,15 @@ export default defineConfig(({mode}) => {
     },
     build: {
       outDir: 'dist', // Explicitly set output directory
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          admin: path.resolve(__dirname, 'admin.html'),
+        },
+        external: [
+          'react-hot-toast', // Fix for the build resolution error
+        ],
+      },
     },
-
   };
 });
