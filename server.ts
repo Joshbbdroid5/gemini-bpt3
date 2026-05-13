@@ -903,7 +903,7 @@ function registerSocketHandlers() {
   broadcastPoolUpdate();
 
   // Joining a specific room
-  socket.on('room:join', (stake: number) => {
+  socket.on('room:join', async (stake: number) => {
     if (!STAKES.includes(stake)) return;
     
     STAKES.forEach(s => socket.leave(`room_${s}`));
