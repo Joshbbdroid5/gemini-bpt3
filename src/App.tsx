@@ -103,12 +103,20 @@ export default function App() {
     const handleWinHistory = (history: any[]) => setWinningHistory(history);
     
     const handleInit = (data: any) => {
-      setAllRoomStats(prev => ({ 
-        ...prev, 
-        [stake]: { ...prev[stake], gameId: data.gameId } 
+      setAllRoomStats(prev => ({
+        ...prev,
+        [stake]: { ...prev[stake], gameId: data.gameId }
       }));
-      // isLive status is now handled by the server's broadcastPoolUpdate
+
+      // Daily status routing (lobby bypass)
+      // Server may send: { daily_status: { isFirstGame: boolean } }
+      // If first game of the day: show Lobby (player count locked to 10)
+      // Otherwise: keep on home and let handleHomePlay bypass to selection.
+      const firstGame = data?.daily_status?.isFirstGame;
+      if (firstGame === true) setPhase('lobby');
+
     };
+
 
     const handleConnectError = (err: Error) => {
       console.error("Socket connection error:", err);

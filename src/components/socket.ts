@@ -12,7 +12,8 @@ export const socketEvents = {
   // Outgoing Events (Player -> Server)
   JOIN_ROOM: 'room:join',
   PLACE_BET: 'game:bet',
-  
+  FORCE_START: 'game:force_start',
+
   // Incoming Events (Server -> Player)
   GAME_STATUS: 'game:status',
   GAME_STOPPED: 'game:stopped',

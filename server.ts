@@ -743,7 +743,81 @@ const resetGame = (stake: number) => {
 
 // Game starts only when admin explicitly starts it.
 
+// =========================
+// Daily_State (persisted)
+// =========================
+const DailyStateModel = mongoose.model('DailyState', new mongoose.Schema({
+  dateKey: { type: String, unique: true, required: true },
+  state: { type: String, enum: ['LOBBY_LOCK', 'ACTIVE'], default: 'LOBBY_LOCK' },
+  firstGameCompletedAt: { type: Date, default: null }
+}));
+
+function getDailyDateKey(d: Date = new Date()) {
+  // UTC date key to avoid timezone drift
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+async function getOrInitDailyState() {
+  const dateKey = getDailyDateKey();
+  const doc = await DailyStateModel.findOne({ dateKey }).lean();
+  if (doc) return doc;
+  const created = await DailyStateModel.create({ dateKey, state: 'LOBBY_LOCK', firstGameCompletedAt: null });
+  return created.toObject();
+}
+
+async function markDailyActive() {
+  const dateKey = getDailyDateKey();
+  await DailyStateModel.updateOne(
+    { dateKey },
+    { $set: { state: 'ACTIVE', firstGameCompletedAt: new Date() } },
+    { upsert: true }
+  );
+}
+
+// selection auto-assign constants
+const SELECTION_MAX_PICK = 10;
+
+function autoAssignBoards(stake: number) {
+  const room = roomStates.get(stake)!;
+  // only if still in selection phase
+  if (room.state !== 'SELECTION') return;
+
+
+  // Snapshot current availability
+  const availableBoards = [] as number[];
+  for (let id = 1; id <= 600; id++) {
+    if (!room.boardStatus.has(id)) availableBoards.push(id);
+  }
+  shuffle(availableBoards);
+
+  // Ensure each participating user has at least 1 board (or up to max) before GAME begins.
+  // This matches: Auto_Assign pick random available board(s) from remaining 600.
+  // Since current architecture stores user selection directly into room.playerBoards, we only fill missing picks.
+  room.playerBoards.forEach((boardIds, userId) => {
+    const current = new Set(boardIds);
+    while (current.size < SELECTION_MAX_PICK && availableBoards.length > 0) {
+      const nextId = availableBoards.pop()!;
+      if (room.boardStatus.has(nextId)) continue;
+      current.add(nextId);
+      room.boardStatus.set(nextId, userId);
+    }
+    room.playerBoards.set(userId, Array.from(current));
+  });
+
+  io.to(`room_${stake}`).emit('game:board_sync', {
+    takenBoards: Array.from(room.boardStatus.keys())
+  });
+}
+
+// Per-round winning payout modal timing etc will be addressed in later steps.
+
 dbPromise.then(async () => {
+  // initialize Daily_State once per server start
+  try {
+    await getOrInitDailyState();
+  } catch (e) {
+    console.error('DailyState init failed:', e);
+  }
   try {
     await syncCache(); // Ensure cache is synced after DB connection
 
@@ -836,8 +910,20 @@ function registerSocketHandlers() {
     socket.join(`room_${stake}`);
     
     const room = roomStates.get(stake)!;
-    socket.emit('game:init', { balls: room.currentBalls, gameId: room.currentGameId });
+
+    // Daily routing status for frontend:
+    // - isFirstGame === true => first game of the day should require lobby (player cap 10)
+    // - isFirstGame === false => lobby bypass, go straight to selection/game
+    const dailyState = await DailyStateModel.findOne({ dateKey: getDailyDateKey() }).lean();
+    const isFirstGame = dailyState?.firstGameCompletedAt ? false : true;
+
+    socket.emit('game:init', {
+      balls: room.currentBalls,
+      gameId: room.currentGameId,
+      daily_status: { isFirstGame }
+    });
   });
+
 
   // Concurrency-Controlled Board Selection
   socket.on('game:pick_board', (data: { boardId: number; stake: number }) => {

@@ -6,6 +6,7 @@ import toast, { Toaster } from 'react-hot-toast';
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power } from 'lucide-react';
+import { socket, socketEvents } from './socket';
 
 interface Props {
   onBack: () => void;
@@ -176,7 +177,7 @@ export default function AdminDashboard({ onBack }: Props) {
       {/* System Controls */}
       <div className="px-4 pt-4">
         <div className={`p-4 rounded-2xl border flex items-center justify-between transition-colors ${
-          stats.isMaintenanceMode 
+          stats.isMaintenanceMode
             ? 'bg-red-500/10 border-red-500/30' 
             : 'bg-green-500/10 border-green-500/30'
         }`}>
@@ -199,6 +200,27 @@ export default function AdminDashboard({ onBack }: Props) {
           >
             {stats.isMaintenanceMode ? 'Go Live' : 'Shut Down'}
           </button>
+        </div>
+
+        {/* Force Start */}
+        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-white font-black uppercase text-xs tracking-wider">Force Start</h3>
+              <p className="text-[10px] text-gray-400 uppercase font-bold">Trigger game start</p>
+            </div>
+            <button
+              onClick={() => {
+                // Admin authorization is already enforced by admin-main.tsx.
+                // Connect socket (if needed) and emit force start.
+                if (!socket.connected) socket.connect();
+                socket.emit(socketEvents.FORCE_START);
+              }}
+              className="px-6 py-2 rounded-xl font-black uppercase text-[10px] bg-yellow-500 text-indigo-950 hover:bg-yellow-400 transition-all shadow-lg shadow-yellow-900/20"
+            >
+              Force Start
+            </button>
+          </div>
         </div>
       </div>
 

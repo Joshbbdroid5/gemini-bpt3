@@ -18,6 +18,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[] }[]>([]);
+  const [winnersCountSnapshot, setWinnersCountSnapshot] = useState(0);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [popupTimeLeft, setPopupTimeLeft] = useState(3);
   const [isMuted, setIsMuted] = useState(false);
@@ -81,13 +82,26 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     };
 
     const handleServerWinner = (winnerData: any) => {
-      // If someone (could be us or someone else) wins, show the popup
-      // In a real app, winnerData would contain the grid to display
-      setWinners([{ 
-        id: winnerData.boardId, 
-        grid: generateBoard(winnerData.boardId), 
-        patterns: winnerData.patterns 
-      }]);
+      // Server emits one event per winning board; we accumulate all winners for the round.
+      setWinners((prev) => {
+        const boardId = winnerData.boardId as number;
+        if (prev.some((w) => w.id === boardId)) return prev; // de-dupe by boardId
+
+        return [
+          ...prev,
+          {
+            id: boardId,
+            grid: generateBoard(boardId),
+            patterns: winnerData.patterns,
+            payout: winnerData.payout,
+          } as any,
+        ];
+      });
+
+      // Snapshot winner count at the moment the popup first appears,
+      // so the payout display doesn't change while more winners are still arriving.
+      setWinnersCountSnapshot((prev) => (prev > 0 ? prev : prev + 1));
+
       setShowWinnerPopup(true);
     };
 

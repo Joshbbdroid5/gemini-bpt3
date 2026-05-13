@@ -1,19 +1,13 @@
-## Telegram Deposit/Withdraw Method Selection - TODO
+# TODO
 
-- [ ] Update `admin-bot.ts` deposit flow:
-  - [ ] Replace current `deposit` handler to show inline keyboard: “Choose your deposit method”
-  - [ ] Add `deposit_method_telebirr` action handler to display Telebirr account details
-  - [ ] After Telebirr selection, request amount with `force_reply` using a reply token like `deposit_amount:`
+## Task
+- Show all winners in the 3-second winner popup when multiple players hit the winning pattern with exactly the same ball drawn.
+- Update `src/components/GamePage.tsx` modal to map through the `winners` array.
 
-- [ ] Update `admin-bot.ts` withdraw flow:
-  - [ ] Replace current `withdraw` handler to show inline keyboard: “Choose your withdrawal method”
-  - [ ] Add `withdraw_method_telebirr` action handler to display Telebirr withdrawal account details
-  - [ ] After Telebirr selection, request amount with `force_reply` using a reply token like `withdraw_amount:`
-
-- [ ] Update `bot.on('text')` amount parsing:
-  - [ ] Detect replies by message text tokens (`deposit_amount:` / `withdraw_amount:`)
-  - [ ] Ensure existing pending deposit creation (Telebirr SMS) still works for deposit confirmations
-
-- [ ] TypeScript/build validation (`npm run build`)
-- [ ] Manual Telegram test: Deposit → Telebirr → amount → Telebirr SMS → admin approve
+## Plan
+- [ ] Inspect `GamePage.tsx` winner popup implementation.
+- [ ] Verify current behavior: popup renders winners array (Telegram + non-Telegram branches).
+- [ ] If not rendering all winners, adjust logic/state updates so `winners` accumulates per round and modal maps over all entries.
+- [ ] Ensure payout and winner indexing are correct for multiple winners.
+- [ ] Run `npm test` / `npm run build` (or equivalent) and confirm TypeScript compile.
 
