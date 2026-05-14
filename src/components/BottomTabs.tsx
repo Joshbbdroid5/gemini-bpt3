@@ -2,12 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { History, Trophy, UserRound, Wallet } from 'lucide-react';
 
-
-
-
-
 export type BottomTabKey = 'game' | 'history' | 'wallet' | 'profile';
-
 
 interface Props {
   active: BottomTabKey;
@@ -33,9 +28,9 @@ const TabButton = ({
     <button
       onClick={onClick}
       className={
-        'flex-1 flex flex-col items-center justify-center gap-1 h-full py-2 transition-all ' +
+        'flex-1 flex flex-col items-center justify-center gap-1 h-full py-2 transition-all relative ' +
         (active
-          ? 'text-yellow-300'
+          ? 'text-yellow-300 scale-110'
           : 'text-gray-300 hover:text-white/90')
       }
       aria-label={label}
@@ -53,6 +48,12 @@ const TabButton = ({
       <span className={'text-[9px] font-black uppercase tracking-widest leading-none ' + (active ? '' : 'opacity-70')}>
         {label}
       </span>
+      {active && (
+        <motion.div
+          layoutId="activeTab"
+          className="absolute -bottom-0 w-8 h-0.5 bg-yellow-300 rounded-full shadow-[0_0_8px_rgba(253,224,71,0.6)]"
+        />
+      )}
     </button>
   );
 };
@@ -67,7 +68,6 @@ export default function BottomTabs({ active, onTabChange, walletBalance }: Props
   };
 
   return (
-
     <motion.nav
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
@@ -104,11 +104,10 @@ export default function BottomTabs({ active, onTabChange, walletBalance }: Props
         />
       </div>
 
-
       {/* small balance hint (keeps UI light) */}
       <div className="absolute -top-2 left-0 right-0 flex justify-center pointer-events-none">
         <div className="bg-black/30 text-[9px] font-black text-yellow-200 px-3 py-1 rounded-full border border-white/10">
-          {t.myBalance}: {walletBalance} ETB
+          {t.myBalance}: {walletBalance.toLocaleString()} ETB
         </div>
       </div>
     </motion.nav>

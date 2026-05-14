@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, Timer, ShoppingCart, ArrowLeft, Users, Trophy } from 'lucide-react';
 import { TOTAL_BOARDS } from '../types';
 import { socket, socketEvents } from './socket';
-
 
 interface Props {
   staked: number;
@@ -21,7 +20,6 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   const [prizePool60, setPrizePool60] = useState(0);
   const [gameId, setGameId] = useState('---');
 
-
   const t = {
     back: 'Back',
     wallet: 'Wallet',
@@ -36,7 +34,6 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
     waitingForAdmin: 'Waiting for admin to start...',
     betsBlocked: 'Bets are paused by admin.',
   };
-
 
   useEffect(() => {
     const handlePoolUpdate = (data: any) => {
@@ -78,13 +75,11 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
     return () => clearInterval(timer);
   }, []);
 
-
   useEffect(() => {
     if (timeLeft === 0) {
       onComplete(Array.from(selectedIds));
     }
   }, [timeLeft, onComplete, selectedIds]);
-
 
   const handleSelect = (id: number) => {
     setSelectedIds(prev => {

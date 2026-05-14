@@ -1,7 +1,7 @@
 /// <reference types="react" />
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
+import { useState, useCallback, useEffect, useRef } from 'react'; // Removed useAnimationControls
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { Info, X, Trophy, RefreshCcw } from 'lucide-react';
 import Header from './components/Header';
@@ -50,6 +50,7 @@ export default function App() {
   const [showRules, setShowRules] = useState(false);
   const [showGoodLuck, setShowGoodLuck] = useState(false);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState<string | undefined>(undefined);
   const [connectionError, setConnectionError] = useState(false);
   const [myId, setMyId] = useState<string>('');
   
@@ -91,8 +92,9 @@ export default function App() {
     const backendUrl = import.meta.env.VITE_BACKEND_URL || window.location.origin;
     fetch(`${backendUrl}/health`).catch((e) => console.error("Backend health check failed:", e)); // Simple poke, added error logging
 
-    const handleStatus = (status: { isVerified: boolean }) => {
+    const handleStatus = (status: { isVerified: boolean; phone?: string }) => {
       setIsVerified(status.isVerified);
+      if (status.phone) setPhoneNumber(status.phone);
     };
 
     const handleWallet = (balance: number) => setWallet(balance);
@@ -114,7 +116,6 @@ export default function App() {
       // Otherwise: keep on home and let handleHomePlay bypass to selection.
       const firstGame = data?.daily_status?.isFirstGame;
       if (firstGame === true) setPhase('lobby');
-
     };
 
 
@@ -209,11 +210,6 @@ export default function App() {
       disconnectFromGame();
     };
   }, []);
-
-
-
-
-
 
   const startSelection = () => {
     // If game is already live, send user directly to GamePage in watching-only mode.
@@ -337,13 +333,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
-
-
-
-
-
-
-
       {/* Animated background overlay for transitions */}
       <AnimatePresence>
         {/* Only show this animated layer when transitioning between phases, or when a specific phase needs a distinct background animation */}
@@ -360,17 +349,7 @@ export default function App() {
 
       <Header onShowRules={() => setShowRules(true)} />
 
-
-
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
-
-        {/* Loading state while verification status is unknown */}
-
-
-
-
-
-
         {/* Loading state while verification status is unknown */}
 
         {isVerified === null && (
@@ -427,10 +406,6 @@ export default function App() {
             </motion.div>
           )}
 
-
-
-
-
           {phase === 'home' && (
             <motion.div
               key="home"
@@ -441,20 +416,14 @@ export default function App() {
             >
               <Dashboard
                 onPlay={handleHomePlay}
-                onDeposit={() => {}}
-                onWithdraw={() => {}}
                 allStats={allRoomStats}
-                wallet={wallet}
               />
             </motion.div>
           )}
 
           {phase === 'selection' && (
-
-
             <motion.div
               key="selection"
-
               initial={{ x: 300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -300, opacity: 0 }}
@@ -507,7 +476,13 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <WalletPage walletBalance={wallet} telegramName={myId} onBack={() => setPhase('home')} />
+              <WalletPage 
+                walletBalance={wallet} 
+                phoneNumber={phoneNumber} 
+                isVerified={isVerified === true}
+                onRefresh={() => window.location.reload()}
+                onBack={() => setPhase('home')} 
+              />
             </motion.div>
           )}
 
@@ -522,8 +497,8 @@ export default function App() {
               <ProfilePage
                 telegramName={myId}
                 walletBalance={wallet}
-                gamesWon={0}
-                totalEarnings={0}
+                gamesWon={history.filter(h => h.isMyWin).length}
+                totalEarnings={history.reduce((sum, h) => h.isMyWin ? sum + h.payoutPerWinner : sum, 0)}
               />
             </motion.div>
           )}

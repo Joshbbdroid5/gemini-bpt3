@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { History, ArrowLeft, Trophy, Users, Wallet, Calendar } from 'lucide-react';
+import { History, ArrowLeft, Trophy, Users, Wallet, Calendar, ShoppingCart, RotateCcw } from 'lucide-react';
 import { ReactNode } from 'react';
 import { HistoryEntry } from '../types';
 
@@ -12,28 +12,39 @@ export default function HistoryPage({ history, onBack }: Props) {
   const t = {
     back: 'Back',
     gameHistory: 'Game History',
+    totalPlayed: 'Total Games Played',
+    recentGames: 'Recent Games',
     noGames: 'No games recorded yet',
     myWin: 'MY WIN',
+    myLoss: 'LOSS',
     gameId: 'Game ID',
     winners: 'Winners',
     totalPool: 'Total Pool',
     payout: 'Payout',
-    myBoards: 'My Boards',
+    staked: 'Staked',
+    boardNum: 'Board Count',
     congratulations: 'Big Congratulations',
     betterLuck: 'Better luck next time',
   };
 
   return (
     <div className="flex-1 flex flex-col bg-transparent overflow-hidden">
-      <div className="p-4 bg-white/5 border-b border-white/5 flex items-center gap-4">
+      {/* Header Section */}
+      <div className="p-6 bg-black/20 border-b border-white/10 flex flex-col gap-1">
+        <div className="flex items-center gap-4 mb-2">
         <button 
           onClick={onBack}
-          className="p-2 hover:bg-white/10 rounded-full transition-colors"
+          className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors"
           aria-label={t.back}
         >
           <ArrowLeft size={20} className="text-gray-400" />
         </button>
-        <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">{t.gameHistory}</h2>
+        <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">{t.gameHistory}</h2>
+        </div>
+        <div className="flex items-center gap-2 text-lime-400 ml-12">
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-70">{t.totalPlayed}:</span>
+          <span className="text-lg font-black italic">{history.length}</span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
@@ -43,22 +54,28 @@ export default function HistoryPage({ history, onBack }: Props) {
             <p className="font-bold text-gray-400 uppercase tracking-widest text-xs">{t.noGames}</p>
           </div>
         ) : (
-          history.slice().reverse().map((entry, idx) => (
+          <div className="flex flex-col gap-4">
+            <div className="px-2">
+              <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">
+                {t.recentGames}
+              </h3>
+            </div>
+            {history.slice().reverse().map((entry, idx) => (
             <motion.div
               key={idx}
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ delay: idx * 0.05 }}
               className={`
-                bg-white/5 p-6 rounded-[32px] border border-white/5 shadow-2xl relative overflow-hidden
+                bg-white/5 p-5 rounded-[32px] border border-white/5 shadow-2xl relative overflow-hidden
                 ${entry.isMyWin ? 'ring-2 ring-yellow-400 border-transparent shadow-[0_0_20px_rgba(250,204,21,0.2)]' : ''}
               `}
             >
-              {entry.isMyWin && (
-                <div className="absolute top-0 right-0 bg-yellow-400 text-indigo-950 px-4 py-1 rounded-bl-xl text-[8px] font-black uppercase tracking-widest">
-                  {t.myWin}
-                </div>
-              )}
+              <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-xl text-[8px] font-black uppercase tracking-widest ${
+                entry.isMyWin ? 'bg-yellow-400 text-indigo-950' : 'bg-white/10 text-gray-400'
+              }`}>
+                {entry.isMyWin ? t.myWin : t.myLoss}
+              </div>
 
               <div className="flex items-start justify-between mb-4">
                 <div className="flex flex-col">
@@ -71,7 +88,17 @@ export default function HistoryPage({ history, onBack }: Props) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-y-4 gap-x-2">
+                <StatItem 
+                  icon={<ShoppingCart size={12} />} 
+                  label={t.staked} 
+                  value={`${(entry.myBoardsCount * 10).toFixed(0)} ETB`} 
+                />
+                <StatItem 
+                  icon={<RotateCcw size={12} />} 
+                  label={t.boardNum} 
+                  value={`#${entry.myBoardsCount}`} 
+                />
                 <StatItem 
                   icon={<Users size={12} />} 
                   label={t.winners} 
@@ -89,17 +116,9 @@ export default function HistoryPage({ history, onBack }: Props) {
                   highlight={entry.isMyWin}
                 />
               </div>
-
-              <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest leading-none">
-                  {t.myBoards}: <span className="text-white">{entry.myBoardsCount}</span>
-                </span>
-                <span className={`text-[9px] font-black uppercase italic ${entry.isMyWin ? 'text-yellow-400' : 'text-white/20'}`}>
-                  {entry.isMyWin ? t.congratulations : t.betterLuck}
-                </span>
-              </div>
             </motion.div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </div>

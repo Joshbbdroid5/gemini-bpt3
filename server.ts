@@ -470,7 +470,7 @@ app.post('/admin/verify-user', async (req, res) => {
     // Notify connected socket that they are now verified
     const socketId = socketMapping.get(userId);
     if (socketId) {
-      io.to(socketId).emit('user:status', { isVerified: true });
+      io.to(socketId).emit('user:status', { isVerified: true, phone });
     }
 
     if (ADMIN_CHAT_ID) {
@@ -896,7 +896,7 @@ function registerSocketHandlers() {
       isUserVerified = user.isVerified;
     }
     socket.emit('wallet:update', currentBalance);
-    socket.emit('user:status', { isVerified: isUserVerified });
+    socket.emit('user:status', { isVerified: isUserVerified, phone: user?.phone });
   }).catch(err => console.error(`Error fetching/creating user for socket ${socket.id}:`, err));
   
   activePlayers++;

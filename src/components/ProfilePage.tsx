@@ -14,85 +14,76 @@ export default function ProfilePage({
   totalEarnings,
 }: Props) {
   const t = {
-    profileWalletBalance: 'Wallet Balance',
+    profileWalletBalance: 'Main Wallet Balance',
     gamesWon: 'Games Won',
     totalEarnings: 'Total Earnings',
-    myBalance: 'My Balance',
-  };
+   };
 
 
   return (
     <div className="flex-1 flex flex-col bg-transparent overflow-hidden">
-      <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center">
-            <UserRound size={20} className="text-yellow-300" />
+          {/* Top Middle Username */}
+      <div className="flex flex-col items-center justify-center p-8 mt-4">
+        <div className="w-20 h-20 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 shadow-xl">
+          <UserRound size={40} className="text-lime-400" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-              Telegram
-            </span>
-            <span className="text-lg font-black text-white italic">
-              {telegramName || '—'}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2">
-          <Wallet size={16} className="text-yellow-300" />
-          <div className="flex flex-col leading-tight">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+          <span className="text-2xl font-black text-white uppercase italic tracking-tight">
+          {telegramName || 'Guest User'}
+        </span>
+      </div>
+      
+<div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 custom-scrollbar">
+        {/* Main Wallet Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/5 border border-white/10 rounded-[32px] p-8 shadow-2xl relative overflow-hidden group flex flex-col items-center text-center"
+        >
+          <div className="relative z-10">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-400/60 mb-2 block">
               {t.profileWalletBalance}
             </span>
-            <span className="text-sm font-black text-white">{walletBalance} ETB</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto min-h-0 p-4">
-        <div className="grid grid-cols-3 gap-3">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/5 border border-white/5 rounded-[32px] p-6 shadow-2xl flex flex-col items-start gap-2"
-          >
-            <Trophy className="text-yellow-300" size={18} />
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">{t.gamesWon}</span>
-            <span className="text-3xl font-black text-white italic">{gamesWon}</span>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="bg-white/5 border border-white/5 rounded-[32px] p-6 shadow-2xl flex flex-col items-start gap-2"
-          >
-            <Stars className="text-yellow-300" size={18} />
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">{t.totalEarnings}</span>
-            <span className="text-3xl font-black text-white italic">{totalEarnings.toFixed(0)} ETB</span>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white/5 border border-white/5 rounded-[32px] p-6 shadow-2xl flex flex-col items-start gap-2"
-          >
-            <div className="w-8 h-8 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
-              <Wallet size={16} className="text-yellow-300" />
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-black text-white italic tracking-tighter">
+                {walletBalance.toLocaleString()}
+              </span>
+              <span className="text-xl font-black text-lime-400 italic">ETB</span>
             </div>
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">{t.myBalance}</span>
-            <span className="text-xl font-black text-white italic">{walletBalance} ETB</span>
-          </motion.div>
-        </div>
+          </div>
+          <Wallet size={120} className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700" />
+        </motion.div>
 
-        <div className="mt-4 bg-white/5 border border-white/5 rounded-[32px] p-6">
-          <p className="text-gray-300 text-xs font-black uppercase tracking-widest">
-            Profile Summary
-          </p>
-          <p className="text-gray-400 text-sm mt-3">
-            Use the bottom tabs to view game history and wallet transactions.
-          </p>
-        </div>
+        {/* Games Won Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white/5 border border-white/5 rounded-[32px] p-6 shadow-2xl flex flex-col items-center gap-2 text-center"
+        >
+          <div className="w-10 h-10 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
+            <Trophy className="text-yellow-400" size={20} />
+          </div>
+          <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">{t.gamesWon}</span>
+          <span className="text-3xl font-black text-white italic">{gamesWon}</span>
+        </motion.div>
+
+        {/* Total Earnings Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white/5 border border-white/5 rounded-[32px] p-6 shadow-2xl flex flex-col items-center gap-2 text-center"
+        >
+          <div className="w-10 h-10 rounded-2xl bg-lime-400/10 border border-lime-400/20 flex items-center justify-center">
+            <Stars className="text-lime-400" size={20} />
+          </div>
+          <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">{t.totalEarnings}</span>
+          <span className="text-2xl font-black text-white italic">
+            {totalEarnings.toLocaleString()} <span className="text-xs not-italic font-bold text-lime-400">ETB</span>
+          </span>
+        </motion.div>
+
+         
       </div>
     </div>
   );
