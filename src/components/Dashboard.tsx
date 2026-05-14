@@ -19,7 +19,7 @@ export default function Dashboard({ onPlay, onDeposit, onWithdraw, wallet, allSt
         animate={{ y: 0, opacity: 1 }}
         className="mb-8"
       >
-        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-yellow-400 mb-2 block">
+        <span className="text-xl font-black uppercase tracking-[0.3em] text-lime-400 mb-2 block">
           Welcome to Lomi Bingo
         </span>
         <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-tight whitespace-pre-line drop-shadow-lg">
