@@ -14,11 +14,9 @@ interface Props {
 }
 
 export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, onLeaveToHome, onGameEnd }: Props) {
-
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[] }[]>([]);
-  const [winnersCountSnapshot, setWinnersCountSnapshot] = useState(0);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [popupTimeLeft, setPopupTimeLeft] = useState(3);
   const [isMuted, setIsMuted] = useState(false);
@@ -39,13 +37,11 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     playAgain: 'Play Again',
     nextGameIn: 'Next game in',
     boardNum: 'Board #',
-    myWin: 'MY WIN',
   };
 
-  const [gameMetadata, setGameMetadata] = useState({ 
-
-    pool: 0, 
-    players: 0, 
+  const [gameMetadata, setGameMetadata] = useState({
+    pool: 0,
+    players: 0,
     gameId: '---'
   });
 
@@ -97,11 +93,6 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
           } as any,
         ];
       });
-
-      // Snapshot winner count at the moment the popup first appears,
-      // so the payout display doesn't change while more winners are still arriving.
-      setWinnersCountSnapshot((prev) => (prev > 0 ? prev : prev + 1));
-
       setShowWinnerPopup(true);
     };
 

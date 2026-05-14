@@ -15,7 +15,6 @@ export interface GameStats {
 }
 
 export interface HistoryEntry {
-
   gameId: string;
   date: string;
   totalStaked: number;
@@ -34,6 +33,3 @@ export const BINGO_COLUMNS = {
 };
 
 export const TOTAL_BOARDS = 600;
-
-
-

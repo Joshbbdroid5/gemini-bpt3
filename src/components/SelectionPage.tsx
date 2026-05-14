@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, Timer, ShoppingCart, ArrowLeft, Users, Trophy } from 'lucide-react';
 import { TOTAL_BOARDS } from '../types';
@@ -31,8 +31,6 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
     boardsRegistered: 'Boards Registered',
     selecting: 'Selecting Board...',
     gameStarting: 'Game Starting Soon',
-    waitingForAdmin: 'Waiting for admin to start...',
-    betsBlocked: 'Bets are paused by admin.',
   };
 
   useEffect(() => {
@@ -180,7 +178,6 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
           </div>
         </div>
       </div>
-
 
       {/* Grid of 600 Boards */}
       <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar scroll-smooth">

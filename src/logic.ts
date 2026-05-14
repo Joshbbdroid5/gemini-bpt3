@@ -5,7 +5,7 @@ function mulberry32(a: number) {
   return function () {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
-    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) | 0;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
@@ -16,17 +16,14 @@ export function generateBoard(boardId: number): BingoBoardData {
   const board: BingoBoardData = Array(5).fill(null).map(() => Array(5).fill(null));
 
   const columns = ['B', 'I', 'N', 'G', 'O'] as const;
-
   columns.forEach((col, colIndex) => {
     const { min, max } = BINGO_COLUMNS[col];
     const available = Array.from({ length: max - min + 1 }, (_, i) => min + i);
-    
     const picked: number[] = [];
     for (let i = 0; i < 5; i++) {
       const idx = Math.floor(rng() * available.length);
       picked.push(available.splice(idx, 1)[0]);
     }
-    
     // Standard Bingo: sort values within column
     picked.sort((a, b) => a - b);
 
@@ -41,17 +38,13 @@ export function generateBoard(boardId: number): BingoBoardData {
 
   return board;
 }
-
 export interface WinningPattern {
   name: string;
   indices: { r: number; c: number }[];
 }
-
 export function checkWin(board: BingoBoardData, called: Set<number | 'FREE'>): { isWinner: boolean; patterns: WinningPattern[] } {
   const patterns: WinningPattern[] = [];
-
   const isMarked = (cell: { value: number | 'FREE' }) => cell.value === 'FREE' || called.has(cell.value);
-
   // 1. Rows
   for (let r = 0; r < 5; r++) {
     if (board[r].every(isMarked)) {
@@ -64,11 +57,7 @@ export function checkWin(board: BingoBoardData, called: Set<number | 'FREE'>): {
 
   // 2. Columns
   for (let c = 0; c < 5; c++) {
-    let allMarked = true;
-    for (let r = 0; r < 5; r++) {
-      if (!isMarked(board[r][c])) { allMarked = false; break; }
-    }
-    if (allMarked) {
+    if (board.every(row => isMarked(row[c]))) {
       patterns.push({
         name: `Column ${['B', 'I', 'N', 'G', 'O'][c]}`,
         indices: [0, 1, 2, 3, 4].map(r => ({ r, c }))
@@ -77,24 +66,18 @@ export function checkWin(board: BingoBoardData, called: Set<number | 'FREE'>): {
   }
 
   // 3. Diagonals
-  let diag1 = true;
-  for (let i = 0; i < 5; i++) { if (!isMarked(board[i][i])) { diag1 = false; break; } }
-  if (diag1) {
+  if ([0, 1, 2, 3, 4].every(i => isMarked(board[i][i]))) {
     patterns.push({
       name: 'Main Diagonal',
       indices: [0, 1, 2, 3, 4].map(i => ({ r: i, c: i }))
     });
   }
-
-  let diag2 = true;
-  for (let i = 0; i < 5; i++) { if (!isMarked(board[i][4 - i])) { diag2 = false; break; } }
-  if (diag2) {
+  if ([0, 1, 2, 3, 4].every(i => isMarked(board[i][4 - i]))) {
     patterns.push({
       name: 'Anti-Diagonal',
       indices: [0, 1, 2, 3, 4].map(i => ({ r: i, c: 4 - i }))
     });
   }
-
   // 4. Corners
   if (isMarked(board[0][0]) && isMarked(board[0][4]) && isMarked(board[4][0]) && isMarked(board[4][4])) {
     patterns.push({
