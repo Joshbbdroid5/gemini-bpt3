@@ -96,7 +96,7 @@ export default function WalletPage({
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
         <AnimatePresence mode="wait">
           {activeTab === 'balance' ? (
             <motion.div

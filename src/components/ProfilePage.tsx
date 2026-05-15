@@ -32,7 +32,7 @@ export default function ProfilePage({
         </span>
       </div>
       
-<div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 custom-scrollbar">
+<div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
         {/* Main Wallet Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -88,4 +88,3 @@ export default function ProfilePage({
     </div>
   );
 }
-

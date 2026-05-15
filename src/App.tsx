@@ -51,10 +51,6 @@ export default function App() {
   const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
   const [totalActivePlayers, setTotalActivePlayers] = useState(0);
 
-  // For scroll buttons
-  const mainContentRef = useRef<HTMLElement>(null);
-  const [showScrollButtons, setShowScrollButtons] = useState(false);
-
   const currentRoomStats = allRoomStats[stake] || {
     pool: 0,
     players: 0,
@@ -280,28 +276,6 @@ export default function App() {
     setHistory(prev => [...prev, entry]);
   };
 
-  // Scroll button logic
-  const handleScroll = useCallback(() => {
-    if (mainContentRef.current) {
-      const { scrollHeight, clientHeight } = mainContentRef.current;
-      setShowScrollButtons(scrollHeight > clientHeight);
-    }
-  }, []);
-
-  useEffect(() => {
-    const ref = mainContentRef.current;
-    if (ref) {
-      ref.addEventListener('scroll', handleScroll);
-      // Initial check and re-check on resize
-      const resizeObserver = new ResizeObserver(handleScroll);
-      resizeObserver.observe(ref);
-      return () => {
-        ref.removeEventListener('scroll', handleScroll);
-        resizeObserver.disconnect();
-      };
-    }
-  }, [handleScroll]);
-
   const handleBackToHome = useCallback(() => {
     setPhase('home');
   }, []);
@@ -348,10 +322,10 @@ export default function App() {
 
 
       <main 
-        ref={mainContentRef} 
         className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar ${
-          phase === 'game' ? 'pb-0' : 'pb-20'
+          phase === 'game' ? 'pb-0' : 'pb-14'
         }`}
+        style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {/* Loading state while verification status is unknown */}
 
@@ -547,33 +521,6 @@ export default function App() {
                    ))}
                 </div>
               </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Scroll Buttons */}
-        <AnimatePresence>
-          {showScrollButtons && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="fixed bottom-4 right-4 z-50 flex flex-col gap-2"
-            >
-              <button
-                onClick={() => mainContentRef.current?.scrollBy({ top: -200, behavior: 'smooth' })}
-                className="p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors shadow-lg"
-                aria-label="Scroll Up"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" /></svg>
-              </button>
-              <button
-                onClick={() => mainContentRef.current?.scrollBy({ top: 200, behavior: 'smooth' })}
-                className="p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors shadow-lg"
-                aria-label="Scroll Down"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
-              </button>
             </motion.div>
           )}
         </AnimatePresence>

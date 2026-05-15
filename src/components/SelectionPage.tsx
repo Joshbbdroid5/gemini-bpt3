@@ -117,8 +117,11 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
       </div>
 
       {/* Grid of 600 Boards */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar scroll-smooth">
-        <div className="grid grid-cols-10 gap-2 pb-4">
+      <div
+        className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar scroll-smooth"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        <div className="grid grid-cols-10 gap-2 pb-0">
           {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
             const isSelected = selectedIds.has(id);
             
@@ -130,7 +133,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
                 whileTap={{ scale: 0.9 }}
                 onClick={() => handleSelect(id)}
                 className={`
-                  aspect-square flex items-center justify-center text-[10px] font-black rounded-full border-2 transition-all duration-200 relative overflow-hidden
+                  aspect-[2/3] flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-all duration-200 relative overflow-hidden
                   ${isSelected
                     ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
                     : takenBoards.has(id)

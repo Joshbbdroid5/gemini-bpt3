@@ -359,7 +359,8 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                   <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
                 </div>
                 <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                  {winners.map((winner, idx: number) => {
+                  <div className="overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    {winners.map((winner, idx: number) => {
                     const winningIndices = new Set(
                       winner.patterns.flatMap(p => p.indices.map(i => `${i.r}-${i.c}`))
                     );
@@ -412,6 +413,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                       </div>
                     );
                   })}
+                  </div>
                 </div>
                 <div className="p-4 flex flex-col items-center gap-2">
                   <span className="text-[10px] font-black text-gray-400">
