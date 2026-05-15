@@ -49,16 +49,11 @@ export default function AdminDashboard({ onBack }: Props) {
         setStats(data.stats);
         setIsAuthenticated(true);
       } else {
-        let details = '';
-        try {
-          details = ` (${response.status} ${response.statusText})`;
-        } catch {}
-        alert(`Unauthorized or server error${details}.\n\nBackend URL: ${backendUrl}\nHealth URL: ${healthUrl}\nWallets URL: ${walletsUrl}`);
+        toast.error(`Unauthorized or server error (${response.status})`);
       }
     } catch (err) {
       console.error('Admin login fetch error:', err);
-      const msg = err instanceof Error ? err.message : String(err);
-      alert(`Connection failed.\n\n${msg}\n\nBackend URL: ${backendUrl}\nHealth URL: ${backendUrl}/health`);
+      toast.error('Connection to admin services failed.');
     } finally {
       setLoading(false);
     }

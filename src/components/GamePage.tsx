@@ -97,16 +97,16 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     };
 
     socket.on(socketEvents.BALL_DRAWN, handleNewBall);
-    socket.on('game:init', handleInit);
+    socket.on(socketEvents.GAME_INIT, handleInit);
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
-    socket.on('game:reset', handleReset);
+    socket.on(socketEvents.GAME_RESET, handleReset);
     socket.on(socketEvents.NEW_WINNER, handleServerWinner);
 
     return () => {
       socket.off(socketEvents.BALL_DRAWN, handleNewBall);
-      socket.off('game:init', handleInit);
+      socket.off(socketEvents.GAME_INIT, handleInit);
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
-      socket.off('game:reset', handleReset);
+      socket.off(socketEvents.GAME_RESET, handleReset);
       socket.off(socketEvents.NEW_WINNER, handleServerWinner);
     };
   }, [showWinnerPopup]);
@@ -177,7 +177,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   return (
     <div className="flex-1 flex flex-col bg-[#1a1b2e] text-white overflow-hidden select-none">
       {/* Top Stats - 5 Columns */}
-      <div className="grid grid-cols-5 gap-0.5 p-1.5 bg-[#2d2e4d]">
+      <div className="grid grid-cols-5 gap-1 p-2 bg-[#2d2e4d]">
         <CompactStat label={t.gameId} value={stats.gameId.slice(0, 8)} />
         <CompactStat label={t.players} value={stats.players} />
         <CompactStat label={t.bet} value={stats.staked} />
@@ -194,7 +194,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
               <div 
                 key={l} 
                 className={`
-                  text-center text-[10px] font-black py-1 rounded-sm
+                  text-center text-[12px] font-black py-1.5 rounded-sm
                   ${i === 0 ? 'bg-blue-500' : i === 1 ? 'bg-indigo-600' : i === 2 ? 'bg-purple-600' : i === 3 ? 'bg-green-600' : 'bg-orange-600'}
                 `}
               >
@@ -211,7 +211,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                   <div 
                     key={num} 
                     className={`
-                      flex items-center justify-center text-[9px] font-bold rounded-sm border border-white/5
+                      flex items-center justify-center text-[11px] font-bold rounded-sm border border-white/5
                       ${isCalled ? (colIndex === 4 ? 'bg-orange-600 border-orange-400' : colIndex === 3 ? 'bg-green-600 border-green-400' : 'bg-indigo-600 border-indigo-400') : 'bg-white/5 text-gray-400'}
                     `}
                   >
@@ -284,13 +284,14 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 overflow-hidden p-2 space-y-4">
-                {boardsData.map(({ id, grid }: { id: number, grid: BingoBoardData }) => (
-                  <div key={id} className="p-2 bg-indigo-900/50 rounded-lg border border-white/5">
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-[10px] font-black text-indigo-300">{t.boardNum}{id}</span>
+                <div className="flex-1 overflow-hidden p-1 flex flex-col justify-center">
+                {/* Only one board allowed per user as requested */}
+                {boardsData.slice(0, 1).map(({ id, grid }: { id: number, grid: BingoBoardData }) => (
+                  <div key={id} className="p-3 bg-indigo-900/60 rounded-2xl border border-white/10 shadow-2xl mx-1">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-[11px] font-black text-indigo-300 uppercase tracking-tighter">{t.boardNum}{id}</span>
                     </div>
-                    <div className="grid grid-cols-5 gap-0.5">
+                    <div className="grid grid-cols-5 gap-1">
                        {grid.map((row, rIdx: number) => row.map((cell: any, cIdx: number) => {
                          const isMarkedLocal = typeof cell.value === 'number' ? manualMarks.has(cell.value) : cell.value === 'FREE';
                          const isCurrentBall = typeof cell.value === 'number' && cell.value === currentBall;
@@ -300,7 +301,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                              key={`${rIdx}-${cIdx}`}
                              onClick={() => typeof cell.value === 'number' && toggleMark(cell.value)}
                              className={`
-                               aspect-square flex items-center justify-center text-[9px] font-bold rounded-sm transition-all
+                               aspect-square flex items-center justify-center text-[12px] font-black rounded-md transition-all
                                ${isCurrentBall ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.6)] z-10 scale-110' : isMarkedLocal ? 'bg-green-600 text-white shadow-[0_0_10px_rgba(22,163,74,0.4)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}
                                ${!autoMarkMode && typeof cell.value === 'number' && calledNumbers.has(cell.value) && !isMarkedLocal ? 'ring-1 ring-yellow-400 animate-pulse' : ''}
                              `}
@@ -340,165 +341,88 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       <AnimatePresence>
         {showWinnerPopup && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            {window.Telegram?.WebApp ? (
-              // Telegram WebView: render a static overlay (no framer-motion) to prevent blinking.
-              <>
-                <div className="absolute inset-0 bg-indigo-950/80" />
-                <div className="relative bg-[#23243d] w-full max-w-sm rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col">
-                  <div className="bg-indigo-600 p-4 text-center">
-                    <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" />
-                    <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
-                  </div>
-                  <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                    {winners.map((winner, idx: number) => {
-                      const winningIndices = new Set(
-                        winner.patterns.flatMap(p => p.indices.map(i => `${i.r}-${i.c}`))
-                      );
-
-                      return (
-                        <div key={idx} className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                          <div className="flex justify-between items-center mb-2">
-                            <div className="flex flex-col">
-                              <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
-                                {t.boardNum}{winner.id}
-                              </span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {winner.patterns.map((p: WinningPattern, pIdx: number) => (
-                                  <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">
-                                    {p.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <span className="text-green-400 font-black italic">
-                              {(stats.derash / winners.length).toFixed(0)} ETB
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-5 gap-0.5">
-                            {winner.grid.map((row, rIdx: number) =>
-                              row.map((cell: any, cIdx: number) => {
-                                const isMarkedWinner = typeof cell.value === 'number'
-                                  ? calledNumbers.has(cell.value)
-                                  : cell.value === 'FREE';
-                                const isWinningCell = winningIndices.has(`${rIdx}-${cIdx}`);
-
-                                return (
-                                  <div
-                                    key={`${rIdx}-${cIdx}`}
-                                    className={`
-                                      aspect-square flex items-center justify-center text-[8px] font-bold rounded-sm border
-                                      ${isWinningCell
-                                        ? 'bg-yellow-400 text-indigo-950 border-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.4)]'
-                                        : isMarkedWinner
-                                          ? 'bg-green-600 border-transparent text-white'
-                                          : 'bg-white/10 text-gray-600 border-transparent'}
-                                    `}
-                                  >
-                                    {cell.value === 'FREE' ? 'F' : cell.value}
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="p-4 flex flex-col items-center gap-2">
-                    <span className="text-[10px] font-black text-gray-400">
-                      {t.nextGameIn} {popupTimeLeft}s
-                    </span>
-                    <button onClick={onRestart} className="w-full bg-white text-black py-3 rounded-xl font-black uppercase text-xs">
-                      {t.playAgain}
-                    </button>
-                  </div>
+            <AnimatePresence>
+              <motion.div
+                initial={window.Telegram?.WebApp ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-indigo-950/80 backdrop-blur-md"
+              />
+              <motion.div
+                initial={window.Telegram?.WebApp ? false : { scale: 0.9, y: 20, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="relative bg-[#23243d] w-full max-w-sm rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col"
+              >
+                <div className="bg-indigo-600 p-4 text-center">
+                  <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" />
+                  <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
                 </div>
-              </>
-            ) : (
-              // Non-Telegram: keep existing motion animation.
-              <>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-indigo-950/80 backdrop-blur-md"
-                />
-                <motion.div
-                  initial={{ scale: 0.9, y: 20, opacity: 0 }}
-                  animate={{ scale: 1, y: 0, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
-                  className="relative bg-[#23243d] w-full max-w-sm rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col"
-                >
-                  <div className="bg-indigo-600 p-4 text-center">
-                    <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" />
-                    <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
-                  </div>
-                  <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                    {winners.map((winner, idx: number) => {
-                      const winningIndices = new Set(
-                        winner.patterns.flatMap(p => p.indices.map(i => `${i.r}-${i.c}`))
-                      );
+                <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                  {winners.map((winner, idx: number) => {
+                    const winningIndices = new Set(
+                      winner.patterns.flatMap(p => p.indices.map(i => `${i.r}-${i.c}`))
+                    );
 
-                      return (
-                        <div key={idx} className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                          <div className="flex justify-between items-center mb-2">
-                            <div className="flex flex-col">
-                              <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
-                                {t.boardNum}{winner.id}
-                              </span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {winner.patterns.map((p: WinningPattern, pIdx: number) => (
-                                  <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">
-                                    {p.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <span className="text-green-400 font-black italic">
-                              {(stats.derash / winners.length).toFixed(0)} ETB
+                    return (
+                      <div key={idx} className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="flex flex-col">
+                            <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
+                              {t.boardNum}{winner.id}
                             </span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {winner.patterns.map((p: WinningPattern, pIdx: number) => (
+                                <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">
+                                  {p.name}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                          <div className="grid grid-cols-5 gap-0.5">
-                            {winner.grid.map((row, rIdx: number) =>
-                              row.map((cell: any, cIdx: number) => {
-                                const isMarkedWinner = typeof cell.value === 'number'
-                                  ? calledNumbers.has(cell.value)
-                                  : cell.value === 'FREE';
-                                const isWinningCell = winningIndices.has(`${rIdx}-${cIdx}`);
-
-                                return (
-                                  <div
-                                    key={`${rIdx}-${cIdx}`}
-                                    className={`
-                                      aspect-square flex items-center justify-center text-[8px] font-bold rounded-sm border
-                                      ${isWinningCell
-                                        ? 'bg-yellow-400 text-indigo-950 border-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.4)]'
-                                        : isMarkedWinner
-                                          ? 'bg-green-600 border-transparent text-white'
-                                          : 'bg-white/10 text-gray-600 border-transparent'}
-                                    `}
-                                  >
-                                    {cell.value === 'FREE' ? 'F' : cell.value}
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
+                          <span className="text-green-400 font-black italic">
+                            {(stats.derash / winners.length).toFixed(0)} ETB
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                  <div className="p-4 flex flex-col items-center gap-2">
-                    <span className="text-[10px] font-black text-gray-400">
-                      {t.nextGameIn} {popupTimeLeft}s
-                    </span>
-                    <button onClick={onRestart} className="w-full bg-white text-black py-3 rounded-xl font-black uppercase text-xs">
-                      {t.playAgain}
-                    </button>
-                  </div>
-                </motion.div>
-              </>
-            )}
+                        <div className="grid grid-cols-5 gap-0.5">
+                          {winner.grid.map((row, rIdx: number) =>
+                            row.map((cell: any, cIdx: number) => {
+                              const isMarkedWinner = typeof cell.value === 'number'
+                                ? calledNumbers.has(cell.value)
+                                : cell.value === 'FREE';
+                              const isWinningCell = winningIndices.has(`${rIdx}-${cIdx}`);
+
+                              return (
+                                <div
+                                  key={`${rIdx}-${cIdx}`}
+                                  className={`
+                                    aspect-square flex items-center justify-center text-[8px] font-bold rounded-sm border
+                                    ${isWinningCell
+                                      ? 'bg-yellow-400 text-indigo-950 border-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.4)]'
+                                      : isMarkedWinner
+                                        ? 'bg-green-600 border-transparent text-white'
+                                        : 'bg-white/10 text-gray-600 border-transparent'}
+                                  `}
+                                >
+                                  {cell.value === 'FREE' ? 'F' : cell.value}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="p-4 flex flex-col items-center gap-2">
+                  <span className="text-[10px] font-black text-gray-400">
+                    {t.nextGameIn} {popupTimeLeft}s
+                  </span>
+                  <button onClick={onRestart} className="w-full bg-white text-black py-3 rounded-xl font-black uppercase text-xs">
+                    {t.playAgain}
+                  </button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
         )}
       </AnimatePresence>
@@ -513,8 +437,8 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 function CompactStat({ label, value }: { label: string, value: string | number }) {
   return (
     <div className="flex flex-col items-center justify-center bg-white/5 rounded-md py-1 border border-white/5">
-       <span className="text-[7px] text-gray-400 font-black uppercase tracking-tight leading-none mb-0.5">{label}</span>
-       <span className="text-[10px] font-black italic leading-none">{value}</span>
+       <span className="text-[9px] text-gray-400 font-black uppercase tracking-tight leading-none mb-0.5">{label}</span>
+       <span className="text-[12px] font-black italic leading-none">{value}</span>
     </div>
   );
 }

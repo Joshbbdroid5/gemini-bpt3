@@ -1,6 +1,6 @@
 /// <reference types="react" />
 
-import { useState, useCallback, useEffect, useRef } from 'react'; // Removed useAnimationControls
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { Info, X, Trophy, RefreshCcw } from 'lucide-react';
@@ -21,14 +21,6 @@ const t = {
   redirecting: 'Redirecting to Game',
 };
 
-
-
-
-
-
-
-
-// Declare Telegram WebApp global
 declare global {
   interface Window {
     Telegram?: any;
@@ -147,12 +139,13 @@ export default function App() {
       });
     };
 
-    socket.on('user:status', handleStatus);
+    socket.on(socketEvents.USER_STATUS, handleStatus);
     socket.on(socketEvents.WALLET_UPDATE, handleWallet);
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
-    socket.on('game:init', handleInit);
-    socket.on('game:ball', () => { /* isLive is updated via pool_sync */ });
-    socket.on('game:reset', () => { 
+    socket.on(socketEvents.GAME_INIT, handleInit);
+    socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
+    socket.on(socketEvents.BALL_DRAWN, () => { /* isLive is updated via pool_sync */ });
+    socket.on(socketEvents.GAME_RESET, () => { 
       // Automated Loop: Redirect players back to selection screen for the next round
       setPhase('selection');
     });
@@ -170,12 +163,13 @@ export default function App() {
 
     // Add cleanup to prevent memory leaks and duplicate listeners
     const cleanup = () => {
-      socket.off('user:status', handleStatus);
+    socket.off(socketEvents.USER_STATUS, handleStatus);
       socket.off(socketEvents.WALLET_UPDATE, handleWallet);
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
-      socket.off('game:init', handleInit);
-      socket.off('game:ball');
-      socket.off('game:reset');
+    socket.off(socketEvents.GAME_INIT, handleInit);
+    socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
+    socket.off(socketEvents.BALL_DRAWN);
+    socket.off(socketEvents.GAME_RESET);
       socket.off('connect_error', handleConnectError);
       clearTimeout(timeoutId);
     };

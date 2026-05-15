@@ -20,7 +20,6 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   const t = {
     back: 'Back',
     wallet: 'Wallet',
-    staked: 'Staked',
     refresh: 'Refresh',
   };
 
@@ -30,11 +29,11 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
       setTakenBoards(taken);
     };
 
-    socket.on('game:board_sync', handleBoardSync);
+    socket.on(socketEvents.BOARD_SYNC, handleBoardSync);
     return () => {
-      socket.off('game:board_sync', handleBoardSync);
+      socket.off(socketEvents.BOARD_SYNC, handleBoardSync);
     };
-  }, [staked]);
+  }, []);
 
   // Local countdown (server finalizes at 40s). We keep UI responsive.
   useEffect(() => {
@@ -60,8 +59,12 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   const handleSelect = (id: number) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else if (next.size < 10) next.add(id); // Limit to 10 boards
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.clear(); // Enforce 1 board limit: clear previous and add new
+        next.add(id);
+      }
       return next;
     });
   };

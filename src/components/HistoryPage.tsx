@@ -23,8 +23,6 @@ export default function HistoryPage({ history, onBack }: Props) {
     payout: 'Payout',
     staked: 'Staked',
     boardNum: 'Board Count',
-    congratulations: 'Big Congratulations',
-    betterLuck: 'Better luck next time',
   };
 
   return (
