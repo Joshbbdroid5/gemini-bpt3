@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Timer, ShoppingCart, ArrowLeft, Users, Trophy } from 'lucide-react';
+import { Wallet, Timer, ShoppingCart, ArrowLeft, RotateCcw } from 'lucide-react';
 import { TOTAL_BOARDS } from '../types';
 import { socket, socketEvents } from './socket';
 
@@ -91,48 +91,53 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gradient-to-br from-yellow-600 via-yellow-700 to-lime-900">
       {/* Stats Bar */}
-      <div className="grid grid-cols-3 gap-2 p-4 bg-black/20 border-b border-white/10">
-        {/* Back Button */}
-        <div className="absolute top-4 left-4 z-50">
+      <div className="relative pt-2 pb-2 px-4 bg-black/20 border-b border-white/10">
+        {/* Back Button (Top Left) */}
+        <div className="absolute top-2 left-3 z-50">
           <button
             onClick={onBack}
-            className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+            className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors shadow-lg"
             aria-label={t.back}
           >
             <ArrowLeft size={20} />
           </button>
         </div>
-        <div className="flex items-center gap-3 p-3 pl-12 bg-white/10 rounded-2xl border border-white/10">
-          <div className="p-2 bg-lime-600 rounded-lg text-white">
-            <Wallet size={16} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-widest text-yellow-100 opacity-50">{t.wallet}</span>
-            <span className="text-sm font-bold text-white">{wallet} ETB</span>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/10">
-          <div className="p-2 bg-orange-600 rounded-lg text-white">
-            <ShoppingCart size={16} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase tracking-widest text-orange-300 opacity-50">{t.staked}</span>
-            <span className="text-sm font-bold text-white italic">{staked * selectedIds.size} ETB</span>
-          </div>
+
+        {/* Refresh Button (Top Right) */}
+        <div className="absolute top-2 right-3 z-50">
+          <button
+            onClick={() => window.location.reload()}
+            className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors shadow-lg"
+            aria-label="Refresh"
+          >
+            <RotateCcw size={20} />
+          </button>
         </div>
 
-        <div className="flex items-center justify-center gap-2 p-3 bg-white/10 rounded-2xl border border-white/10">
-          <Timer size={16} className="text-yellow-400" />
-          <span className={`text-lg font-mono font-black ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-            {timeLeft}s
-          </span>
+        {/* Main Stats (Wallet, Stake, Timer) */}
+        <div className="grid grid-cols-3 gap-2 px-10">
+          <div className="flex flex-col items-center justify-center bg-white/5 p-1.5 rounded-xl border border-white/10">
+            <Wallet size={14} className="text-lime-400 mb-1" />
+            <span className="text-[10px] font-black text-white">{wallet} ETB</span>
+          </div>
+          
+          <div className="flex flex-col items-center justify-center bg-white/5 p-1.5 rounded-xl border border-white/10">
+            <ShoppingCart size={14} className="text-orange-400 mb-1" />
+            <span className="text-[10px] font-black text-white uppercase italic">10 ETB</span>
+          </div>
+
+          <div className="flex flex-col items-center justify-center bg-white/5 p-1.5 rounded-xl border border-white/10">
+            <Timer size={14} className="text-yellow-400 mb-1" />
+            <span className={`text-[12px] font-mono font-black ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+              {timeLeft}s
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Grid of 600 Boards */}
       <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar scroll-smooth">
-        <div className="grid grid-cols-10 gap-2 pb-24">
+        <div className="grid grid-cols-10 gap-2 pb-4">
           {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
             const isSelected = selectedIds.has(id);
             
@@ -161,27 +166,6 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
               </motion.button>
             );
           })}
-        </div>
-      </div>
-      
-      {/* Selection Summary Overlay */}
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-[#1a2e05]/95 backdrop-blur-xl border-t border-white/20 shadow-2xl z-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase tracking-widest text-yellow-200/50">{t.selectionStatus}</span>
-              <span className={`text-lg font-black italic ${selectedIds.size > 0 ? 'text-green-400' : 'text-white'}`}>
-                {selectedIds.size > 0 
-                  ? `${selectedIds.size} ${t.boardsRegistered}` 
-                  : t.selecting
-                }
-              </span>
-            </div>
-          </div>
-          <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-3">
-             <div className="w-2 h-2 bg-yellow-400 rounded-full animate-ping"></div>
-             <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">{t.gameStarting}</span>
-          </div>
         </div>
       </div>
     </div>

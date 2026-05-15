@@ -347,7 +347,11 @@ export default function App() {
         />
       </AnimatePresence>
 
-      {phase !== 'selection' && <Header onShowRules={() => setShowRules(true)} />}
+      {/* The Header is now only shown when not on the selection page, as selection has its own navigation */}
+      {phase !== 'selection' && phase !== 'game' && <Header onShowRules={() => setShowRules(true)} />}
+      {/* The GamePage also has its own header/stats bar, so hide the main Header there too */}
+
+
 
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
         {/* Loading state while verification status is unknown */}
