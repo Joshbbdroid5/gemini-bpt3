@@ -347,7 +347,7 @@ export default function App() {
         />
       </AnimatePresence>
 
-      <Header onShowRules={() => setShowRules(true)} />
+      {phase !== 'selection' && <Header onShowRules={() => setShowRules(true)} />}
 
       <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-24">
         {/* Loading state while verification status is unknown */}

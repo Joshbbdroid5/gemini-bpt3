@@ -91,7 +91,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gradient-to-br from-yellow-600 via-yellow-700 to-lime-900">
       {/* Stats Bar */}
-      <div className="grid grid-cols-2 gap-2 p-4 bg-black/20 border-b border-white/10">
+      <div className="grid grid-cols-3 gap-2 p-4 bg-black/20 border-b border-white/10">
         {/* Back Button */}
         <div className="absolute top-4 left-4 z-50">
           <button
@@ -121,61 +121,12 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
             <span className="text-sm font-bold text-white italic">{staked * selectedIds.size} ETB</span>
           </div>
         </div>
-      </div>
 
-      {/* Timer Bar */}
-      <div className="px-4 py-2 bg-black/40 backdrop-blur-md flex items-center justify-between border-b border-white/10">
-        <div className="flex items-center gap-2 text-white">
-          <Timer size={14} className="text-yellow-400" />
-          <span className="text-[10px] font-black uppercase tracking-widest">{t.timeRemaining}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className={`text-xl font-mono font-black ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+        <div className="flex items-center justify-center gap-2 p-3 bg-white/10 rounded-2xl border border-white/10">
+          <Timer size={16} className="text-yellow-400" />
+          <span className={`text-lg font-mono font-black ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
             {timeLeft}s
           </span>
-        </div>
-      </div>
-
-      {/* Info / Dynamic Header */}
-      <div className="px-4 py-2 bg-indigo-950/30 flex flex-col gap-2 border-b border-white/5">
-        <div className="flex justify-between items-center">
-          <p className="text-[9px] font-black uppercase tracking-widest text-yellow-100">
-            {t.selectBoardInfo}
-          </p>
-
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
-              <Users size={14} className="text-white/80" />
-              <span className="text-[9px] font-black text-white uppercase tracking-tighter">
-                {players} Players
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-yellow-400/15 px-2 py-0.5 rounded-full border border-yellow-400/25">
-              <Trophy size={14} className="text-yellow-300" />
-              <span className="text-[9px] font-black text-yellow-200 uppercase tracking-tighter">
-                Total Prize (60%)
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-[8px] font-black text-green-400 uppercase tracking-tighter">
-              {TOTAL_BOARDS} {t.boardsAvailable}
-            </span>
-          </div>
-
-          <div className="px-3 py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-400/20 rounded-2xl">
-            <div className="text-[8px] font-black uppercase tracking-[0.2em] text-yellow-200/80">Current Prize Pool</div>
-            <div className="text-lg font-black italic text-yellow-100">{prizePool60.toFixed(0)} ETB</div>
-          </div>
-
-          <div className="text-[9px] font-black uppercase tracking-tighter text-white/60">
-            Game & Board ID
-            <span className="text-white/90 ml-2">{gameId}</span>
-          </div>
         </div>
       </div>
 
