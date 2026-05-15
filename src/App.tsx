@@ -35,18 +35,27 @@ export default function App() {
   // State persistence for "refreshing that exact page"
   const [phase, setPhase] = useState<AppPhase>(() => {
     const saved = localStorage.getItem('bingo_phase');
-    return (saved as AppPhase) || 'home';
+    const validPhases: AppPhase[] = ['home', 'selection', 'game', 'history', 'wallet', 'profile'];
+    if (saved && validPhases.includes(saved as AppPhase)) {
+      return saved as AppPhase;
+    }
+    return 'home';
   });
   const [bottomTab, setBottomTab] = useState<BottomTabKey>(() => {
     const saved = localStorage.getItem('bingo_tab');
-    return (saved as BottomTabKey) || 'game';
+    const validTabs: BottomTabKey[] = ['game', 'history', 'wallet', 'profile'];
+    if (saved && validTabs.includes(saved as BottomTabKey)) {
+      return saved as BottomTabKey;
+    }
+    return 'game';
   });
 
   const [stake, setStake] = useState<number>(() => {
     const saved = localStorage.getItem('bingo_stake');
-    return saved ? parseInt(saved) : 10;
+    const parsed = saved ? parseInt(saved) : 10;
+    return isNaN(parsed) ? 10 : parsed;
   });
-  const [wallet, setWallet] = useState(1000);
+  const [wallet, setWallet] = useState<number>(0);
   const [selectedBoardIds, setSelectedBoardIds] = useState<number[]>(() => {
     try {
       const saved = localStorage.getItem('bingo_selected_ids');
@@ -123,12 +132,8 @@ export default function App() {
         [stake]: { ...prev[stake], gameId: data.gameId }
       }));
 
-      // Daily status routing (lobby bypass)
-      // Server may send: { daily_status: { isFirstGame: boolean } }
-      // If first game of the day: show Lobby (player count locked to 10)
-      // Otherwise: keep on home and let handleHomePlay bypass to selection.
-      const firstGame = data?.daily_status?.isFirstGame;
-      if (firstGame === true) setPhase('lobby');
+      // Removed the invalid 'lobby' phase redirect that caused blank screens.
+      // If a lobby is needed in the future, a corresponding UI component must be added to the render block.
     };
 
 
@@ -167,9 +172,15 @@ export default function App() {
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on(socketEvents.BALL_DRAWN, () => { /* isLive is updated via pool_sync */ });
     socket.on(socketEvents.GAME_RESET, () => { 
-      setSelectedBoardIds([]);
-      // Automated Loop: Redirect players back to selection screen for the next round
-      setPhase('selection');
+      // Only auto-redirect if the user was actually in a game or selection
+      // This prevents users browsing their Profile/History from being yanked away
+      setPhase(prev => {
+        if (prev === 'game' || prev === 'selection') {
+          setSelectedBoardIds([]);
+          return 'selection';
+        }
+        return prev;
+      });
     });
     socket.on(socketEvents.GAME_STATUS, handleGameStatus);
     socket.on(socketEvents.GAME_STOPPED, handleGameStopped);
@@ -185,13 +196,15 @@ export default function App() {
 
     // Add cleanup to prevent memory leaks and duplicate listeners
     const cleanup = () => {
-    socket.off(socketEvents.USER_STATUS, handleStatus);
+      socket.off(socketEvents.USER_STATUS, handleStatus);
       socket.off(socketEvents.WALLET_UPDATE, handleWallet);
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
-    socket.off(socketEvents.GAME_INIT, handleInit);
-    socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
-    socket.off(socketEvents.BALL_DRAWN);
-    socket.off(socketEvents.GAME_RESET);
+      socket.off(socketEvents.GAME_INIT, handleInit);
+      socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
+      socket.off(socketEvents.BALL_DRAWN);
+      socket.off(socketEvents.GAME_RESET);
+      socket.off(socketEvents.GAME_STATUS, handleGameStatus);
+      socket.off(socketEvents.GAME_STOPPED, handleGameStopped);
       socket.off('connect_error', handleConnectError);
       clearTimeout(timeoutId);
     };
@@ -304,6 +317,7 @@ export default function App() {
 
   const handleBackToHome = useCallback(() => {
     setPhase('home');
+    setBottomTab('game'); // Ensure the tab highlight moves back to the "Game/Play" tab
   }, []);
 
   const handleTabChange = useCallback(
@@ -467,7 +481,10 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <HistoryPage history={history} onBack={() => setPhase('home')} />
+              <HistoryPage 
+                history={history} 
+                onBack={handleBackToHome} 
+              />
             </motion.div>
           )}
 
@@ -484,7 +501,7 @@ export default function App() {
                 phoneNumber={phoneNumber} 
                 isVerified={isVerified === true}
                 onRefresh={() => window.location.reload()}
-                onBack={() => setPhase('home')} 
+                onBack={handleBackToHome} 
               />
             </motion.div>
           )}
@@ -506,6 +523,17 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* Fallback to prevent blank pages if phase is corrupted */}
+          {!['home', 'selection', 'game', 'history', 'wallet', 'profile'].includes(phase) && (
+            <motion.div
+              key="fallback"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex-1 flex items-center justify-center p-10 text-center"
+            >
+              <button onClick={() => { setPhase('home'); setBottomTab('game'); }} className="bg-white text-black px-6 py-2 rounded-xl font-bold">Return Home</button>
+            </motion.div>
+          )}
         </AnimatePresence>
 
         {/* Global Loading / Good Luck Overlay */}

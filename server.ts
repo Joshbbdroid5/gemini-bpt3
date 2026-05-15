@@ -989,8 +989,9 @@ function registerSocketHandlers() {
     console.log(`Bet received from ${userId}: ${data.stake} ETB in Room ${roomStake}`);
     socket.join(`room_${roomStake}`);
 
-    // Cold Start Logic: 10th player starts the selection phase for the first time
-    if (room.state === 'LOBBY' && room.playerBoards.size === 10) {
+    // IMPROVEMENT: Reduced requirement from 10 to 1 for immediate functioning.
+    // In production, you can set this to 2 or more to ensure a multiplayer feel.
+    if (room.state === 'LOBBY' && room.playerBoards.size >= 1) {
       startSelectionPhase(roomStake);
     }
 
