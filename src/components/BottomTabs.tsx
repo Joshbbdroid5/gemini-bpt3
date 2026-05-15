@@ -7,7 +7,6 @@ export type BottomTabKey = 'game' | 'history' | 'wallet' | 'profile';
 interface Props {
   active: BottomTabKey;
   onTabChange: (tab: BottomTabKey) => void;
-  walletBalance: number;
 }
 
 
@@ -58,13 +57,12 @@ const TabButton = ({
   );
 };
 
-export default function BottomTabs({ active, onTabChange, walletBalance }: Props) {
+export default function BottomTabs({ active, onTabChange }: Props) {
   const t = {
     tabGame: 'Game',
     tabHistory: 'History',
     tabWallet: 'Wallet',
     tabProfile: 'Profile',
-    myBalance: 'My Balance',
   };
 
   return (
@@ -102,13 +100,6 @@ export default function BottomTabs({ active, onTabChange, walletBalance }: Props
           active={active === 'profile'}
           onClick={() => onTabChange('profile')}
         />
-      </div>
-
-      {/* small balance hint (keeps UI light) */}
-      <div className="absolute -top-2 left-0 right-0 flex justify-center pointer-events-none">
-        <div className="bg-black/30 text-[9px] font-black text-yellow-200 px-3 py-1 rounded-full border border-white/10">
-          {t.myBalance}: {walletBalance.toLocaleString()} ETB
-        </div>
       </div>
     </motion.nav>
   );

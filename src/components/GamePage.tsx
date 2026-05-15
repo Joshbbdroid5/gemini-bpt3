@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Volume2, VolumeX, RotateCcw, LogOut } from 'lucide-react';
+import { Trophy, Volume2, VolumeX, RefreshCw, LogOut } from 'lucide-react';
 import { generateBoard, WinningPattern } from '../logic';
 import { BingoBoardData, GameStats, HistoryEntry } from '../types';
 import { socket, socketEvents } from './socket';
@@ -326,8 +326,8 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
           <span className="text-[8px] font-black uppercase">{t.leave}</span>
         </button>
         <button onClick={() => window.location.reload()} className="col-span-1 h-14 rounded-xl bg-[#4a4b6e] flex flex-col items-center justify-center">
-          <RotateCcw size={16} />
-          <span className="text-[8px] font-black uppercase">{t.refresh}</span>
+          <RefreshCw size={16} className="text-lime-400" />
+          <span className="text-[8px] font-black text-white uppercase">{t.refresh}</span>
         </button>
         <button 
           disabled
@@ -359,7 +359,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                   <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
                 </div>
                 <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                  <div className="overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  <div style={{ WebkitOverflowScrolling: 'touch' }}>
                     {winners.map((winner, idx: number) => {
                     const winningIndices = new Set(
                       winner.patterns.flatMap(p => p.indices.map(i => `${i.r}-${i.c}`))

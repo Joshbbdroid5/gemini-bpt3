@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Trophy, Wallet, UserRound, Stars } from 'lucide-react';
+import { Trophy, Wallet, UserRound, Stars, RefreshCw } from 'lucide-react';
 interface Props {
   telegramName?: string;
   walletBalance: number;
@@ -22,6 +22,16 @@ export default function ProfilePage({
 
   return (
     <div className="flex-1 flex flex-col bg-transparent overflow-hidden">
+      {/* Refresh Button (Top Right) */}
+      <div className="absolute top-4 right-4 z-50">
+        <button
+          onClick={() => window.location.reload()}
+          className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 active:scale-90 transition-all"
+          aria-label="Refresh"
+        >
+          <RefreshCw size={20} className="text-lime-400" />
+        </button>
+      </div>
           {/* Top Middle Username */}
       <div className="flex flex-col items-center justify-center p-8 mt-4">
         <div className="w-20 h-20 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 shadow-xl">

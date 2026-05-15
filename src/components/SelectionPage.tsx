@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Timer, ShoppingCart, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Wallet, Timer, ShoppingCart, ArrowLeft, RefreshCw } from 'lucide-react';
 import { TOTAL_BOARDS } from '../types';
 import { socket, socketEvents } from './socket';
 
@@ -91,7 +91,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
             className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors shadow-lg"
             aria-label={t.refresh}
           >
-            <RotateCcw size={20} />
+            <RefreshCw size={20} className="text-lime-400" />
           </button>
         </div>
 
@@ -118,10 +118,10 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
 
       {/* Grid of 600 Boards */}
       <div
-        className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar scroll-smooth"
+        className="flex-1 overflow-y-auto min-h-0 pt-2 px-2 pb-0 custom-scrollbar scroll-smooth"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        <div className="grid grid-cols-10 gap-2 pb-0">
+        <div className="grid grid-cols-10 gap-1.5 pb-32">
           {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
             const isSelected = selectedIds.has(id);
             

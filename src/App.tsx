@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { Info, X, Trophy, RefreshCcw } from 'lucide-react';
+import { Info, X, Trophy, RefreshCw } from 'lucide-react';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import SelectionPage from './components/SelectionPage';
@@ -32,12 +32,29 @@ const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
 const IS_BOT_CONFIGURED = BOT_USERNAME && BOT_USERNAME !== 'YOUR_BOT_USERNAME_HERE' && BOT_USERNAME !== '';
 
 export default function App() {
-  const [phase, setPhase] = useState<AppPhase>('home');
-  const [bottomTab, setBottomTab] = useState<BottomTabKey>('game');
+  // State persistence for "refreshing that exact page"
+  const [phase, setPhase] = useState<AppPhase>(() => {
+    const saved = localStorage.getItem('bingo_phase');
+    return (saved as AppPhase) || 'home';
+  });
+  const [bottomTab, setBottomTab] = useState<BottomTabKey>(() => {
+    const saved = localStorage.getItem('bingo_tab');
+    return (saved as BottomTabKey) || 'game';
+  });
 
-  const [stake, setStake] = useState(10);
+  const [stake, setStake] = useState<number>(() => {
+    const saved = localStorage.getItem('bingo_stake');
+    return saved ? parseInt(saved) : 10;
+  });
   const [wallet, setWallet] = useState(1000);
-  const [selectedBoardIds, setSelectedBoardIds] = useState<number[]>([]);
+  const [selectedBoardIds, setSelectedBoardIds] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem('bingo_selected_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showRules, setShowRules] = useState(false);
   const [showGoodLuck, setShowGoodLuck] = useState(false);
@@ -50,6 +67,14 @@ export default function App() {
 
   const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
   const [totalActivePlayers, setTotalActivePlayers] = useState(0);
+
+  // Persist navigation state to localStorage
+  useEffect(() => {
+    localStorage.setItem('bingo_phase', phase);
+    localStorage.setItem('bingo_tab', bottomTab);
+    localStorage.setItem('bingo_stake', stake.toString());
+    localStorage.setItem('bingo_selected_ids', JSON.stringify(selectedBoardIds));
+  }, [phase, bottomTab, stake, selectedBoardIds]);
 
   const currentRoomStats = allRoomStats[stake] || {
     pool: 0,
@@ -142,6 +167,7 @@ export default function App() {
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on(socketEvents.BALL_DRAWN, () => { /* isLive is updated via pool_sync */ });
     socket.on(socketEvents.GAME_RESET, () => { 
+      setSelectedBoardIds([]);
       // Automated Loop: Redirect players back to selection screen for the next round
       setPhase('selection');
     });
@@ -322,7 +348,7 @@ export default function App() {
 
 
       <main 
-        className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar ${
+        className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-hidden ${
           phase === 'game' ? 'pb-0' : 'pb-14'
         }`}
         style={{ WebkitOverflowScrolling: 'touch' }}
@@ -354,7 +380,7 @@ export default function App() {
                 <h2 className="text-white text-xl font-black uppercase italic mb-2">Connection Failed</h2>
                 <p className="text-gray-400 text-sm mb-8">We couldn't reach the game server. Please check your connection and try again.</p>
                 <button onClick={() => window.location.reload()} className="flex items-center gap-2 bg-white text-black px-8 py-3 rounded-xl font-black uppercase text-xs">
-                  <RefreshCcw size={16} /> Retry
+                  <RefreshCw size={16} /> Retry
                 </button>
               </motion.div>
             )}
@@ -574,7 +600,6 @@ export default function App() {
         <BottomTabs
           active={bottomTab}
           onTabChange={handleTabChange}
-          walletBalance={wallet}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { History, ArrowLeft, Trophy, Users, Wallet, Calendar, ShoppingCart, RotateCcw } from 'lucide-react';
+import { History, ArrowLeft, Trophy, Users, Wallet, Calendar, ShoppingCart, RotateCcw, RefreshCw } from 'lucide-react';
 import { ReactNode } from 'react';
 import { HistoryEntry } from '../types';
 
@@ -28,16 +28,25 @@ export default function HistoryPage({ history, onBack }: Props) {
   return (
     <div className="flex-1 flex flex-col bg-transparent overflow-hidden">
       {/* Header Section */}
-      <div className="p-6 bg-black/20 border-b border-white/10 flex flex-col gap-1">
-        <div className="flex items-center gap-4 mb-2">
+      <div className="p-6 bg-black/20 border-b border-white/10 flex flex-col gap-1 relative">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-4">
         <button 
           onClick={onBack}
           className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors"
           aria-label={t.back}
         >
           <ArrowLeft size={20} className="text-gray-400" />
-        </button>
-        <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">{t.gameHistory}</h2>
+          </button>
+          <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">{t.gameHistory}</h2>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 active:scale-90 transition-all"
+            aria-label="Refresh"
+          >
+            <RefreshCw size={20} className="text-lime-400" />
+          </button>
         </div>
         <div className="flex items-center gap-2 text-lime-400 ml-12">
           <span className="text-[10px] font-black uppercase tracking-widest opacity-70">{t.totalPlayed}:</span>
