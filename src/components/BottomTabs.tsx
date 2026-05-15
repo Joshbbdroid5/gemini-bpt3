@@ -29,7 +29,7 @@ const TabButton = ({
       onClick={onClick}
       className={
         'flex-1 flex flex-col items-center justify-center gap-1 h-full py-2 transition-all relative ' +
-        (active
+        (active 
           ? 'text-yellow-300 scale-110'
           : 'text-gray-300 hover:text-white/90')
       }
@@ -37,7 +37,7 @@ const TabButton = ({
     >
       <div
         className={
-          'w-10 h-10 rounded-2xl flex items-center justify-center border transition-all ' +
+          'w-8 h-8 rounded-xl flex items-center justify-center border transition-all ' +
           (active
             ? 'bg-white/10 border-yellow-400/30 shadow-[0_0_22px_rgba(250,204,21,0.15)]'
             : 'bg-white/5 border-white/10')
@@ -73,7 +73,7 @@ export default function BottomTabs({ active, onTabChange, walletBalance }: Props
       animate={{ y: 0, opacity: 1 }}
       className="fixed bottom-0 left-0 right-0 z-60 bg-[#2d2e4d] border-t border-white/10 backdrop-blur-md"
     >
-      <div className="grid grid-cols-4 h-16">
+      <div className="grid grid-cols-4 h-14">
         <TabButton
           tab="game"
           icon={<Trophy size={18} className={active === 'game' ? 'text-yellow-300' : 'text-gray-300'} />}

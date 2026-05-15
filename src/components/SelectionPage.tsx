@@ -16,44 +16,22 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   const [timeLeft, setTimeLeft] = useState(40);
 
   const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
-  const [players, setPlayers] = useState(0);
-  const [prizePool60, setPrizePool60] = useState(0);
-  const [gameId, setGameId] = useState('---');
 
   const t = {
     back: 'Back',
     wallet: 'Wallet',
     staked: 'Staked',
-    timeRemaining: 'Time Remaining',
-    boardsAvailable: 'Boards Available',
-    selectBoardInfo: 'Select 1 Board to play.',
-    selectionStatus: 'Selection Status',
-    boardsRegistered: 'Boards Registered',
-    selecting: 'Selecting Board...',
-    gameStarting: 'Game Starting Soon',
+    refresh: 'Refresh',
   };
 
   useEffect(() => {
-    const handlePoolUpdate = (data: any) => {
-      // server sends: { rooms, totalActive }
-      // we only use current stake=10 in this app; pool is already 60%
-      const roomStats = data?.rooms?.[staked];
-      if (!roomStats) return;
-      setPlayers(roomStats.players ?? 0);
-      setPrizePool60(roomStats.pool ?? 0);
-      setGameId(roomStats.gameId ?? '---');
-    };
-
     const handleBoardSync = (data: any) => {
       const taken = new Set<number>(data?.takenBoards ?? []);
       setTakenBoards(taken);
     };
 
-    socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on('game:board_sync', handleBoardSync);
-
     return () => {
-      socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
       socket.off('game:board_sync', handleBoardSync);
     };
   }, [staked]);
@@ -108,7 +86,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
           <button
             onClick={() => window.location.reload()}
             className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors shadow-lg"
-            aria-label="Refresh"
+            aria-label={t.refresh}
           >
             <RotateCcw size={20} />
           </button>
