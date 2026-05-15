@@ -177,7 +177,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   return (
     <div className="flex-1 flex flex-col bg-[#1a1b2e] text-white overflow-hidden select-none">
       {/* Top Stats - 5 Columns */}
-      <div className="grid grid-cols-5 gap-1 p-2 bg-[#2d2e4d]">
+      <div className="grid grid-cols-5 gap-0.5 p-1.5 bg-[#2d2e4d]">
         <CompactStat label={t.gameId} value={stats.gameId.slice(0, 8)} />
         <CompactStat label={t.players} value={stats.players} />
         <CompactStat label={t.bet} value={stats.staked} />
@@ -236,17 +236,6 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
             </div>
             <div className="flex items-center gap-3">
               <button 
-                onClick={() => setAutoMarkMode(!autoMarkMode)}
-                className={`px-3 py-1 rounded-full text-[9px] font-black transition-all border ${
-                  autoMarkMode 
-                    ? 'bg-green-500/20 border-green-500/50 text-green-400' 
-                    : 'bg-orange-500/20 border-orange-500/50 text-orange-400'
-                }`}
-                aria-label={autoMarkMode ? "Disable auto-mark" : "Enable auto-mark"}
-              >
-                {autoMarkMode ? 'AUTO ON' : 'MANUAL'}
-              </button>
-              <button 
                 onClick={() => setIsMuted(!isMuted)} 
                 className="text-gray-400"
                 aria-label={isMuted ? "Unmute" : "Mute"}
@@ -257,17 +246,30 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
           </div>
 
           {/* Current Ball Card */}
-          <div className="h-24 bg-[#23243d] rounded-xl border border-white/10 flex items-center justify-center relative overflow-hidden">
-            {/* Telegram WebView can glitch with blur/animated/transformed layers.
-                Remove the blurred glow layer for Telegram only. */}
-            {(!(window.Telegram?.WebApp)) ? (
-              <div className="absolute inset-0 bg-indigo-500/10 blur-2xl radial-gradient" />
-            ) : null}
-            <div className="w-16 h-16 rounded-full bg-white border-4 border-lime-400 flex items-center justify-center shadow-[0_0_20px_rgba(250,204,21,0.5)] z-10">
-
-              <span className="text-xl font-black text-indigo-950">
-                {currentBall ? `${getLetter(currentBall)}-${currentBall}` : '--'}
-              </span>
+          <div className="flex flex-col gap-2">
+            <div className="h-24 bg-[#23243d] rounded-xl border border-white/10 flex items-center justify-center relative overflow-hidden">
+              {/* Telegram WebView can glitch with blur/animated/transformed layers.
+                  Remove the blurred glow layer for Telegram only. */}
+              {(!(window.Telegram?.WebApp)) ? (
+                <div className="absolute inset-0 bg-indigo-500/10 blur-2xl radial-gradient" />
+              ) : null}
+              <div className="w-16 h-16 rounded-full bg-white border-4 border-lime-400 flex items-center justify-center shadow-[0_0_20px_rgba(250,204,21,0.5)] z-10">
+                <span className="text-xl font-black text-indigo-950">
+                  {currentBall ? `${getLetter(currentBall)}-${currentBall}` : '--'}
+                </span>
+              </div>
+            </div>
+            <div className="px-1">
+              <button 
+                onClick={() => setAutoMarkMode(!autoMarkMode)}
+                className={`w-full py-2 rounded-xl text-[10px] font-black transition-all border ${
+                  autoMarkMode 
+                    ? 'bg-green-500/20 border-green-500/50 text-green-400' 
+                    : 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                }`}
+              >
+                {autoMarkMode ? 'AUTO ON' : 'MANUAL'}
+              </button>
             </div>
           </div>
 
@@ -317,18 +319,18 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       </div>
 
       {/* Footer Area */}
-      <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d]">
-        <button onClick={onLeaveToHome} className="col-span-1 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center">
+      <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d] border-t border-white/10">
+        <button onClick={onLeaveToHome} className="col-span-1 h-14 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center">
           <LogOut size={16} />
           <span className="text-[8px] font-black uppercase">{t.leave}</span>
         </button>
-        <button onClick={() => window.location.reload()} className="col-span-1 h-12 rounded-xl bg-[#4a4b6e] flex flex-col items-center justify-center">
+        <button onClick={() => window.location.reload()} className="col-span-1 h-14 rounded-xl bg-[#4a4b6e] flex flex-col items-center justify-center">
           <RotateCcw size={16} />
           <span className="text-[8px] font-black uppercase">{t.refresh}</span>
         </button>
         <button 
           disabled
-          className="col-span-2 h-12 rounded-xl bg-[#b19539] opacity-70 text-indigo-950 font-black text-base italic uppercase tracking-tighter shadow-inner px-4 overflow-hidden text-center flex items-center justify-center"
+          className="col-span-2 h-14 rounded-xl bg-[#b19539] opacity-70 text-indigo-950 font-black text-base italic uppercase tracking-tighter shadow-inner px-4 overflow-hidden text-center flex items-center justify-center"
         >
           Live Game
         </button>

@@ -353,7 +353,12 @@ export default function App() {
 
 
 
-      <main ref={mainContentRef} className="flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar pb-20">
+      <main 
+        ref={mainContentRef} 
+        className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-y-auto custom-scrollbar ${
+          phase === 'game' ? 'pb-0' : 'pb-20'
+        }`}
+      >
         {/* Loading state while verification status is unknown */}
 
         {isVerified === null && (
@@ -624,11 +629,13 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      <BottomTabs
-        active={bottomTab}
-        onTabChange={handleTabChange}
-        walletBalance={wallet}
-      />
+      {phase !== 'game' && (
+        <BottomTabs
+          active={bottomTab}
+          onTabChange={handleTabChange}
+          walletBalance={wallet}
+        />
+      )}
 
     </div>
   );
