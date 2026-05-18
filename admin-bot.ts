@@ -38,8 +38,9 @@ adminBot.command('manage', (ctx) => {
     {
       parse_mode: 'HTML',
       ...Markup.inlineKeyboard([
-        [Markup.button.callback('🛑 Stop Game', 'maint_on'), Markup.button.callback('🚀 Start Game', 'maint_off')],
-        [Markup.button.callback('📥 Pending Deposits', 'view_pending')],
+        [Markup.button.callback('� Start Engine', 'engine_start'), Markup.button.callback('🛑 Stop Engine', 'engine_stop')],
+        [Markup.button.callback('🛡️ Maint ON', 'maint_on'), Markup.button.callback('✅ Maint OFF', 'maint_off')],
+        [Markup.button.callback(' Pending Deposits', 'view_pending')],
         [Markup.button.callback('📤 Pending Withdrawals', 'view_withdrawals')],
         [Markup.button.callback('📊 View Server Stats', 'view_stats')],
         [Markup.button.callback('🔍 Search User', 'search_user')],
@@ -66,6 +67,77 @@ adminBot.action(/maint_(on|off)/, async (ctx: Context & { match: RegExpExecArray
   } catch (err: any) {
     await ctx.reply('❌ Error: Could not reach the game server.');
   }
+});
+
+adminBot.action('engine_start', async (ctx: Context) => {
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!requireAdminSecret(ctx)) return;
+
+  try {
+    const response = await fetch(`${API_URL}/admin/start-game`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET }),
+    });
+    const data = await response.json();
+    await ctx.answerCbQuery(data.message || '🚀 Engine Started');
+    await ctx.reply(`✅ <b>Engine Status:</b> ${data.message || 'Started'}`, { parse_mode: 'HTML' });
+  } catch (err) {
+    await ctx.reply('❌ Error: Could not start engine.');
+  }
+});
+
+adminBot.action('engine_stop', async (ctx: Context) => {
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+
+  await ctx.answerCbQuery();
+  await ctx.editMessageText(
+    '⚠️ <b>CONFIRM SHUTDOWN</b>\n\nAre you sure you want to stop the game engine? This will prevent new selection phases from starting once the current rounds finish.',
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('🛑 Yes, Stop Engine', 'engine_stop_confirm')],
+        [Markup.button.callback('🔙 Cancel', 'manage_menu')]
+      ])
+    }
+  );
+});
+
+adminBot.action('engine_stop_confirm', async (ctx: Context) => {
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!requireAdminSecret(ctx)) return;
+
+  try {
+    const response = await fetch(`${API_URL}/admin/stop-game`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET }),
+    });
+    const data = await response.json();
+    await ctx.answerCbQuery('🛑 Stop Requested');
+    await ctx.editMessageText(`🛑 <b>Engine Status:</b> ${data.message}`, { parse_mode: 'HTML' });
+  } catch (err) {
+    await ctx.editMessageText('❌ Error: Could not stop engine.', { parse_mode: 'HTML' });
+  }
+});
+
+adminBot.action('manage_menu', async (ctx: Context) => {
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  
+  return ctx.editMessageText(
+    '🛠 <b>Server Management</b>\n\nSelect a management function below:',
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback(' Start Engine', 'engine_start'), Markup.button.callback('🛑 Stop Engine', 'engine_stop')],
+        [Markup.button.callback('🛡️ Maint ON', 'maint_on'), Markup.button.callback('✅ Maint OFF', 'maint_off')],
+        [Markup.button.callback(' Pending Deposits', 'view_pending')],
+        [Markup.button.callback('📤 Pending Withdrawals', 'view_withdrawals')],
+        [Markup.button.callback('📊 View Server Stats', 'view_stats')],
+        [Markup.button.callback('🔍 Search User', 'search_user')],
+      ]),
+    }
+  );
 });
 
 adminBot.action('view_pending', async (ctx: Context) => { // Explicitly typed ctx
@@ -131,7 +203,8 @@ adminBot.action('view_stats', async (ctx: Context) => {
                 `💰 <b>Game Volume:</b> ${s.totalVolume.toFixed(2)} ETB\n` +
                 `📈 <b>Net Profit:</b> ${s.totalProfit.toFixed(2)} ETB\n` +
                 `🎮 <b>Active Bets:</b> ${s.activeBets} ETB\n` +
-                `⚙️ <b>Maintenance:</b> ${s.isMaintenanceMode ? 'ON' : 'OFF'}`;
+                `⚙️ <b>Maintenance:</b> ${s.isMaintenanceMode ? 'ON' : 'OFF'}\n` +
+                `🚀 <b>Engine:</b> ${s.isGameRunning ? (s.stopRequested ? 'Stopping...' : 'Running') : 'Idle'}`;
 
     await ctx.reply(msg, { parse_mode: 'HTML' });
   } catch (err: any) {
