@@ -209,7 +209,7 @@ export default function App() {
     // Set a timeout to catch connection failures
     const timeoutId = setTimeout(() => {
       setIsVerified(currentStatus => {
-        if (currentStatus === null) setConnectionError(true);
+        if (currentStatus === null && !socket.connected) setConnectionError(true);
         return currentStatus;
       });
     }, 30000); // Increased to 30 seconds for Render cold starts
