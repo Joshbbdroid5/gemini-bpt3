@@ -203,7 +203,7 @@ export default function App() {
       });
     });
     socket.on(socketEvents.GAME_STATUS, handleGameStatus);
-    socket.on(socketEvents.GAME_STOPPED, handleGameStopped);
+    socket.on(socketEvents.GAME_STOPPED, (msg?: string) => handleGameStopped(msg));
     socket.on('connect_error', handleConnectError);
 
     // Set a timeout to catch connection failures
@@ -385,7 +385,7 @@ export default function App() {
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-150 bg-primary flex flex-col items-center justify-center p-8 text-center"
+            className="fixed inset-0 z-150 bg-[#0f170a] flex flex-col items-center justify-center p-8 text-center"
           >
             {!connectionError ? (
               <>
