@@ -28,7 +28,7 @@ export interface ServerToClientEvents {
   [socketEvents.USER_STATUS]: (status: { isVerified: boolean; phone?: string }) => void;
   [socketEvents.GAME_INIT]: (data: any) => void;
   [socketEvents.GAME_STATUS]: (status: { isGameRunning: boolean; gameId: string }) => void;
-  [socketEvents.GAME_STOPPED]: () => void;
+  [socketEvents.GAME_STOPPED]: (msg?: string) => void;
   [socketEvents.GAME_RESET]: () => void;
   [socketEvents.BALL_DRAWN]: (num: number) => void;
   [socketEvents.NEW_WINNER]: (data: any) => void;

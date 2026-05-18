@@ -1,6 +1,6 @@
 /// <reference types="react" />
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { Info, X, Trophy, RefreshCw, Clock } from 'lucide-react';
@@ -414,12 +414,12 @@ export default function App() {
         {/* Engine Idle Modal */}
         <AnimatePresence>
           {showEngineIdleModal && (
-            <div className="fixed inset-0 z-[201] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <div className="fixed inset-0 z-201 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.9, opacity: 0 }}
-                  className="bg-white w-full max-w-xs rounded-[32px] p-6 shadow-2xl flex flex-col text-center"
+                  className="bg-white w-full max-w-xs rounded-4xl p-6 shadow-2xl flex flex-col text-center"
                 >
                   <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Clock className="text-indigo-600" size={32} />
