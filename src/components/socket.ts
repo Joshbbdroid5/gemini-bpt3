@@ -6,7 +6,7 @@ const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || window.location.origin;
 export const socketEvents = {
   // Outgoing Events (Player -> Server)
   JOIN_ROOM: 'room:join',
-  PLACE_BET: 'game:bet',
+  PICK_BOARD: 'game:pick_board',
   FORCE_START: 'game:force_start',
 
   // Incoming Events (Server -> Player)
@@ -41,7 +41,7 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   [socketEvents.JOIN_ROOM]: (roomId: number) => void;
-  [socketEvents.PLACE_BET]: (data: { stake: number; boardIds: number[] }) => void;
+  [socketEvents.PICK_BOARD]: (data: { boardId: number; stake: number }) => void;
   [socketEvents.FORCE_START]: () => void;
 }
 

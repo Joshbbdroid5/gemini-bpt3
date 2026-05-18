@@ -521,7 +521,7 @@ app.post('/admin/wallets', (req, res) => {
   }
   res.json({
     wallets: Object.fromEntries(userWallets),
-    stats: { totalVolume, totalProfit, activeBets: Array.from(roomStates.values()).reduce((a, b) => a + b.globalPool, 0), isMaintenanceMode }
+    stats: { totalVolume, totalProfit, activeBets: Array.from(roomStates.values()).reduce((a, b) => a + b.globalPool, 0), isMaintenanceMode, isGameRunning, stopRequested, isEngineActive: isGameRunning && !stopRequested }
   });
 });
 
@@ -549,14 +549,71 @@ app.post('/admin/toggle-maintenance', (req, res) => {
   res.json({ success: true, isMaintenanceMode });
 });
 
+// ADMIN ENDPOINT: Explicitly start the game cycle
+app.post('/admin/start-game', (req, res) => {
+  const { secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  const alreadyRunning = isGameRunning && !stopRequested;
+  if (alreadyRunning) return res.json({ success: true, message: "Game already running" });
+  
+  isGameRunning = true;
+  stopRequested = false;
+  console.log("🚀 Admin started the game engine.");
+  
+  STAKES.forEach(stake => {
+    const room = roomStates.get(stake)!;
+    // Clear existing timer if any to avoid double triggers
+    if (room.selectionTimer) clearTimeout(room.selectionTimer);
+    startSelectionPhase(stake);
+  });
+  broadcastPoolUpdate();
+
+  res.json({ success: true, isGameRunning });
+});
+
+// ADMIN ENDPOINT: Gracefully stop the game engine
+app.post('/admin/stop-game', (req, res) => {
+  const { secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  if (!isGameRunning) return res.json({ success: true, isGameRunning, message: "Engine already idle" });
+
+  const hasLiveGames = Array.from(roomStates.values()).some(r => r.state === 'GAME');
+  
+  if (!hasLiveGames) {
+    // Stop immediately if no rounds are in progress
+    isGameRunning = false;
+    stopRequested = false;
+    roomStates.forEach(room => {
+      if (room.selectionTimer) {
+        clearTimeout(room.selectionTimer);
+        room.selectionTimer = undefined;
+      }
+    });
+    console.log("🛑 Admin stopped the game engine immediately.");
+    broadcastPoolUpdate();
+    const stopMsg = "Games are over for today. Please come back tomorrow to play!";
+    io.emit('game:stopped', stopMsg);
+    return res.json({ success: true, isGameRunning, message: stopMsg });
+  } else {
+    // Set flag to stop after current rounds finish
+    stopRequested = true;
+    console.log("🛑 Graceful stop requested. Waiting for rounds to finish.");
+    broadcastPoolUpdate();
+    return res.json({ success: true, isGameRunning, stopRequested, message: "Stop requested. Waiting for live rounds to finish." });
+  }
+});
+
 // Global Game State
 let totalVolume = 0;
 let totalProfit = 0;
 let isMaintenanceMode = false;
 let isGameRunning = false;
+let stopRequested = false;
 let activePlayers = 0;
 
-type GameState = 'LOBBY' | 'SELECTION' | 'GAME' | 'FINISHED';
+type GameState = 'SELECTION' | 'GAME' | 'FINISHED';
 
 interface RoomState {
   stake: number;
@@ -565,8 +622,9 @@ interface RoomState {
   globalPool: number;
   state: GameState;
   currentGameId: string;
-  isFirstGameDone: boolean;
   selectionTimer?: NodeJS.Timeout;
+  selectionStartTime?: number; // Timestamp when selection phase started
+  selectionDuration?: number; // Total duration of selection phase in ms
   playerBoards: Map<string, number[]>; // userId -> boardIds
   boardStatus: Map<number, string>; // boardId -> userId (concurrency control)
   gameLoopTimeout?: any;
@@ -585,8 +643,7 @@ STAKES.forEach(stake => {
     currentBalls: [],
     shuffledBalls: [],
     globalPool: 0,
-    state: 'LOBBY',
-    isFirstGameDone: false,
+    state: 'SELECTION',
     currentGameId: generateGameId(stake),
     playerBoards: new Map(),
     boardStatus: new Map(),
@@ -608,6 +665,8 @@ const verifiedUsers = new Set<string>();
 // If you find the server lagging, you can increase this to 5s or 10s
 const broadcastPoolUpdate = () => {
   const allRoomStats: Record<number, any> = {};
+  const engineActive = isGameRunning && !stopRequested;
+  
   STAKES.forEach(stake => {
     const room = roomStates.get(stake)!;
     allRoomStats[stake] = {
@@ -615,13 +674,15 @@ const broadcastPoolUpdate = () => {
       players: room.playerBoards.size,
       gameId: room.currentGameId,
       state: room.state,
-      isLive: room.state === 'GAME'
+      isLive: room.state === 'GAME',
+      isEngineActive: engineActive
     };
   });
 
   io.emit('game:pool_sync', {
     rooms: allRoomStats,
-    totalActive: activePlayers
+    totalActive: activePlayers,
+    isEngineActive: engineActive
   });
 };
 
@@ -708,13 +769,19 @@ const runGameLoop = (stake: number) => {
 };
 
 const startSelectionPhase = (stake: number) => {
+  if (stopRequested) {
+    console.log(`🚫 Prevented selection phase for stake ${stake} (stop requested).`);
+    return;
+  }
   const room = roomStates.get(stake)!;
+  const SELECTION_PHASE_DURATION_MS = 40000; // 40 seconds
   room.state = 'SELECTION';
-  room.isFirstGameDone = true;
+  room.selectionStartTime = Date.now();
+  room.selectionDuration = SELECTION_PHASE_DURATION_MS;
   broadcastPoolUpdate();
   
   // Start 40s "Quick Pick" window to finalize Total Players for this round
-  room.selectionTimer = setTimeout(() => {
+  room.selectionTimer = setTimeout(() => { // Store the timer reference
     room.state = 'GAME';
     room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
     broadcastPoolUpdate();
@@ -731,93 +798,29 @@ const resetGame = (stake: number) => {
   room.boardStatus.clear();
   room.currentGameId = generateGameId(stake);
   io.to(`room_${stake}`).emit('game:reset');
-
-  // Lobby-Bypass: If the first game of the day is done, go straight to selection
-  if (room.isFirstGameDone) {
-    startSelectionPhase(stake);
-  } else {
-    room.state = 'LOBBY';
+  
+  // Check if a stop was requested and no other rooms are still in a game
+  if (stopRequested) {
+    const hasLiveGames = Array.from(roomStates.values()).some(r => r.state === 'GAME');
+    if (!hasLiveGames) {
+      isGameRunning = false;
+      stopRequested = false;
+      console.log("🛑 Game engine stopped gracefully after round completion.");
+      broadcastPoolUpdate();
+      io.emit('game:stopped', 'Games are over for today. Please come back tomorrow to play!');
+      return;
+    }
   }
+
+  startSelectionPhase(stake);
   broadcastPoolUpdate();
 };
 
 // Game starts only when admin explicitly starts it.
 
-// =========================
-// Daily_State (persisted)
-// =========================
-const DailyStateModel = mongoose.model('DailyState', new mongoose.Schema({
-  dateKey: { type: String, unique: true, required: true },
-  state: { type: String, enum: ['LOBBY_LOCK', 'ACTIVE'], default: 'LOBBY_LOCK' },
-  firstGameCompletedAt: { type: Date, default: null }
-}));
-
-function getDailyDateKey(d: Date = new Date()) {
-  // UTC date key to avoid timezone drift
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
-async function getOrInitDailyState() {
-  const dateKey = getDailyDateKey();
-  const doc = await DailyStateModel.findOne({ dateKey }).lean();
-  if (doc) return doc;
-  const created = await DailyStateModel.create({ dateKey, state: 'LOBBY_LOCK', firstGameCompletedAt: null });
-  return created.toObject();
-}
-
-async function markDailyActive() {
-  const dateKey = getDailyDateKey();
-  await DailyStateModel.updateOne(
-    { dateKey },
-    { $set: { state: 'ACTIVE', firstGameCompletedAt: new Date() } },
-    { upsert: true }
-  );
-}
-
-// selection auto-assign constants
-const SELECTION_MAX_PICK = 10;
-
-function autoAssignBoards(stake: number) {
-  const room = roomStates.get(stake)!;
-  // only if still in selection phase
-  if (room.state !== 'SELECTION') return;
-
-
-  // Snapshot current availability
-  const availableBoards = [] as number[];
-  for (let id = 1; id <= 600; id++) {
-    if (!room.boardStatus.has(id)) availableBoards.push(id);
-  }
-  shuffle(availableBoards);
-
-  // Ensure each participating user has at least 1 board (or up to max) before GAME begins.
-  // This matches: Auto_Assign pick random available board(s) from remaining 600.
-  // Since current architecture stores user selection directly into room.playerBoards, we only fill missing picks.
-  room.playerBoards.forEach((boardIds, userId) => {
-    const current = new Set(boardIds);
-    while (current.size < SELECTION_MAX_PICK && availableBoards.length > 0) {
-      const nextId = availableBoards.pop()!;
-      if (room.boardStatus.has(nextId)) continue;
-      current.add(nextId);
-      room.boardStatus.set(nextId, userId);
-    }
-    room.playerBoards.set(userId, Array.from(current));
-  });
-
-  io.to(`room_${stake}`).emit('game:board_sync', {
-    takenBoards: Array.from(room.boardStatus.keys())
-  });
-}
-
 // Per-round winning payout modal timing etc will be addressed in later steps.
 
 dbPromise.then(async () => {
-  // initialize Daily_State once per server start
-  try {
-    await getOrInitDailyState();
-  } catch (e) {
-    console.error('DailyState init failed:', e);
-  }
   try {
     await syncCache(); // Ensure cache is synced after DB connection
 
@@ -834,7 +837,7 @@ dbPromise.then(async () => {
       room.globalPool = 0;
       room.playerBoards.clear();
       room.boardStatus.clear();
-      room.state = 'LOBBY';
+      room.state = 'SELECTION';
       room.currentGameId = generateGameId(stake);
     });
 
@@ -911,90 +914,71 @@ function registerSocketHandlers() {
     
     const room = roomStates.get(stake)!;
 
-    // Daily routing status for frontend:
-    // - isFirstGame === true => first game of the day should require lobby (player cap 10)
-    // - isFirstGame === false => lobby bypass, go straight to selection/game
-    const dailyState = await DailyStateModel.findOne({ dateKey: getDailyDateKey() }).lean();
-    const isFirstGame = dailyState?.firstGameCompletedAt ? false : true;
-
     socket.emit('game:init', {
       balls: room.currentBalls,
       gameId: room.currentGameId,
-      daily_status: { isFirstGame }
+      selectionTimeLeft: room.selectionStartTime && room.selectionDuration
+        ? Math.max(0, Math.ceil((room.selectionStartTime + room.selectionDuration - Date.now()) / 1000))
+        : 0,
+      takenBoards: Array.from(room.boardStatus.keys())
     });
   });
 
 
   // Concurrency-Controlled Board Selection
-  socket.on('game:pick_board', (data: { boardId: number; stake: number }) => {
+  socket.on('game:pick_board', async (data: { boardId: number; stake: number }) => {
     const room = roomStates.get(data.stake);
     if (!room || room.state !== 'SELECTION') return;
 
-    // Check if taken
+    const boardId = data.boardId;
+    const stakeAmount = data.stake;
+
+    const userRecord = await User.findOne({ userId });
+    if (!userRecord) return;
+
+    const currentSelected = room.playerBoards.get(userId) || [];
+    const isSwapping = currentSelected.length > 0 && !currentSelected.includes(boardId);
+    const isDeselecting = currentSelected.includes(boardId);
+    const isFirstSelection = currentSelected.length === 0;
+
+    // Check if taken by someone else
     const existingOwner = room.boardStatus.get(data.boardId);
     if (existingOwner && existingOwner !== userId) {
       return socket.emit('message', 'Board already taken, please choose another.');
     }
 
-    // Clear previous choice
-    room.boardStatus.forEach((owner, id) => {
-      if (owner === userId) room.boardStatus.delete(id);
-    });
-
-    // Assign new
-    room.boardStatus.set(data.boardId, userId);
-    room.playerBoards.set(userId, [data.boardId]);
+    if (isDeselecting) {
+      // Refund logic
+      userRecord.balance += stakeAmount;
+      await userRecord.save();
+      room.boardStatus.delete(boardId);
+      room.playerBoards.set(userId, []);
+      room.globalPool -= stakeAmount;
+      socket.emit('wallet:update', userRecord.balance);
+    } else if (isSwapping) {
+      // Swap logic: Make previous available, take new one
+      const oldId = currentSelected[0];
+      room.boardStatus.delete(oldId);
+      room.boardStatus.set(boardId, userId);
+      room.playerBoards.set(userId, [boardId]);
+    } else if (isFirstSelection) {
+      // New Selection logic: Check balance and deduct
+      if (userRecord.balance < stakeAmount) {
+        return socket.emit('message', 'Insufficient balance.');
+      }
+      userRecord.balance -= stakeAmount;
+      await userRecord.save();
+      room.boardStatus.set(boardId, userId);
+      room.playerBoards.set(userId, [boardId]);
+      room.globalPool += stakeAmount;
+      totalVolume += stakeAmount;
+      GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: stakeAmount } }, { upsert: true }).exec();
+      socket.emit('wallet:update', userRecord.balance);
+    }
     
     io.to(`room_${data.stake}`).emit('game:board_sync', {
       takenBoards: Array.from(room.boardStatus.keys())
     });
-  });
-
-  // Handle Betting/Joining Pool
-  socket.on('game:bet', async (data: { stake: number; boardIds: number[] }) => {
-    const roomStake = data.stake;
-    const room = roomStates.get(roomStake);
-
-    // Allow betting during LOBBY (to trigger game) or SELECTION (dynamic joining)
-    if (!room || (room.state !== 'LOBBY' && room.state !== 'SELECTION')) {
-      return socket.emit('message', 'Game is currently in progress. Please wait for the next round.');
-    }
-    
-    const userRecord = await User.findOne({ userId });
-    const currentBalance = userRecord?.balance || 0;
-
-    // SECURITY: Ensure user is verified before accepting bets
-    if (!userRecord?.isVerified) {
-      socket.emit('message', 'Please verify your account to place bets. Use /start in the bot to verify.');
-      return;
-    }
-    // SECURITY: Validate data and balance
-    if (currentBalance < data.stake) {
-      socket.emit('message', 'Insufficient balance to place bet.');
-      return;
-    }
-
-    // Deduct from wallet
-    const user = await User.findOneAndUpdate({ userId }, { $inc: { balance: -data.stake } }, { new: true });
-    if (user) {
-      socket.emit('wallet:update', user.balance);
-    }
-
-    room.playerBoards.set(userId, data.boardIds);
-    room.globalPool += data.stake;
-    totalVolume += data.stake;
-    // Persist volume to DB
-    GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: data.stake } }, { upsert: true }).exec();
-
-    console.log(`Bet received from ${userId}: ${data.stake} ETB in Room ${roomStake}`);
-    socket.join(`room_${roomStake}`);
-
-    // IMPROVEMENT: Reduced requirement from 10 to 1 for immediate functioning.
-    // In production, you can set this to 2 or more to ensure a multiplayer feel.
-    if (room.state === 'LOBBY' && room.playerBoards.size >= 1) {
-      startSelectionPhase(roomStake);
-    }
-
     broadcastPoolUpdate();
   });
 

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { Info, X, Trophy, RefreshCw } from 'lucide-react';
+import { Info, X, Trophy, RefreshCw, Clock } from 'lucide-react';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import SelectionPage from './components/SelectionPage';
@@ -42,7 +42,7 @@ export default function App() {
     return 'home';
   });
   const [bottomTab, setBottomTab] = useState<BottomTabKey>(() => {
-    const saved = localStorage.getItem('bingo_tab');
+    const saved = localStorage.getItem('bingo_tab') || 'game';
     const validTabs: BottomTabKey[] = ['game', 'history', 'wallet', 'profile'];
     if (saved && validTabs.includes(saved as BottomTabKey)) {
       return saved as BottomTabKey;
@@ -64,13 +64,21 @@ export default function App() {
       return [];
     }
   });
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('bingo_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [showRules, setShowRules] = useState(false);
   const [showGoodLuck, setShowGoodLuck] = useState(false);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string | undefined>(undefined);
   const [connectionError, setConnectionError] = useState(false);
   const [myId, setMyId] = useState<string>('');
+  const [showEngineIdleModal, setShowEngineIdleModal] = useState(false);
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
 
@@ -83,17 +91,24 @@ export default function App() {
     localStorage.setItem('bingo_tab', bottomTab);
     localStorage.setItem('bingo_stake', stake.toString());
     localStorage.setItem('bingo_selected_ids', JSON.stringify(selectedBoardIds));
-  }, [phase, bottomTab, stake, selectedBoardIds]);
+    localStorage.setItem('bingo_history', JSON.stringify(history));
+  }, [phase, bottomTab, stake, selectedBoardIds, history]);
 
   const currentRoomStats = allRoomStats[stake] || {
     pool: 0,
     players: 0,
     gameId: '---',
-    isLive: false
+    isLive: false,
+    isEngineActive: false
   };
 
   // Homepage Play uses only stake=10 and decides between selection vs watching.
   const handleHomePlay = () => {
+    if (!currentRoomStats.isEngineActive) {
+      setShowEngineIdleModal(true);
+      return;
+    }
+
     if (currentRoomStats.isLive) {
       setSelectedBoardIds([]); // watching-only
       setPhase('game');
@@ -121,19 +136,22 @@ export default function App() {
 
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: any) => {
-      if (data.rooms) setAllRoomStats(data.rooms);
-      if (data.totalActive !== undefined) setTotalActivePlayers(data.totalActive);
+      if (data.rooms) {
+        const rooms = { ...data.rooms };
+        Object.keys(rooms).forEach(k => {
+          rooms[k].isEngineActive = data.isEngineActive;
+        });
+        setAllRoomStats(rooms);
+      }
+      if (data.totalActive !== void 0) setTotalActivePlayers(data.totalActive);
     };
     const handleWinHistory = (history: any[]) => setWinningHistory(history);
     
     const handleInit = (data: any) => {
-      setAllRoomStats(prev => ({
-        ...prev,
-        [stake]: { ...prev[stake], gameId: data.gameId }
-      }));
-
-      // Removed the invalid 'lobby' phase redirect that caused blank screens.
-      // If a lobby is needed in the future, a corresponding UI component must be added to the render block.
+      setAllRoomStats(prev => {
+        const current = prev[stake] || {};
+        return { ...prev, [stake]: { ...current, gameId: data.gameId } };
+      });
     };
 
 
@@ -155,11 +173,13 @@ export default function App() {
       });
     };
 
-    const handleGameStopped = () => {
+    const handleGameStopped = (msg?: string) => {
+      if (msg) alert(msg);
+      setPhase('home');
       setAllRoomStats(prev => {
         const next = { ...prev };
         if (next[stake]) {
-          next[stake] = { ...next[stake], isLive: false };
+          next[stake] = { ...next[stake], isLive: false, isEngineActive: false };
         }
         return next;
       });
@@ -261,15 +281,6 @@ export default function App() {
       return;
     }
 
-    const totalCost = ids.length * stake;
-    if (wallet < totalCost) {
-      alert("Insufficient balance!");
-      return;
-    }
-
-    // Notify server of the bet
-    socket.emit('game:bet', { stake: totalCost, boardIds: ids });
-    
     setShowGoodLuck(true);
     setTimeout(() => {
       setShowGoodLuck(false);
@@ -362,10 +373,9 @@ export default function App() {
 
 
       <main 
-        className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-hidden ${
+        className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-hidden scroll-touch ${
           phase === 'game' ? 'pb-0' : 'pb-14'
         }`}
-        style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {/* Loading state while verification status is unknown */}
 
@@ -400,6 +410,39 @@ export default function App() {
             )}
           </motion.div>
         )}
+
+        {/* Engine Idle Modal */}
+        <AnimatePresence>
+          {showEngineIdleModal && (
+            <div className="fixed inset-0 z-[201] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="bg-white w-full max-w-xs rounded-[32px] p-6 shadow-2xl flex flex-col text-center"
+                >
+                  <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Clock className="text-indigo-600" size={32} />
+                  </div>
+                  
+                  <h3 className="text-xl font-black text-indigo-950 uppercase italic tracking-tighter mb-2">
+                    Game Starts Soon!
+                  </h3>
+                  
+                  <p className="text-gray-500 text-sm font-medium leading-relaxed mb-6">
+                    The admin is getting things ready. Please wait a moment for the round to begin.
+                  </p>
+
+                  <button 
+                    onClick={() => setShowEngineIdleModal(false)}
+                    className="px-6 py-3 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-colors"
+                  > 
+                    Got it
+                  </button>
+                </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence mode="wait">
           {isVerified === false && (
@@ -523,8 +566,8 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* Fallback to prevent blank pages if phase is corrupted */}
-          {!['home', 'selection', 'game', 'history', 'wallet', 'profile'].includes(phase) && (
+        {/* Fallback to prevent blank pages if phase is corrupted */}
+        {!['home', 'selection', 'game', 'history', 'wallet', 'profile'].includes(phase as any) && (
             <motion.div
               key="fallback"
               initial={{ opacity: 0 }}

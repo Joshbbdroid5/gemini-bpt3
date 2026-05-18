@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, Timer, ShoppingCart, ArrowLeft, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { TOTAL_BOARDS } from '../types';
 import { socket, socketEvents } from './socket';
 
@@ -24,17 +25,28 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   };
 
   useEffect(() => {
+    const handleGameInit = (data: { selectionTimeLeft?: number; takenBoards?: number[] }) => {
+      if (data.selectionTimeLeft !== undefined) {
+        setTimeLeft(data.selectionTimeLeft);
+      }
+      if (data.takenBoards) {
+        setTakenBoards(new Set(data.takenBoards));
+      }
+    };
+
     const handleBoardSync = (data: any) => {
       const taken = new Set<number>(data?.takenBoards ?? []);
       setTakenBoards(taken);
     };
+
+    socket.on(socketEvents.GAME_INIT, handleGameInit);
 
     socket.on(socketEvents.BOARD_SYNC, handleBoardSync);
     return () => {
       socket.off(socketEvents.BOARD_SYNC, handleBoardSync);
     };
   }, []);
-
+  
   // Local countdown (server finalizes at 40s). We keep UI responsive.
   useEffect(() => {
     const timer = setInterval(() => {
@@ -57,12 +69,24 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   }, [timeLeft, onComplete, selectedIds]);
 
   const handleSelect = (id: number) => {
+    const isCurrentlySelected = selectedIds.has(id);
+    const hasAnySelected = selectedIds.size > 0;
+
+    // Only block if this is the first board being selected and balance is too low
+    if (!isCurrentlySelected && !hasAnySelected && wallet < staked) {
+      toast.error("Insufficient balance!");
+      return;
+    }
+
+    // Emit the update to the server immediately
+    socket.emit(socketEvents.PICK_BOARD, { boardId: id, stake: staked });
+
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
+      if (isCurrentlySelected) {
         next.delete(id);
       } else {
-        next.clear(); // Enforce 1 board limit: clear previous and add new
+        next.clear(); // Enforce 1 board limit locally
         next.add(id);
       }
       return next;
@@ -137,13 +161,13 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
                   ${isSelected
                     ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
                     : takenBoards.has(id)
-                      ? 'bg-white/5 text-gray-500 border-white/5 cursor-not-allowed opacity-60'
+                      ? 'bg-red-900/20 text-white/10 border-red-500/40 border-dashed cursor-not-allowed'
                       : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
                   }
                 `}
                 disabled={!isSelected && takenBoards.has(id)}
               >
-                {!isSelected && (
+                {!isSelected && !takenBoards.has(id) && (
                   <div className="absolute top-0 right-0 w-3 h-3 bg-white/5 blur-sm rounded-full -translate-x-1 translate-y-1"></div>
                 )}
                 <span className="relative z-10">{id}</span>

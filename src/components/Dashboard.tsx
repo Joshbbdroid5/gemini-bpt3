@@ -3,12 +3,12 @@ import { StakeButton } from './StakeButton';
 
 interface Props {
   onPlay: (stake: number) => void;
-  allStats: Record<number, { players: number; isLive: boolean }>;
+  allStats: Record<number, { players: number; isLive: boolean; isEngineActive: boolean }>;
 }
 
 export default function Dashboard({ onPlay, allStats }: Props) {
   const stakeAmount = 10;
-  const stats = allStats[stakeAmount] || { players: 0, isLive: false };
+  const stats = allStats[stakeAmount] || { players: 0, isLive: false, isEngineActive: false };
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
@@ -32,6 +32,7 @@ export default function Dashboard({ onPlay, allStats }: Props) {
           amount={stakeAmount}
           players={stats.players}
           isLive={stats.isLive}
+          isEngineActive={stats.isEngineActive}
           onPlay={onPlay}
         />
       </div>

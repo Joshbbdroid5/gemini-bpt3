@@ -16,3 +16,8 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* Enable smooth momentum scrolling on iOS */
+.scroll-touch, .custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}

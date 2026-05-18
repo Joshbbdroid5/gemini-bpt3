@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Volume2, VolumeX, RefreshCw, LogOut } from 'lucide-react';
 import { generateBoard, WinningPattern } from '../logic';
@@ -13,31 +13,125 @@ interface Props {
   onGameEnd: (entry: HistoryEntry) => void;
 }
 
+const t = {
+  gameId: 'Game ID',
+  players: 'Players',
+  bet: 'Bet',
+  derash: 'Prize (60%)',
+  called: 'Called',
+  watchingOnly: 'Watching Only',
+  watchingText: 'The game has started. Please wait for the next round.',
+  leave: 'Leave',
+  refresh: 'Refresh',
+  winners: 'Winners',
+  playAgain: 'Play Again',
+  nextGameIn: 'Next game in',
+  boardNum: 'Board #',
+};
+
+const getLetter = (n: number) => {
+  if (n <= 15) return 'B';
+  if (n <= 30) return 'I';
+  if (n <= 45) return 'N';
+  if (n <= 60) return 'G';
+  return 'O';
+};
+
+const REGISTER_GRID_INDICES = Array.from({ length: 15 }).map((_, rowIndex) =>
+  [0, 1, 2, 3, 4].map(colIndex => (colIndex * 15) + rowIndex + 1)
+);
+
+const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, t }: { 
+  winner: any, 
+  winnersCount: number, 
+  totalPrize: number, 
+  calledNumbers: Set<number>,
+  t: any
+}) => {
+  const winningIndices = useMemo(() => new Set(
+    winner.patterns.flatMap((p: WinningPattern) => p.indices.map(i => `${i.r}-${i.c}`))
+  ), [winner.patterns]);
+
+  return (
+    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+      <div className="flex justify-between items-center mb-2">
+        <div className="flex flex-col">
+          <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
+            {t.boardNum}{winner.id}
+          </span>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {winner.patterns.map((p: WinningPattern, pIdx: number) => (
+              <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">
+                {p.name}
+              </span>
+            ))}
+          </div>
+        </div>
+        <span className="text-green-400 font-black italic">
+          {(totalPrize / winnersCount).toFixed(0)} ETB
+        </span>
+      </div>
+      <div className="grid grid-cols-5 gap-0.5">
+        {winner.grid.map((row: any, rIdx: number) =>
+          row.map((cell: any, cIdx: number) => {
+            const isMarkedWinner = typeof cell.value === 'number'
+              ? calledNumbers.has(cell.value)
+              : cell.value === 'FREE';
+            const isWinningCell = winningIndices.has(`${rIdx}-${cIdx}`);
+
+            return (
+              <div
+                key={`${rIdx}-${cIdx}`}
+                className={`
+                  aspect-square flex items-center justify-center text-[8px] font-bold rounded-sm border
+                  ${isWinningCell
+                    ? 'bg-yellow-400 text-indigo-950 border-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.4)]'
+                    : isMarkedWinner
+                      ? 'bg-green-600 border-transparent text-white'
+                      : 'bg-white/10 text-gray-600 border-transparent'}
+                `}
+              >
+                {cell.value === 'FREE' ? 'F' : cell.value}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+});
+
+const BoardCell = memo(({ value, isMarked, isCurrentBall, isPendingMark, onToggle }: {
+  value: number | 'FREE',
+  isMarked: boolean,
+  isCurrentBall: boolean,
+  isPendingMark: boolean,
+  onToggle: (num: number) => void
+}) => {
+  return (
+    <button 
+      onClick={() => typeof value === 'number' && onToggle(value)}
+      className={`
+        aspect-square flex items-center justify-center text-[12px] font-black rounded-md transition-all
+        ${isCurrentBall ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.6)] z-10 scale-110' : isMarked ? 'bg-green-600 text-white shadow-[0_0_10px_rgba(22,163,74,0.4)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}
+        ${isPendingMark ? 'ring-1 ring-yellow-400 animate-pulse' : ''}
+      `}
+    >
+      {value === 'FREE' ? 'F' : value}
+    </button>
+  );
+});
+
 export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, onLeaveToHome, onGameEnd }: Props) {
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
-  const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[] }[]>([]);
+  const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[]; payout: number }[]>([]);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [popupTimeLeft, setPopupTimeLeft] = useState(3);
   const [isMuted, setIsMuted] = useState(false);
   const [autoMarkMode, setAutoMarkMode] = useState(true);
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
-
-  const t = {
-    gameId: 'Game ID',
-    players: 'Players',
-    bet: 'Bet',
-    derash: 'Prize (60%)',
-    called: 'Called',
-    watchingOnly: 'Watching Only',
-    watchingText: 'The game has started. Please wait for the next round.',
-    leave: 'Leave',
-    refresh: 'Refresh',
-    winners: 'Winners',
-    playAgain: 'Play Again',
-    nextGameIn: 'Next game in',
-    boardNum: 'Board #',
-  };
+  const bingoAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [gameMetadata, setGameMetadata] = useState({
     pool: 0,
@@ -45,25 +139,67 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     gameId: '---'
   });
 
-  // Keep manual marks in sync with called numbers when auto mode is on
+  // Refs to prevent stale closures in socket handlers and prevent effect churn
+  const showWinnerPopupRef = useRef(showWinnerPopup);
+  const onRestartRef = useRef(onRestart);
+  const onGameEndRef = useRef(onGameEnd);
+  const selectedBoardIdsRef = useRef(selectedBoardIds);
+  const gameMetadataRef = useRef(gameMetadata);
+  const autoMarkModeRef = useRef(autoMarkMode);
+  const winnersRef = useRef(winners);
+
+  const calledNumbersRef = useRef(calledNumbers);
+  useEffect(() => {
+    calledNumbersRef.current = calledNumbers;
+  }, [calledNumbers]);
+
+  // Keep refs synchronized with state and props
+  useEffect(() => {
+    showWinnerPopupRef.current = showWinnerPopup;
+    onRestartRef.current = onRestart;
+    onGameEndRef.current = onGameEnd;
+    selectedBoardIdsRef.current = selectedBoardIds;
+    gameMetadataRef.current = gameMetadata;
+    autoMarkModeRef.current = autoMarkMode;
+    winnersRef.current = winners;
+  }, [showWinnerPopup, onRestart, onGameEnd, selectedBoardIds, gameMetadata, autoMarkMode, winners]);
+
+  // Pre-warm assets: Initialize and load audio on mount
+  useEffect(() => {
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3');
+    audio.load();
+    bingoAudioRef.current = audio;
+  }, []);
+
+  // Performance optimization: Sync manualMarks only when mode is toggled
   useEffect(() => {
     if (autoMarkMode) {
       setManualMarks(new Set(calledNumbers));
     }
-  }, [autoMarkMode, calledNumbers]);
+  }, [autoMarkMode]);
 
   // Handle incoming balls from server
   useEffect(() => {
     const handleNewBall = (num: number) => {
-      if (showWinnerPopup) return;
+      if (showWinnerPopupRef.current) return;
       setCurrentBall(num);
       setCalledNumbers((prev: Set<number>) => new Set(prev).add(num));
+      if (autoMarkModeRef.current) {
+        setManualMarks((prev: Set<number>) => new Set(prev).add(num));
+      }
     };
 
     const handleInit = (data: { balls: number[], gameId: string }) => {
-      setCalledNumbers(new Set(data.balls));
+      // Sort the incoming balls to ensure chronological order, especially for setCurrentBall
+      // and for consistent state if the server sends them unsorted.
+      const sortedBalls = [...data.balls].sort((a, b) => a - b);
+      const initialBalls = new Set(sortedBalls);
+      setCalledNumbers(initialBalls);
+      if (autoMarkModeRef.current) {
+        setManualMarks(new Set(initialBalls));
+      }
       setGameMetadata((prev: typeof gameMetadata) => ({ ...prev, gameId: data.gameId }));
-      if (data.balls.length > 0) setCurrentBall(data.balls[data.balls.length - 1]);
+      if (sortedBalls.length > 0) setCurrentBall(sortedBalls[sortedBalls.length - 1]);
     };
 
     const handlePoolUpdate = (data: { pool: number; players: number; gameId: string }) => {
@@ -71,10 +207,12 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     };
 
     const handleReset = () => {
-      // Clear local state when server starts a new round
       setCalledNumbers(new Set());
       setCurrentBall(null);
       setShowWinnerPopup(false);
+      setWinners([]);
+      setPopupTimeLeft(3);
+      setManualMarks(new Set());
     };
 
     const handleServerWinner = (winnerData: any) => {
@@ -90,7 +228,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
             grid: generateBoard(boardId),
             patterns: winnerData.patterns,
             payout: winnerData.payout,
-          } as any,
+          },
         ];
       });
       setShowWinnerPopup(true);
@@ -102,6 +240,11 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     socket.on(socketEvents.GAME_RESET, handleReset);
     socket.on(socketEvents.NEW_WINNER, handleServerWinner);
 
+    // Pre-warm Data: Request latest game state immediately upon mounting
+    // This ensures we have the correct ball history and game metadata
+    // if the game was already in progress or if we joined late.
+    socket.emit(socketEvents.JOIN_ROOM, stakedPerBoard); 
+
     return () => {
       socket.off(socketEvents.BALL_DRAWN, handleNewBall);
       socket.off(socketEvents.GAME_INIT, handleInit);
@@ -109,7 +252,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       socket.off(socketEvents.GAME_RESET, handleReset);
       socket.off(socketEvents.NEW_WINNER, handleServerWinner);
     };
-  }, [showWinnerPopup]);
+  }, []); // Bound once on mount, cleaned up once on unmount
   
   // Game Stats
   const stats: GameStats = useMemo(() => ({
@@ -129,9 +272,9 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
   // Play BINGO shout sound effect when winner popup appears
   useEffect(() => {
-    if (showWinnerPopup && !isMuted) {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3');
-      audio.play().catch(e => console.log('Audio playback prevented by browser:', e));
+    if (showWinnerPopup && !isMuted && bingoAudioRef.current) {
+      bingoAudioRef.current.currentTime = 0;
+      bingoAudioRef.current.play().catch(e => console.log('Audio playback prevented by browser:', e));
     }
   }, [showWinnerPopup, isMuted]);
 
@@ -139,43 +282,59 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   useEffect(() => {
     if (!showWinnerPopup) return;
 
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       setPopupTimeLeft((prev: number) => {
         if (prev <= 1) {
           clearInterval(timer);
-          onRestart();
+          
+          // Centralized recording logic
+          const currentWinners = winnersRef.current;
+          const isMyWin = currentWinners.some(w => selectedBoardIdsRef.current.includes(w.id));
+          
+          onGameEndRef.current({
+            gameId: gameMetadataRef.current.gameId,
+            date: new Date().toLocaleDateString(),
+            myBoardsCount: selectedBoardIdsRef.current.length,
+            totalWinners: currentWinners.length,
+            totalStaked: Math.round(gameMetadataRef.current.pool / 0.6),
+            payoutPerWinner: currentWinners.length > 0 ? gameMetadataRef.current.pool / currentWinners.length : 0,
+            isMyWin
+          });
+
+          onRestartRef.current();
           return 0;
         }
         return prev - 1;
       });
-    }, 1000);
+    }, 1000) as unknown as number;
 
     return () => clearInterval(timer);
-  }, [showWinnerPopup, onRestart]);
+  }, [showWinnerPopup]); 
 
-  const toggleMark = (num: number) => {
-    if (autoMarkMode || !calledNumbers.has(num)) return;
+  const toggleMark = useCallback((num: number) => {
+    if (autoMarkModeRef.current || !calledNumbersRef.current.has(num)) return;
     setManualMarks((prev: Set<number>) => {
       const next = new Set(prev);
       if (next.has(num)) next.delete(num);
       else next.add(num);
       return next;
     });
-  };
+  }, []);
 
-  const getLetter = (n: number) => {
-    if (n <= 15) return 'B';
-    if (n <= 30) return 'I';
-    if (n <= 45) return 'N';
-    if (n <= 60) return 'G';
-    return 'O';
-  };
+  const registerHeader = useMemo(() => (
+    <div className="grid grid-cols-5 gap-1 mb-1">
+      {['B', 'I', 'N', 'G', 'O'].map((l, i) => (
+        <div key={l} className={`text-center text-[12px] font-black py-1.5 rounded-sm ${
+          i === 0 ? 'bg-blue-500' : i === 1 ? 'bg-indigo-600' : i === 2 ? 'bg-purple-600' : i === 3 ? 'bg-green-600' : 'bg-orange-600'
+        }`}>{l}</div>
+      ))}
+    </div>
+  ), []);
 
-  const balls = Array.from(calledNumbers);
-  const historyBalls = balls.slice(-5, -1).reverse();
+  const historyBalls = useMemo(() => Array.from(calledNumbers).slice(-5, -1).reverse(), [calledNumbers]);
 
   return (
-    <div className="flex-1 flex flex-col bg-[#1a1b2e] text-white overflow-hidden select-none">
+    <div className="flex-1 flex flex-col bg-primary text-white overflow-hidden select-none">
       {/* Top Stats - 5 Columns */}
       <div className="grid grid-cols-5 gap-1 p-2 bg-[#2d2e4d]">
         <CompactStat label={t.gameId} value={stats.gameId.slice(0, 8)} />
@@ -189,36 +348,17 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       <div className="flex-1 flex overflow-hidden p-2 gap-2">
         {/* Left: 75-number Register */}
         <div className="w-[45%] h-full bg-[#2d2e4d] rounded-xl border border-white/10 p-1 flex flex-col">
-          <div className="grid grid-cols-5 gap-1 mb-1">
-            {['B', 'I', 'N', 'G', 'O'].map((l, i) => (
-              <div 
-                key={l} 
-                className={`
-                  text-center text-[12px] font-black py-1.5 rounded-sm
-                  ${i === 0 ? 'bg-blue-500' : i === 1 ? 'bg-indigo-600' : i === 2 ? 'bg-purple-600' : i === 3 ? 'bg-green-600' : 'bg-orange-600'}
-                `}
-              >
-                {l}
-              </div>
-            ))}
-          </div>
+          {registerHeader}
           <div className="flex-1 grid grid-cols-5 gap-1 overflow-hidden">
-            {Array.from({ length: 15 }).map((_, rowIndex: number) => (
-              ['B', 'I', 'N', 'G', 'O'].map((l, colIndex) => {
-                const num = (colIndex * 15) + rowIndex + 1;
-                const isCalled = calledNumbers.has(num);
-                return (
-                  <div 
-                    key={num} 
-                    className={`
-                      flex items-center justify-center text-[11px] font-bold rounded-sm border border-white/5
-                      ${isCalled ? (colIndex === 4 ? 'bg-orange-600 border-orange-400' : colIndex === 3 ? 'bg-green-600 border-green-400' : 'bg-indigo-600 border-indigo-400') : 'bg-white/5 text-gray-400'}
-                    `}
-                  >
-                    {num}
-                  </div>
-                );
-              })
+            {REGISTER_GRID_INDICES.map((row, rowIndex) => (
+              row.map((num, colIndex) => (
+                <RegisterCell 
+                  key={num} 
+                  num={num}
+                  colIndex={colIndex}
+                  isCalled={calledNumbers.has(num)}
+                />
+              ))
             ))}
           </div>
         </div>
@@ -295,19 +435,17 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                        {grid.map((row, rIdx: number) => row.map((cell: any, cIdx: number) => {
                          const isMarkedLocal = typeof cell.value === 'number' ? manualMarks.has(cell.value) : cell.value === 'FREE';
                          const isCurrentBall = typeof cell.value === 'number' && cell.value === currentBall;
+                         const isPendingMark = !autoMarkMode && typeof cell.value === 'number' && calledNumbers.has(cell.value) && !isMarkedLocal;
 
                          return (
-                           <button 
+                           <BoardCell 
                              key={`${rIdx}-${cIdx}`}
-                             onClick={() => typeof cell.value === 'number' && toggleMark(cell.value)}
-                             className={`
-                               aspect-square flex items-center justify-center text-[12px] font-black rounded-md transition-all
-                               ${isCurrentBall ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.6)] z-10 scale-110' : isMarkedLocal ? 'bg-green-600 text-white shadow-[0_0_10px_rgba(22,163,74,0.4)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}
-                               ${!autoMarkMode && typeof cell.value === 'number' && calledNumbers.has(cell.value) && !isMarkedLocal ? 'ring-1 ring-yellow-400 animate-pulse' : ''}
-                             `}
-                           >
-                             {cell.value === 'FREE' ? 'F' : cell.value}
-                           </button>
+                             value={cell.value}
+                             isMarked={isMarkedLocal}
+                             isCurrentBall={isCurrentBall}
+                             isPendingMark={isPendingMark}
+                             onToggle={toggleMark}
+                           />
                          );
                        }))}
                     </div>
@@ -321,7 +459,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
       {/* Footer Area */}
       <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d] border-t border-white/10">
-        <button onClick={onLeaveToHome} className="col-span-1 h-14 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center">
+        <button onClick={onLeaveToHome} className="col-span-1 h-14 rounded-xl bg-linear-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center">
           <LogOut size={16} />
           <span className="text-[8px] font-black uppercase">{t.leave}</span>
         </button>
@@ -340,7 +478,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       {/* Winner Popup */}
       <AnimatePresence>
         {showWinnerPopup && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-200 flex items-center justify-center p-4">
             <AnimatePresence>
               <motion.div
                 initial={window.Telegram?.WebApp ? false : { opacity: 0 }}
@@ -352,67 +490,24 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                 initial={window.Telegram?.WebApp ? false : { scale: 0.9, y: 20, opacity: 0 }}
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="relative bg-[#23243d] w-full max-w-sm rounded-[32px] border border-white/10 shadow-2xl overflow-hidden flex flex-col"
+                className="relative bg-[#23243d] w-full max-w-sm rounded-4xl border border-white/10 shadow-2xl overflow-hidden flex flex-col"
               >
                 <div className="bg-indigo-600 p-4 text-center">
                   <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" />
                   <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
                 </div>
                 <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                  <div style={{ WebkitOverflowScrolling: 'touch' }}>
-                    {winners.map((winner, idx: number) => {
-                    const winningIndices = new Set(
-                      winner.patterns.flatMap(p => p.indices.map(i => `${i.r}-${i.c}`))
-                    );
-
-                    return (
-                      <div key={idx} className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="flex flex-col">
-                            <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
-                              {t.boardNum}{winner.id}
-                            </span>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {winner.patterns.map((p: WinningPattern, pIdx: number) => (
-                                <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">
-                                  {p.name}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <span className="text-green-400 font-black italic">
-                            {(stats.derash / winners.length).toFixed(0)} ETB
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-5 gap-0.5">
-                          {winner.grid.map((row, rIdx: number) =>
-                            row.map((cell: any, cIdx: number) => {
-                              const isMarkedWinner = typeof cell.value === 'number'
-                                ? calledNumbers.has(cell.value)
-                                : cell.value === 'FREE';
-                              const isWinningCell = winningIndices.has(`${rIdx}-${cIdx}`);
-
-                              return (
-                                <div
-                                  key={`${rIdx}-${cIdx}`}
-                                  className={`
-                                    aspect-square flex items-center justify-center text-[8px] font-bold rounded-sm border
-                                    ${isWinningCell
-                                      ? 'bg-yellow-400 text-indigo-950 border-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.4)]'
-                                      : isMarkedWinner
-                                        ? 'bg-green-600 border-transparent text-white'
-                                        : 'bg-white/10 text-gray-600 border-transparent'}
-                                  `}
-                                >
-                                  {cell.value === 'FREE' ? 'F' : cell.value}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div>
+                    {winners.map((winner, idx: number) => (
+                      <WinnerCard 
+                        key={idx} 
+                        winner={winner} 
+                        winnersCount={winners.length} 
+                        totalPrize={stats.derash} 
+                        calledNumbers={calledNumbers}
+                        t={t}
+                      />
+                    ))}
                   </div>
                 </div>
                 <div className="p-4 flex flex-col items-center gap-2">
@@ -436,14 +531,27 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   );
 }
 
-function CompactStat({ label, value }: { label: string, value: string | number }) {
+const CompactStat = memo(({ label, value }: { label: string, value: string | number }) => {
   return (
     <div className="flex flex-col items-center justify-center bg-white/5 rounded-md py-1 border border-white/5">
        <span className="text-[9px] text-gray-400 font-black uppercase tracking-tight leading-none mb-0.5">{label}</span>
        <span className="text-[12px] font-black italic leading-none">{value}</span>
     </div>
   );
-}
+});
+
+const RegisterCell = memo(({ num, isCalled, colIndex }: { num: number, isCalled: boolean, colIndex: number }) => {
+  return (
+    <div 
+      className={`
+        flex items-center justify-center text-[11px] font-bold rounded-sm border border-white/5
+        ${isCalled ? (colIndex === 4 ? 'bg-orange-600 border-orange-400' : colIndex === 3 ? 'bg-green-600 border-green-400' : 'bg-indigo-600 border-indigo-400') : 'bg-white/5 text-gray-400'}
+      `}
+    >
+      {num}
+    </div>
+  );
+});
 
 function getBallColor(n: number) {
   if (n <= 15) return 'border-blue-500 text-blue-400';

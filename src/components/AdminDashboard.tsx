@@ -16,7 +16,7 @@ export default function AdminDashboard({ onBack }: Props) {
   const [secret, setSecret] = useState('');
   const [wallets, setWallets] = useState<Record<string, number>>({});
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [stats, setStats] = useState({ totalVolume: 0, totalProfit: 0, activeBets: 0, isMaintenanceMode: false });
+  const [stats, setStats] = useState({ totalVolume: 0, totalProfit: 0, activeBets: 0, isMaintenanceMode: false, isGameRunning: false, stopRequested: false });
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [adjustmentValues, setAdjustmentValues] = useState<Record<string, string>>({});
@@ -129,6 +129,50 @@ export default function AdminDashboard({ onBack }: Props) {
     }
   };
 
+  const handleStartEngine = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${backendUrl}/admin/start-game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(data.message || 'Game engine started!');
+        await fetchWallets(); // Refresh stats to reflect state change
+      } else {
+        toast.error(data.error || 'Failed to start engine');
+      }
+    } catch (err) {
+      toast.error('Connection error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStopEngine = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${backendUrl}/admin/stop-game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(data.message || 'Stop request sent');
+        await fetchWallets(); // Refresh stats to reflect state change
+      } else {
+        toast.error(data.error || 'Failed to stop engine');
+      }
+    } catch (err) {
+      toast.error('Connection error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredWallets = Object.entries(wallets).filter(([id]) => 
     id.toLowerCase().includes(search.toLowerCase())
   );
@@ -195,6 +239,44 @@ export default function AdminDashboard({ onBack }: Props) {
           >
             {stats.isMaintenanceMode ? 'Go Live' : 'Shut Down'}
           </button>
+        </div>
+
+        {/* Game Engine Control */}
+        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-full ${stats.isGameRunning ? (stats.stopRequested ? 'bg-orange-500' : 'bg-indigo-500') : 'bg-gray-600'} text-white`}>
+              <Activity size={20} />
+            </div>
+            <div>
+              <h3 className="text-white font-black uppercase text-xs tracking-wider">Game Engine</h3>
+              <p className="text-[10px] text-gray-400 uppercase font-bold">
+                {stats.isGameRunning ? (stats.stopRequested ? 'Stopping (Round Active)' : 'Engine Running') : 'Engine Idle'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {!stats.isGameRunning ? (
+              <button 
+                onClick={handleStartEngine}
+                disabled={loading}
+                className="px-6 py-2 rounded-xl font-black uppercase text-[10px] bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-900/20 transition-all disabled:opacity-50"
+              >
+                Start Engine
+              </button>
+            ) : (
+              <button 
+                onClick={handleStopEngine}
+                disabled={stats.stopRequested || loading}
+                className={`px-6 py-2 rounded-xl font-black uppercase text-[10px] transition-all ${
+                  stats.stopRequested 
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+                    : 'bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-900/20'
+                }`}
+              >
+                {stats.stopRequested ? 'Stopping...' : 'Stop Engine'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Force Start */}
