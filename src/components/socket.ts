@@ -25,7 +25,7 @@ export const socketEvents = {
 } as const;
 
 export interface ServerToClientEvents {
-  [socketEvents.USER_STATUS]: (status: { isVerified: boolean; phone?: string }) => void;
+  'user:status': (status: { isVerified: boolean; phone?: string }) => void;
   [socketEvents.GAME_INIT]: (data: any) => void;
   [socketEvents.GAME_STATUS]: (status: { isGameRunning: boolean; gameId: string }) => void;
   [socketEvents.GAME_STOPPED]: (msg?: string) => void;
@@ -40,9 +40,9 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  [socketEvents.JOIN_ROOM]: (roomId: number) => void;
-  [socketEvents.PICK_BOARD]: (data: { boardId: number; stake: number }) => void;
-  [socketEvents.FORCE_START]: () => void;
+  'room:join': (roomId: number) => void;
+  'game:pick_board': (data: { boardId: number; stake: number }) => void;
+  'game:force_start': () => void;
 }
 
 export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_URL, {

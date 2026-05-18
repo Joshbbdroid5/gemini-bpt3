@@ -382,7 +382,7 @@ export default function App() {
         {isVerified === null && (
           <motion.div
             key="loading"
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-150 bg-primary flex flex-col items-center justify-center p-8 text-center"
