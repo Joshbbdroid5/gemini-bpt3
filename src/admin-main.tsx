@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import AdminDashboard from './components/AdminDashboard';
 import './index.css';
+import ErrorBoundary from './ErrorBoundary';
 
 const ADMIN_ID = import.meta.env.VITE_ADMIN_CHAT_ID;
 
@@ -34,7 +35,11 @@ const AdminRoot = () => {
     );
   }
 
-  return <AdminDashboard onBack={() => { window.location.href = '/'; }} />;
+  return (
+    <ErrorBoundary fallback={<div className="fixed inset-0 z-150 bg-red-800 flex items-center justify-center text-white text-2xl">Admin application crashed! Please refresh.</div>}>
+      <AdminDashboard onBack={() => { window.location.href = '/'; }} />
+    </ErrorBoundary>
+  );
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<AdminRoot />);

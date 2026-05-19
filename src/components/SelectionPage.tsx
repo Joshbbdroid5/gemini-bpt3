@@ -25,13 +25,10 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   };
 
   useEffect(() => {
-    const handleGameInit = (data: { selectionTimeLeft?: number; takenBoards?: number[] }) => {
-      if (data.selectionTimeLeft !== undefined) {
-        setTimeLeft(data.selectionTimeLeft);
-      }
-      if (data.takenBoards) {
-        setTakenBoards(new Set(data.takenBoards));
-      }
+    const handleGameInit = (data: { gameId: string; balls: number[] }) => {
+      // Payload is { gameId, balls } per socket typing.
+      // Selection UI uses BOARD_SYNC for taken boards and local timer for countdown.
+      void data;
     };
 
     const handleBoardSync = (data: any) => {

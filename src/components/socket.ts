@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 
 // This URL will be updated once we deploy the Node.js server
-const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || window.location.origin;
+const SOCKET_URL: string = import.meta.env.VITE_BACKEND_URL || window.location.origin;
 
 export const socketEvents = {
   // Outgoing Events (Player -> Server)
@@ -26,7 +26,7 @@ export const socketEvents = {
 
 export interface ServerToClientEvents {
   [socketEvents.USER_STATUS]: (status: { isVerified: boolean; phone?: string }) => void;
-  [socketEvents.GAME_INIT]: (data: any) => void;
+  [socketEvents.GAME_INIT]: (data: { gameId: string; balls: number[] }) => void;
   [socketEvents.GAME_STATUS]: (status: { isGameRunning: boolean; gameId: string }) => void;
   [socketEvents.GAME_STOPPED]: (msg?: string) => void;
   [socketEvents.GAME_RESET]: () => void;
