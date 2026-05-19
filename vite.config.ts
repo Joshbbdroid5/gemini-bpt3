@@ -23,8 +23,7 @@ export default defineConfig(({mode}) => {
           main: path.resolve(__dirname, 'index.html'),
           admin: path.resolve(__dirname, 'admin.html'),
         },
-        // Ensure react-hot-toast is externalized to prevent build errors
-        external: ['react-hot-toast'],
+
       },
     },
   };
