@@ -377,6 +377,22 @@ export default function App() {
   
         <main className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-hidden scroll-touch ${phase === 'game' ? 'pb-0' : 'pb-14'}`}>
           <AnimatePresence mode="wait">
+            {/* Initial Loader: Prevents "Blank Black Page" while connecting to backend */}
+            {isVerified === null && !connectionError && (
+              <motion.div
+                key="loading-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-150 flex flex-col items-center justify-center bg-[#0f170a]"
+              >
+                <RefreshCw size={32} className="text-yellow-500/50 animate-spin mb-4" />
+                <p className="text-yellow-500/40 text-[10px] font-black uppercase tracking-[0.3em]">
+                  Connecting...
+                </p>
+              </motion.div>
+            )}
+
             {isVerified === false && (
               <motion.div
                 key="verify"
@@ -489,6 +505,24 @@ export default function App() {
             )}
           </AnimatePresence>
 
+          <AnimatePresence>
+            {connectionError && (
+              <motion.div
+                key="connection-error"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-150 bg-red-800 flex flex-col items-center justify-center p-8 text-center text-white"
+              >
+                <RefreshCw size={40} className="mb-6 animate-spin-slow" />
+                <h2 className="text-2xl font-black uppercase italic mb-2">Connection Lost</h2>
+                <p className="text-red-200 text-sm mb-8">
+                  Could not connect to the game server. Please check your internet connection or try again later.
+                </p>
+                <button onClick={() => window.location.reload()} className="w-full bg-white text-red-800 py-4 rounded-2xl font-black uppercase">Reload Page</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <AnimatePresence>
             {showGoodLuck && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-100 flex items-center justify-center p-6 bg-indigo-900/90 backdrop-blur-xl text-center">
