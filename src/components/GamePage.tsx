@@ -53,7 +53,7 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, t }:
   ), [winner.patterns]);
 
   return (
-    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+    <div key={winner.id} className="bg-white/5 p-3 rounded-2xl border border-white/5"> {/* Use winner.id as key */}
       <div className="flex justify-between items-center mb-2">
         <div className="flex flex-col">
           <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
@@ -181,7 +181,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   // Handle incoming balls from server
   useEffect(() => {
     const handleNewBall = (num: number) => {
-      if (showWinnerPopupRef.current) return;
+      if (showWinnerPopupRef.current) return; // Do not update if winner popup is active
       setCurrentBall(num);
       setCalledNumbers((prev: Set<number>) => new Set(prev).add(num));
       if (autoMarkModeRef.current) {
@@ -189,17 +189,16 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       }
     };
 
-    const handleInit = (data: { balls: number[], gameId: string }) => {
+    const handleInit = (data: { balls: number[]; gameId: string }) => {
       // Sort the incoming balls to ensure chronological order, especially for setCurrentBall
       // and for consistent state if the server sends them unsorted.
-      const sortedBalls = [...data.balls].sort((a, b) => a - b);
-      const initialBalls = new Set(sortedBalls);
+      const initialBalls = new Set(data.balls); // Preserve chronological order from server
       setCalledNumbers(initialBalls);
       if (autoMarkModeRef.current) {
-        setManualMarks(new Set(initialBalls));
+        setManualMarks(new Set(initialBalls)); // Auto-mark all initial balls
       }
       setGameMetadata((prev: typeof gameMetadata) => ({ ...prev, gameId: data.gameId }));
-      if (sortedBalls.length > 0) setCurrentBall(sortedBalls[sortedBalls.length - 1]);
+      if (data.balls.length > 0) setCurrentBall(data.balls[data.balls.length - 1]); // Set current ball to the last chronologically drawn
     };
 
     const handlePoolUpdate = (data: { pool: number; players: number; gameId: string }) => {
@@ -264,7 +263,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
   // Boards data
   const boardsData = useMemo(() => {
-    return selectedBoardIds.map(id => ({
+    return selectedBoardIds.map((id: number) => ({
       id,
       grid: generateBoard(id)
     }));
@@ -274,7 +273,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   useEffect(() => {
     if (showWinnerPopup && !isMuted && bingoAudioRef.current) {
       bingoAudioRef.current.currentTime = 0;
-      bingoAudioRef.current.play().catch(e => console.log('Audio playback prevented by browser:', e));
+      bingoAudioRef.current.play().catch((e: any) => console.log('Audio playback prevented by browser:', e));
     }
   }, [showWinnerPopup, isMuted]);
 
@@ -289,7 +288,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
           
           // Centralized recording logic
           const currentWinners = winnersRef.current;
-          const isMyWin = currentWinners.some(w => selectedBoardIdsRef.current.includes(w.id));
+          const isMyWin = currentWinners.some((w: any) => selectedBoardIdsRef.current.includes(w.id));
           
           onGameEndRef.current({
             gameId: gameMetadataRef.current.gameId,
@@ -331,7 +330,10 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     </div>
   ), []);
 
-  const historyBalls = useMemo(() => Array.from(calledNumbers).slice(-5, -1).reverse(), [calledNumbers]);
+  const historyBalls = useMemo(() => {
+    const allCalled = Array.from(calledNumbers);
+    return allCalled.filter(n => n !== currentBall).slice(-5).reverse(); // Last 5 called balls, excluding the current one, in reverse chronological order
+  }, [calledNumbers, currentBall]);
 
   return (
     <div className="flex-1 flex flex-col bg-primary text-white overflow-hidden select-none">
@@ -498,8 +500,8 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                 </div>
                 <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
                   <div>
-                    {winners.map((winner, idx: number) => (
-                      <WinnerCard 
+                    {winners.map((winner: any, idx: number) => (
+                      <WinnerCard
                         key={idx} 
                         winner={winner} 
                         winnersCount={winners.length} 

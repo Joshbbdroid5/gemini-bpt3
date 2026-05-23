@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-
+ // Defining props for the ErrorBoundary component
 interface Props {
   children?: ReactNode;
   fallback?: ReactNode; // Optional fallback UI prop
@@ -7,7 +7,7 @@ interface Props {
 
 interface State {
   hasError: boolean;
-}
+} // Defining state for the ErrorBoundary component
 
 class ErrorBoundary extends Component<Props, State> {
   public state: State = {
@@ -15,14 +15,13 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(_: Error): State {
-    // Update state so the next render will show the fallback UI.
+    // Update state so the next render will show the fallback UI. This static method is called after an error has been thrown by a descendant component.
     return { hasError: true };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
-    // You can also log the error to an error reporting service here
-    // For example: Sentry.captureException(error, { extra: errorInfo });
+    console.error("Uncaught error:", error, errorInfo); // Log the error to the console
+    // You can also log the error to an error reporting service here, e.g., Sentry.captureException(error, { extra: errorInfo });
   }
 
   public render() {

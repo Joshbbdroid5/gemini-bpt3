@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Wallet, Award, TrendingUp } from 'lucide-react';
+import { User, Wallet, Award, TrendingUp } from 'lucide-react'; // Importing necessary icons from lucide-react
 
 interface ProfilePageProps {
   telegramName: string;
@@ -11,10 +11,10 @@ interface ProfilePageProps {
 export default function ProfilePage({ telegramName, walletBalance, gamesWon, totalEarnings }: ProfilePageProps) {
   return (
     <div className="flex flex-col items-center p-6 bg-gray-900 text-white min-h-screen">
-      <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-4xl font-bold mb-4">
+      <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-4xl font-bold mb-4"> {/* User avatar placeholder */}
         <User size={48} />
       </div>
-      <h2 className="text-3xl font-black mb-6">@{telegramName}</h2>
+      <h2 className="text-3xl font-black mb-6">@{telegramName}</h2> {/* Display Telegram username */}
 
       <div className="w-full max-w-md bg-gray-800 rounded-2xl p-6 shadow-lg mb-6">
         <h3 className="text-xl font-bold mb-4">Your Stats</h3>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 // NOTE: This file previously triggered TS "Cannot find name 'div'" errors.
-// That error typically happens when the file is not treated as TSX.
+// That error typically happens when the file is not treated as TSX. This comment clarifies the previous issue.
 // Ensure the file extension is .tsx (it is) and keep JSX within the function return.
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -23,7 +23,7 @@ export default function AdminDashboard({ onBack }: Props) {
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [modalData, setModalData] = useState<{ userId: string; amount: number; type: 'add' | 'subtract' } | null>(null);
-
+ // Backend URL from environment variables, with a fallback for local development
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
   const fetchWallets = async () => {
@@ -32,7 +32,7 @@ export default function AdminDashboard({ onBack }: Props) {
       const healthUrl = `${backendUrl}/health`;
       // First: prove backend is reachable from the browser
       const healthResp = await fetch(healthUrl, { method: 'GET' });
-      if (!healthResp.ok) {
+      if (!healthResp.ok) { // Check if the health check response is not OK
         throw new Error(`Health check failed: ${healthResp.status} ${healthResp.statusText}`);
       }
 
@@ -48,7 +48,7 @@ export default function AdminDashboard({ onBack }: Props) {
         setWallets(data.wallets);
         setStats(data.stats);
         setIsAuthenticated(true);
-      } else {
+      } else { // Handle unauthorized or server errors
         toast.error(`Unauthorized or server error (${response.status})`);
       }
     } catch (err) {
@@ -64,7 +64,7 @@ export default function AdminDashboard({ onBack }: Props) {
     let intervalId: NodeJS.Timeout;
     if (isAuthenticated) {
       intervalId = setInterval(() => {
-        fetchWallets();
+        fetchWallets(); // Periodically refresh wallet data
       }, 30000); // Refresh every 30 seconds
     }
     return () => {
@@ -73,7 +73,7 @@ export default function AdminDashboard({ onBack }: Props) {
   }, [isAuthenticated, secret, backendUrl]); // Re-run effect if isAuthenticated or secret changes
 
   const triggerUpdateBalance = (userId: string, amount: number, type: 'add' | 'subtract') => {
-    if (isNaN(amount) || amount <= 0) return; // Ensure amount is positive for modal display
+    if (isNaN(amount) || amount <= 0) return; // Validate amount: must be a positive number
     setModalData({ userId, amount, type });
     setShowConfirmModal(true);
   };
@@ -88,7 +88,7 @@ export default function AdminDashboard({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, amount, secret })
-      });
+      }); // Send request to update wallet balance
 
       if (response.ok) {
         // Clear the input for this user
@@ -96,7 +96,7 @@ export default function AdminDashboard({ onBack }: Props) {
         // Refresh the list to show new balance
         await fetchWallets(); //
         toast.success(`${type === 'add' ? 'Added' : 'Subtracted'} ${amount} ETB ${type === 'add' ? 'to' : 'from'} ${userId}`);
-      } else {
+      } else { // Handle errors from the server
         const errorData = await response.json();
         toast.error(`Failed: ${errorData.error || 'Server error'}`);
       }
@@ -116,7 +116,7 @@ export default function AdminDashboard({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret, enabled: nextState })
-      });
+      }); // Send request to toggle maintenance mode
 
       if (response.ok) {
         const data = await response.json();
@@ -136,7 +136,7 @@ export default function AdminDashboard({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret })
-      });
+      }); // Send request to start game engine
       const data = await response.json();
       if (response.ok) {
         toast.success(data.message || 'Game engine started!');
@@ -158,7 +158,7 @@ export default function AdminDashboard({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret })
-      });
+      }); // Send request to stop game engine
       const data = await response.json();
       if (response.ok) {
         toast.success(data.message || 'Stop request sent');
@@ -179,7 +179,7 @@ export default function AdminDashboard({ onBack }: Props) {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-primary">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-primary"> {/* Login screen for admin access */}
         <Shield size={48} className="text-indigo-500 mb-4" />
         <h2 className="text-xl font-black text-white uppercase italic mb-6 text-center">Admin Access</h2>
         <input 
@@ -189,7 +189,7 @@ export default function AdminDashboard({ onBack }: Props) {
           placeholder="Enter Admin Secret"
           className="w-full max-w-xs bg-white/5 border border-white/10 rounded-xl p-4 text-white text-center mb-4"
         />
-        <button 
+        <button
           onClick={fetchWallets}
           className="w-full max-w-xs bg-indigo-600 text-white py-4 rounded-xl font-black uppercase"
         >
@@ -203,7 +203,7 @@ export default function AdminDashboard({ onBack }: Props) {
   return (
     <>
     <div className="flex-1 flex flex-col bg-primary overflow-hidden">
-      <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
+      <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between"> {/* Header for the admin dashboard */}
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-2 bg-white/5 rounded-full" aria-label="Go back"><ArrowLeft size={18} /></button>
           <h2 className="font-black text-white uppercase italic">Wallet Manager</h2>
@@ -215,7 +215,7 @@ export default function AdminDashboard({ onBack }: Props) {
 
       {/* System Controls */}
       <div className="px-4 pt-4">
-        <div className={`p-4 rounded-2xl border flex items-center justify-between transition-colors ${
+        <div className={`p-4 rounded-2xl border flex items-center justify-between transition-colors ${ // Maintenance mode toggle
           stats.isMaintenanceMode
             ? 'bg-red-500/10 border-red-500/30' 
             : 'bg-green-500/10 border-green-500/30'
@@ -229,7 +229,7 @@ export default function AdminDashboard({ onBack }: Props) {
               <p className="text-[10px] text-gray-400 uppercase font-bold">{stats.isMaintenanceMode ? 'System Paused - Bets Blocked' : 'System Live - Accepting Bets'}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={handleToggleMaintenance}
             className={`px-6 py-2 rounded-xl font-black uppercase text-[10px] transition-all ${
               stats.isMaintenanceMode 
@@ -242,7 +242,7 @@ export default function AdminDashboard({ onBack }: Props) {
         </div>
 
         {/* Game Engine Control */}
-        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-between">
+        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-between"> {/* Game engine control */}
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-full ${stats.isGameRunning ? (stats.stopRequested ? 'bg-orange-500' : 'bg-indigo-500') : 'bg-gray-600'} text-white`}>
               <Activity size={20} />
@@ -255,7 +255,7 @@ export default function AdminDashboard({ onBack }: Props) {
             </div>
           </div>
           <div className="flex gap-2">
-            {!stats.isGameRunning ? (
+            {!stats.isGameRunning ? ( // Render Start Engine button if not running
               <button 
                 onClick={handleStartEngine}
                 disabled={loading}
@@ -263,7 +263,7 @@ export default function AdminDashboard({ onBack }: Props) {
               >
                 Start Engine
               </button>
-            ) : (
+            ) : ( // Render Stop Engine button if running
               <button 
                 onClick={handleStopEngine}
                 disabled={stats.stopRequested || loading}
@@ -280,7 +280,7 @@ export default function AdminDashboard({ onBack }: Props) {
         </div>
 
         {/* Force Start */}
-        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5">
+        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5"> {/* Force start game button */}
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="text-white font-black uppercase text-xs tracking-wider">Force Start</h3>
@@ -302,7 +302,7 @@ export default function AdminDashboard({ onBack }: Props) {
       </div>
 
       {/* Summary Cards */}
-      <div className="px-4 pt-4 grid grid-cols-3 gap-2">
+      <div className="px-4 pt-4 grid grid-cols-3 gap-2"> {/* Summary statistics cards */}
         <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-3">
           <div className="flex items-center gap-2 mb-1">
             <Activity size={14} className="text-indigo-400" />
@@ -327,7 +327,7 @@ export default function AdminDashboard({ onBack }: Props) {
       </div>
 
       <div className="p-4">
-        <div className="relative">
+        <div className="relative"> {/* Search input for user IDs */}
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
           <input 
             value={search}
@@ -339,7 +339,7 @@ export default function AdminDashboard({ onBack }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {filteredWallets.map(([id, balance]) => (
+        {filteredWallets.map(([id, balance]) => ( // Map through filtered wallets to display each user's data
           <div key={id} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
@@ -353,14 +353,14 @@ export default function AdminDashboard({ onBack }: Props) {
             </div>
 
             {/* Quick Adjustment Controls */}
-            <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+            <div className="flex items-center gap-2 pt-2 border-t border-white/5"> {/* Balance adjustment controls */}
               <div className="relative flex-1">
                 <input 
                   type="number"
                   placeholder="Adjustment amount..."
                   value={adjustmentValues[id] || ''}
                   onChange={(e) => setAdjustmentValues(prev => ({ ...prev, [id]: e.target.value }))}
-                  className="w-full bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-indigo-500" // Input for adjustment amount
                 />
               </div>
               <div className="flex gap-1">
@@ -368,13 +368,13 @@ export default function AdminDashboard({ onBack }: Props) {
                   onClick={() => triggerUpdateBalance(id, Math.abs(Number(adjustmentValues[id])), 'subtract')}
                   disabled={isUpdating === id || !adjustmentValues[id]}
                   className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 disabled:opacity-30"
-                  aria-label="Decrease Balance"
+                  aria-label="Decrease Balance" // Button to decrease balance
                 ><Minus size={14} /></button>
                 <button 
                   onClick={() => triggerUpdateBalance(id, Math.abs(Number(adjustmentValues[id])), 'add')}
                   disabled={isUpdating === id || !adjustmentValues[id]}
                   className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 disabled:opacity-30"
-                  aria-label="Increase Balance"
+                  aria-label="Increase Balance" // Button to increase balance
                 ><Plus size={14} /></button>
               </div>
             </div>
@@ -385,7 +385,7 @@ export default function AdminDashboard({ onBack }: Props) {
     <Toaster position="bottom-center" />
 
     {/* Confirmation Modal */}
-    <AnimatePresence>
+    <AnimatePresence> {/* Animate presence for the confirmation modal */}
       {showConfirmModal && modalData && (
         <motion.div
           initial={{ opacity: 0 }}

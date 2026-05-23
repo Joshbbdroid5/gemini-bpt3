@@ -86,7 +86,13 @@ export default function App() {
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
 
   const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
-  const [totalActivePlayers, setTotalActivePlayers] = useState(0);
+  const [totalActivePlayers, setTotalActivePlayers] = useState(0); // State to track total active players across all rooms
+
+  // Use a ref for stake to avoid stale closures in socket handlers
+  const stakeRef = useRef(stake);
+  useEffect(() => {
+    stakeRef.current = stake;
+  }, [stake]);
 
   // Persist navigation state to localStorage
   useEffect(() => {
@@ -97,7 +103,7 @@ export default function App() {
     localStorage.setItem('bingo_history', JSON.stringify(history));
   }, [phase, bottomTab, stake, selectedBoardIds, history]);
 
-  const currentRoomStats = allRoomStats[stake] || {
+  const currentRoomStats = allRoomStats[stake] || { // Get stats for the current stake room, or default values
     pool: 0,
     players: 0,
     gameId: '---',
@@ -110,13 +116,13 @@ export default function App() {
     if (!currentRoomStats.isEngineActive) {
       setShowEngineIdleModal(true);
       return;
-    }
+    } // Show modal if game engine is not active
 
     if (currentRoomStats.isLive) {
       setSelectedBoardIds([]); // watching-only
       setPhase('game');
       return;
-    }
+    } // If game is live, go to game page in watching-only mode
     setPhase('selection');
   };
 
@@ -130,7 +136,7 @@ export default function App() {
   useEffect(() => {
     // Wake up the backend (Render cold start mitigation)
     const backendUrl = import.meta.env.VITE_BACKEND_URL || window.location.origin;
-    fetch(`${backendUrl}/health`).catch((e) => console.error("Backend health check failed:", e)); // Simple poke, added error logging
+    fetch(`${backendUrl}/health`).catch((e) => console.error("Backend health check failed:", e)); // Simple poke to wake up backend, with error logging
 
     const handleStatus = (status: { isVerified: boolean; phone?: string }) => {
       setIsVerified(status.isVerified);
@@ -139,7 +145,7 @@ export default function App() {
 
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: any) => {
-      if (data.rooms) {
+      if (data.rooms) { // Update all room stats if provided
         const rooms: Record<string, any> = { ...data.rooms };
         Object.keys(rooms).forEach((k) => {
           rooms[k].isEngineActive = data.isEngineActive;
@@ -149,11 +155,11 @@ export default function App() {
       if (data.totalActive !== void 0) setTotalActivePlayers(data.totalActive);
     };
     const handleWinHistory = (history: any[]) => setWinningHistory(history);
-    
+
     const handleInit = (data: { gameId: string; balls: number[] }) => {
       setAllRoomStats(prev => {
-        const current = prev[stake] || {};
-        return { ...prev, [stake]: { ...current, gameId: data.gameId } };
+        const current = prev[stakeRef.current] || {};
+        return { ...prev, [stakeRef.current]: { ...current, gameId: data.gameId } };
       });
     };
 
@@ -167,8 +173,8 @@ export default function App() {
     const handleGameStatus = (status: { isGameRunning: boolean; gameId: string }) => {
       setAllRoomStats((prev) => {
         const next = { ...prev };
-        next[stake] = {
-          ...next[stake],
+        next[stakeRef.current] = {
+          ...next[stakeRef.current],
           gameId: status.gameId,
           isLive: status.isGameRunning,
         };
@@ -177,19 +183,19 @@ export default function App() {
     };
 
     const handleGameStopped = (msg?: string) => {
-      if (msg) alert(msg);
+      if (msg) alert(msg); // Show message if provided
       setPhase('home');
       setAllRoomStats(prev => {
         const next = { ...prev };
-        if (next[stake]) {
-          next[stake] = { ...next[stake], isLive: false, isEngineActive: false };
+        if (next[stakeRef.current]) {
+          next[stakeRef.current] = { ...next[stakeRef.current], isLive: false, isEngineActive: false };
         }
         return next;
       });
     };
 
     socket.on(socketEvents.USER_STATUS, handleStatus);
-    socket.on(socketEvents.WALLET_UPDATE, handleWallet);
+    socket.on(socketEvents.WALLET_UPDATE, handleWallet); // Listen for wallet updates
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.GAME_INIT, handleInit);
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
@@ -197,7 +203,7 @@ export default function App() {
     socket.on(socketEvents.GAME_RESET, () => { 
       // Only auto-redirect if the user was actually in a game or selection
       // This prevents users browsing their Profile/History from being yanked away
-      setPhase(prev => {
+      setPhase(prev => { // Reset phase and selected boards on game reset
         if (prev === 'game' || prev === 'selection') {
           setSelectedBoardIds([]);
           return 'selection';
@@ -208,7 +214,7 @@ export default function App() {
     socket.on(socketEvents.GAME_STATUS, handleGameStatus);
     socket.on(socketEvents.GAME_STOPPED, (msg?: string) => handleGameStopped(msg));
     socket.on('connect_error', handleConnectError);
-
+    // Set a timeout to catch connection failures
     // Set a timeout to catch connection failures
     const timeoutId = setTimeout(() => {
       // Hard fallback: prevent permanent overlay when socket events never arrive.
@@ -224,7 +230,7 @@ export default function App() {
     // Add cleanup to prevent memory leaks and duplicate listeners
     const cleanup = () => {
       socket.off(socketEvents.USER_STATUS, handleStatus);
-      socket.off(socketEvents.WALLET_UPDATE, handleWallet);
+      socket.off(socketEvents.WALLET_UPDATE, handleWallet); // Remove wallet update listener
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
       socket.off(socketEvents.GAME_INIT, handleInit);
       socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
@@ -237,7 +243,7 @@ export default function App() {
     };
 
     const tg = window.Telegram?.WebApp;
-    if (tg) {
+    if (tg) { // Check if Telegram WebApp is available
       tg.expand(); // Open full screen in Telegram
       const user = tg.initDataUnsafe?.user;
       if (user?.id) setMyId(user.id.toString());
@@ -245,9 +251,9 @@ export default function App() {
       connectToGame({
 
         initData: tg.initData,
-        user: user
+        user: user // Pass Telegram user data to connectToGame
       });
-      socket.emit('room:join', 10); // Default to room 10
+      socket.emit('room:join', stake); // Join the correct initial room
     } else {
 
       // Fallback for browser testing
@@ -257,8 +263,8 @@ export default function App() {
         guestId = `guest_${Math.floor(1000 + Math.random() * 9000)}`;
         localStorage.setItem('bingoGuestId', guestId);
       }
-      connectToGame({ userId: guestId });
-      socket.emit('room:join', 10);
+      connectToGame({ userId: guestId }); // Connect as guest user
+      socket.emit('room:join', stake); // Join the correct initial room
       setMyId(guestId); // Set myId for guest users
     }
     return () => {
@@ -269,12 +275,12 @@ export default function App() {
 
   const startSelection = () => {
     // If game is already live, send user directly to GamePage in watching-only mode.
-    if (currentRoomStats.isLive) {
+    if (currentRoomStats.isLive) { // Check if the game is currently live
       setSelectedBoardIds([]);
       setPhase('game');
       return;
     }
-
+    // Otherwise, allow board selection and betting.
     // Otherwise, allow board selection and betting.
     setPhase('selection');
   };
@@ -283,7 +289,7 @@ export default function App() {
     setSelectedBoardIds(ids);
 
     // Prevent playing if not verified
-    if (!isVerified) {
+    if (!isVerified) { // Check if the user is verified
       alert("Please verify your phone number in the bot first!");
       return;
     }
@@ -297,7 +303,7 @@ export default function App() {
 
   const handleTopUp = (amount: number) => {
     if (!IS_BOT_CONFIGURED) {
-      alert(`Configuration Error: VITE_TELEGRAM_BOT_USERNAME is not set (Current: ${BOT_USERNAME})`);
+      alert(`Configuration Error: VITE_TELEGRAM_BOT_USERNAME is not set (Current: ${BOT_USERNAME})`); // Alert if bot username is not configured
       return;
     }
     if (window.Telegram?.WebApp) {
@@ -311,7 +317,7 @@ export default function App() {
 
   const handleDeposit = () => {
     if (!IS_BOT_CONFIGURED) return alert("Bot username not set. Please check Render Environment variables.");
-    if (window.Telegram?.WebApp) {
+    if (window.Telegram?.WebApp) { // Open Telegram link for deposit
        window.Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=deposit`);
     } else {
        window.open(`https://t.me/${BOT_USERNAME}?start=deposit`, '_blank');
@@ -320,7 +326,7 @@ export default function App() {
 
   const handleWithdraw = () => {
     if (!IS_BOT_CONFIGURED) return alert("Bot username not set. Please check Render Environment variables.");
-    if (window.Telegram?.WebApp) {
+    if (window.Telegram?.WebApp) { // Open Telegram link for withdrawal
        window.Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=withdraw`);
     } else {
        window.open(`https://t.me/${BOT_USERNAME}?start=withdraw`, '_blank');
@@ -334,7 +340,7 @@ export default function App() {
   };
 
   const handleBackToHome = useCallback(() => {
-    setPhase('home');
+    setPhase('home'); // Set phase to home
     setBottomTab('game'); // Ensure the tab highlight moves back to the "Game/Play" tab
   }, []);
 
@@ -342,11 +348,11 @@ export default function App() {
     (tab: BottomTabKey) => {
       setBottomTab(tab);
 
-      if (tab === 'game') {
+      if (tab === 'game') { // Handle navigation to game tab
         // If user is in selection, keep it. Otherwise go to game.
         if (phase === 'selection') return;
         setPhase('game');
-      } else if (tab === 'history') {
+      } else if (tab === 'history') { // Handle navigation to history tab
         setPhase('history');
       } else if (tab === 'wallet') {
         setPhase('wallet' as any);
@@ -359,7 +365,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
-    <ErrorBoundary fallback={<div className="fixed inset-0 z-150 bg-red-800 flex items-center justify-center text-white text-2xl">Application crashed! Please refresh.</div>}>
+    <ErrorBoundary fallback={<div className="fixed inset-0 z-150 bg-red-800 flex items-center justify-center text-white text-2xl">Application crashed! Please refresh.</div>}> {/* ErrorBoundary for the entire app */}
         {/* Animated background overlay for transitions */}
         <AnimatePresence>
           <motion.div
@@ -372,7 +378,7 @@ export default function App() {
           />
         </AnimatePresence>
 
-     
+
         {phase !== 'selection' && phase !== 'game' && <Header onShowRules={() => setShowRules(true)} />}
   
         <main className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-hidden scroll-touch ${phase === 'game' ? 'pb-0' : 'pb-14'}`}>
@@ -383,7 +389,7 @@ export default function App() {
                 key="loading-overlay"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: 0 }} // Animation for loading overlay
                 className="fixed inset-0 z-150 flex flex-col items-center justify-center bg-[#0f170a]"
               >
                 <RefreshCw size={32} className="text-yellow-500/50 animate-spin mb-4" />
@@ -394,7 +400,7 @@ export default function App() {
             )}
 
             {isVerified === false && (
-              <motion.div
+              <motion.div // Verification required overlay
                 key="verify"
                 className="fixed inset-0 z-150 bg-primary flex flex-col items-center justify-center p-8 text-center"
               >
@@ -415,7 +421,7 @@ export default function App() {
             )}
 
               {phase === 'home' && (
-              <motion.div
+              <motion.div // Home page content
                 key="home"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -430,7 +436,7 @@ export default function App() {
             )}
 
             {phase === 'game' && (
-              <motion.div
+              <motion.div // Game page content
                 key="game"
                 initial={{ y: 300, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -447,7 +453,7 @@ export default function App() {
             )}
 
             {phase === 'history' && (
-              <motion.div
+              <motion.div // History page content
                 key="history"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -459,7 +465,7 @@ export default function App() {
             )}
 
             {phase === 'wallet' && (
-              <motion.div
+              <motion.div // Wallet page content
                 key="wallet"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -477,7 +483,7 @@ export default function App() {
             )}
 
             {phase === 'profile' && (
-              <motion.div
+              <motion.div // Profile page content
                 key="profile"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -494,7 +500,7 @@ export default function App() {
             )}
 
             {!VALID_PHASES.includes(phase as any) && (
-              <motion.div
+              <motion.div // Fallback for invalid phases
                 key="fallback"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -507,7 +513,7 @@ export default function App() {
 
           <AnimatePresence>
             {connectionError && (
-              <motion.div
+              <motion.div // Connection error overlay
                 key="connection-error"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -523,7 +529,7 @@ export default function App() {
               </motion.div>
             )}
           </AnimatePresence>
-          <AnimatePresence>
+          <AnimatePresence> {/* Animate presence for modals */}
             {showGoodLuck && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-100 flex items-center justify-center p-6 bg-indigo-900/90 backdrop-blur-xl text-center">
                 <motion.div initial={{ scale: 0.8, y: 20 }} animate={{ scale: 1, y: 0 }} className="flex flex-col items-center">
@@ -541,7 +547,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {showEngineIdleModal && (
+            {showEngineIdleModal && ( // Game engine idle modal
               <div className="fixed inset-0 z-201 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
                 <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-xs rounded-4xl p-6 shadow-2xl flex flex-col text-center">
                   <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -554,8 +560,7 @@ export default function App() {
               </div>
             )}
 
-{showRules && (
-            
+            {showRules && ( // Game rules modal
               
               <div className="fixed inset-0 z-101 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
                 <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl flex flex-col">

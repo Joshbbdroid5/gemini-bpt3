@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { History, ArrowLeft, Trophy, Users, Wallet, Calendar, ShoppingCart, RotateCcw, RefreshCw } from 'lucide-react';
+import { History, ArrowLeft, Trophy, Users, Wallet, Calendar, ShoppingCart, RotateCcw, RefreshCw } from 'lucide-react'; // Importing necessary icons from lucide-react
 import { ReactNode } from 'react';
 import { HistoryEntry } from '../types';
 
@@ -29,14 +29,14 @@ export default function HistoryPage({ history, onBack }: Props) {
     <div className="flex-1 flex flex-col bg-transparent overflow-hidden">
       {/* Header Section */}
       <div className="p-6 bg-black/20 border-b border-white/10 flex flex-col gap-1 relative">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2"> {/* Header with back and refresh buttons */}
           <div className="flex items-center gap-4">
         <button 
           onClick={onBack}
           className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors"
           aria-label={t.back}
         >
-          <ArrowLeft size={20} className="text-gray-400" />
+          <ArrowLeft size={20} className="text-gray-400" /> {/* Back button icon */}
           </button>
           <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">{t.gameHistory}</h2>
           </div>
@@ -44,7 +44,7 @@ export default function HistoryPage({ history, onBack }: Props) {
             onClick={() => window.location.reload()}
             className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 active:scale-90 transition-all"
             aria-label="Refresh"
-          >
+          > {/* Refresh button */}
             <RefreshCw size={20} className="text-lime-400" />
           </button>
         </div>
@@ -55,7 +55,7 @@ export default function HistoryPage({ history, onBack }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' }}>
-        {history.length === 0 ? (
+        {history.length === 0 ? ( // Conditional rendering for empty history
           <div className="flex flex-col items-center justify-center h-full text-center p-10 opacity-30">
             <History size={48} className="text-gray-300 mb-4" />
             <p className="font-bold text-gray-400 uppercase tracking-widest text-xs">{t.noGames}</p>
@@ -67,7 +67,7 @@ export default function HistoryPage({ history, onBack }: Props) {
                 {t.recentGames}
               </h3>
             </div>
-            {history.slice().reverse().map((entry, idx) => (
+            {history.slice().reverse().map((entry, idx) => ( // Map through history entries, reversed for most recent first
             <motion.div
               key={idx}
               initial={{ x: -20, opacity: 0 }}

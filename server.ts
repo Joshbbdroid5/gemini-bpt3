@@ -12,6 +12,8 @@ import { Markup } from 'telegraf';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import mongoose, { Error as MongooseError } from 'mongoose';
+import logger from './src/logger';
+import client from 'prom-client';
 
 dotenv.config();
 
@@ -21,6 +23,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const server = http.createServer(app);
+
+// Prometheus Monitoring Setup
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
+
+const httpRequestDurationMicroseconds = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'code'],
+  buckets: [0.01, 0.05, 0.1, 0.2, 0.5, 1, 2]
+});
+register.registerMetric(httpRequestDurationMicroseconds);
 
 // Configure CORS for Socket.io
 let io: SocketIOServer; // Declare io here, initialize after DB connection
@@ -38,6 +52,18 @@ const corsOptions = {
   }
 };
 
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    httpRequestDurationMicroseconds.observe(
+      { method: req.method, route: req.route?.path || req.path, code: res.statusCode },
+      duration
+    );
+  });
+  next();
+});
+
 app.use(cors(corsOptions.cors)); // Match REST API CORS policy to Socket.io
 app.use(express.json());
 
@@ -48,32 +74,30 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo'
 
 // Debugging: Check for essential environment variables
 if (!ADMIN_SECRET) {
-  console.error('❌ CRITICAL: ADMIN_SECRET is not set in environment variables!');
+  logger.error('CRITICAL: ADMIN_SECRET is not set in environment variables!');
 }
 
 // MongoDB Connection
 if (process.env.NODE_ENV === 'production' && MONGODB_URI.includes('localhost')) {
-  console.warn('WARNING: MONGODB_URI is pointing to localhost in production. Ensure your environment variables are set on Render.');
+  logger.warn('MONGODB_URI is pointing to localhost in production. Ensure environment variables are set on Render.');
 }
 
-console.log('Attempting to connect to MongoDB...');
+logger.info('Attempting to connect to MongoDB...');
 const dbPromise = mongoose.connect(MONGODB_URI, {
   serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of hanging
 })
   .then((conn) => {
-    console.log(`✅ Connected to MongoDB: ${conn.connection.host}`);
-    console.log(`📂 Database Name: ${conn.connection.name}`);
+    logger.info(`Connected to MongoDB: ${conn.connection.host}`, { dbName: conn.connection.name });
     return conn;
   })
   .catch(err => {
-    console.error('❌ MongoDB Connection Error Details:');
+    logger.error('MongoDB Connection Error Details', { error: err.message });
     if (err.message.includes('auth')) {
-      console.error('👉 TIP: Authentication failed. Check your password in MONGODB_URI. (URL-encode special characters like @ to %40)');
+      logger.info('TIP: Authentication failed. Check your password in MONGODB_URI.');
     }
     if (err.message.includes('port number') && MONGODB_URI.startsWith('mongodb+srv')) {
-      console.error('👉 TIP: SRV connection strings (mongodb+srv://) must not include a port number. Remove ":27017" or any other port from your URI string in Render.');
+      logger.info('TIP: SRV connection strings must not include a port number.');
     }
-    console.error(`Error Message: ${err.message}`);
     throw err; // Re-throw to prevent further initialization
   });
 
@@ -137,6 +161,41 @@ const userSchema = new mongoose.Schema<IUser>({
 });
 const User = mongoose.model<IUser>('User', userSchema);
 
+// GameState enum for Mongoose schema
+enum GameStateEnum {
+  SELECTION = 'SELECTION',
+  GAME = 'GAME',
+  FINISHED = 'FINISHED',
+}
+
+// RoomState Schema for persistence
+interface IRoomState {
+  stake: number;
+  currentBalls: number[];
+  shuffledBalls: number[];
+  globalPool: number;
+  state: GameStateEnum;
+  currentGameId: string;
+  selectionStartTime?: number;
+  selectionDuration?: number;
+  playerBoards: Map<string, number[]>;
+  boardStatus: Map<string, string>;
+}
+
+const roomStateSchema = new mongoose.Schema<IRoomState>({
+  stake: { type: Number, required: true, unique: true },
+  currentBalls: { type: [Number], default: [] },
+  shuffledBalls: { type: [Number], default: [] },
+  globalPool: { type: Number, default: 0 },
+  state: { type: String, enum: Object.values(GameStateEnum), default: GameStateEnum.SELECTION },
+  currentGameId: { type: String, required: true },
+  selectionStartTime: { type: Number },
+  selectionDuration: { type: Number },
+  playerBoards: { type: Map, of: [Number], default: new Map() },
+  boardStatus: { type: Map, of: String, default: new Map() },
+});
+const RoomStateModel = mongoose.model<IRoomState>('RoomState', roomStateSchema);
+
 // Archive Schema for Auditing
 const gameArchiveSchema = new mongoose.Schema({
   gameId: String,
@@ -170,16 +229,25 @@ async function syncCache() {
   try {
     const users = await User.find({}).lean(); // lean() makes queries much faster for read-only sync
     users.forEach(u => userWallets.set(u.userId, u.balance));
-    console.log(`Wallet cache synced: ${users.length} users loaded.`);
+    logger.info(`Wallet cache synced: ${users.length} users loaded.`);
 
     // Sync Global Stats
        const stats = await GlobalStats.findOne({ key: 'main_stats' }).lean();
     if (stats) {
       totalVolume = stats.totalVolume;
       totalProfit = stats.totalProfit;
-    } else await GlobalStats.create({ key: 'main_stats', totalVolume: 0, totalProfit: 0 }); // Ensure stats exist
+    } else {
+      await GlobalStats.create({ key: 'main_stats', totalVolume: 0, totalProfit: 0 }); // Ensure stats exist
+    }
+
+    // Load existing room states from DB
+    const existingRoomStates = await RoomStateModel.find({});
+    existingRoomStates.forEach(roomDoc => {
+      roomStates.set(roomDoc.stake, roomDoc);
+      // Re-initialize timers if needed, based on roomDoc.state and timestamps
+    });
   } catch (err) {
-    console.error('Failed to sync cache from MongoDB:', err);
+    logger.error('Failed to sync cache from MongoDB', { error: err });
   }
 }
 
@@ -215,6 +283,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
+
 // ADMIN ENDPOINT: Create or update user record (used for referrals)
 app.post('/admin/create-user', async (req, res) => {
   const { userId, referredBy, secret } = req.body;
@@ -228,11 +301,11 @@ app.post('/admin/create-user', async (req, res) => {
       { upsert: true, new: true }
     );
     if (ADMIN_CHAT_ID) {
-      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `👤 <b>New User Created:</b> <code>${userId}</code>${referredBy ? ` (Referred by: ${referredBy})` : ''}`, { parse_mode: 'HTML' }).catch(console.error);
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `👤 <b>New User Created:</b> <code>${userId}</code>${referredBy ? ` (Referred by: ${referredBy})` : ''}`, { parse_mode: 'HTML' }).catch(e => logger.error('Admin notify error', { error: e }));
     }
     res.json({ success: true, user });
   } catch (err) {
-    console.error("User Creation Error:", err);
+    logger.error("User Creation Error", { error: err, userId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -306,6 +379,7 @@ app.post('/admin/update-wallet', async (req, res) => {
       { upsert: true, new: true, runValidators: true }
     );
 
+    if (user) userWallets.set(userId, user.balance); // Update in-memory cache
     // REFERRAL LOGIC: Reward the inviter with 5% of the deposit
     if (user?.referredBy) {
       const bonus = amount * 0.05;
@@ -337,11 +411,11 @@ app.post('/admin/update-wallet', async (req, res) => {
     await Promise.all([
       notifyUser(userId, `🎊 <b>Payment Approved!</b>\nYour balance has been updated with <b>${amount} ETB</b>. Good luck!`),
       ADMIN_CHAT_ID ? adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `✅ <b>Approval Log:</b> User <code>${userId}</code> credited with ${amount} ETB.`, { parse_mode: 'HTML' }) : Promise.resolve()
-    ]).catch(console.error);
+    ]).catch(e => logger.error('Approval notification failed', { error: e }));
 
     res.json({ success: true, newBalance: user?.balance });
   } catch (err) {
-    console.error("Wallet Update Error:", err); // Log the real error
+    logger.error("Wallet Update Error", { error: err, userId }); // Log the real error
     if (err instanceof MongooseError) {
       return res.status(400).json({ error: 'Database operation failed', details: err.message });
     }
@@ -381,7 +455,7 @@ app.post('/admin/withdraw-request', async (req, res) => {
             [Markup.button.callback('✅ Paid', `w_paid_${amount}_${userId}`), Markup.button.callback('❌ Reject & Refund', `w_ref_${amount}_${userId}`)],
           ])
         }
-      ).catch(e => console.error("Admin notify error:", e));
+      ).catch(e => logger.error("Admin notify error", { error: e }));
     }
     res.json({ success: true, newBalance: user.balance });
   } catch (err) {
@@ -474,12 +548,12 @@ app.post('/admin/verify-user', async (req, res) => {
     }
 
     if (ADMIN_CHAT_ID) {
-      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `📱 <b>User Registered:</b> <code>${userId}</code> has verified phone: <code>${phone}</code>`, { parse_mode: 'HTML' }).catch(console.error);
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `📱 <b>User Registered:</b> <code>${userId}</code> has verified phone: <code>${phone}</code>`, { parse_mode: 'HTML' }).catch(e => logger.error('Admin registration notify error', { error: e }));
     }
 
     res.json({ success: true, isNewUser: !existingUser?.phone });
   } catch (err) {
-    console.error("Verification Route Error:", err); // Log the real error
+    logger.error("Verification Route Error", { error: err, userId }); // Log the real error
     res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : String(err) });
   }
 });
@@ -496,7 +570,7 @@ app.get('/admin/user-info', async (req, res) => {
     }
     res.json({ balance: user.balance, isVerified: user.isVerified });
   } catch (err) {
-    console.error("User Info Fetch Error:", err);
+    logger.error("User Info Fetch Error", { error: err, userId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -536,7 +610,7 @@ app.post('/admin/toggle-maintenance', (req, res) => {
   isMaintenanceMode = enabled;
 
   if (wasMaintenance && !isMaintenanceMode) {
-    console.log("Maintenance mode deactivated. Resuming game loops for all rooms...");
+    logger.info("Maintenance mode deactivated. Resuming game loops.");
     STAKES.forEach(stake => {
       const room = roomStates.get(stake);
       if (room && room.gameLoopTimeout) {
@@ -559,7 +633,7 @@ app.post('/admin/start-game', (req, res) => {
   
   isGameRunning = true;
   stopRequested = false;
-  console.log("🚀 Admin started the game engine.");
+  logger.info("Admin started the game engine.");
   
   STAKES.forEach(stake => {
     const room = roomStates.get(stake)!;
@@ -591,7 +665,7 @@ app.post('/admin/stop-game', (req, res) => {
         room.selectionTimer = undefined;
       }
     });
-    console.log("🛑 Admin stopped the game engine immediately.");
+    logger.info("Admin stopped the game engine immediately.");
     broadcastPoolUpdate();
     const stopMsg = "Games are over for today. Please come back tomorrow to play!";
     io.emit('game:stopped', stopMsg);
@@ -599,7 +673,7 @@ app.post('/admin/stop-game', (req, res) => {
   } else {
     // Set flag to stop after current rounds finish
     stopRequested = true;
-    console.log("🛑 Graceful stop requested. Waiting for rounds to finish.");
+    logger.info("Graceful stop requested. Waiting for rounds to finish.");
     broadcastPoolUpdate();
     return res.json({ success: true, isGameRunning, stopRequested, message: "Stop requested. Waiting for live rounds to finish." });
   }
@@ -625,6 +699,8 @@ interface RoomState {
   selectionTimer?: NodeJS.Timeout;
   selectionStartTime?: number; // Timestamp when selection phase started
   selectionDuration?: number; // Total duration of selection phase in ms
+  selectionStartTime?: number;
+  selectionDuration?: number;
   playerBoards: Map<string, number[]>; // userId -> boardIds
   boardStatus: Map<number, string>; // boardId -> userId (concurrency control)
   gameLoopTimeout?: any;
@@ -649,6 +725,21 @@ STAKES.forEach(stake => {
     boardStatus: new Map(),
   });
 });
+// Type alias for clarity, referencing the enum
+type GameState = GameStateEnum;
+
+// STAKES.forEach(stake => {
+//   roomStates.set(stake, {
+//     stake,
+//     currentBalls: [],
+//     shuffledBalls: [],
+//     globalPool: 0,
+//     state: GameStateEnum.SELECTION,
+//     currentGameId: generateGameId(stake),
+//     playerBoards: new Map(),
+//     boardStatus: new Map(),
+//   });
+// });
 
 const socketMapping = new Map<string, string>(); // userId -> socketId
 
@@ -698,7 +789,9 @@ function shuffle(array: number[]) {
 const runGameLoop = (stake: number) => {
   const room = roomStates.get(stake)!;
 
-  if (!isGameRunning || room.state !== 'GAME') return;
+  if (!isGameRunning || room.state !== GameStateEnum.GAME) {
+    return;
+  }
 
   if (room.currentBalls.length < room.shuffledBalls.length) {
     const ball = room.shuffledBalls[room.currentBalls.length];
@@ -713,7 +806,7 @@ const runGameLoop = (stake: number) => {
           const grid = boardsCache.get(boardId);
           const win = checkWin(grid, new Set(room.currentBalls) as any);
           
-          if (win.isWinner) {
+          if (win.isWinner && !room.boardStatus.get(boardId.toString())) { // Ensure board hasn't been claimed by another winner
             winnersThisRound.push({
               userId,
               boardId,
@@ -724,7 +817,7 @@ const runGameLoop = (stake: number) => {
       });
 
       if (winnersThisRound.length > 0) {
-        room.state = 'FINISHED';
+        room.state = GameStateEnum.FINISHED;
         const totalPayout = room.globalPool * 0.6; // 60% to players
         const houseShare = room.globalPool * 0.4; // 40% to house
         
@@ -734,6 +827,7 @@ const runGameLoop = (stake: number) => {
         const splitPayout = totalPayout / winnersThisRound.length;
 
         winnersThisRound.forEach(async (w) => {
+          room.boardStatus.set(w.boardId.toString(), w.userId); // Mark board as won
           const winnerInfo = {
             ...w,
             payout: splitPayout,
@@ -755,9 +849,12 @@ const runGameLoop = (stake: number) => {
             houseRake: houseShare,
             ballsDrawn: room.currentBalls
           });
+          }).catch(e => logger.error('Game completion processing error', { error: e }));
         });
+        room.markModified('boardStatus'); // Mark Map as modified for Mongoose
       }
     }
+    } // End of if (room.currentBalls.length < room.shuffledBalls.length)
 
   if (room.state === 'FINISHED' || room.currentBalls.length >= 75) {
     // 3-second winner declaration window as requested for the rapid-fire loop
@@ -766,6 +863,7 @@ const runGameLoop = (stake: number) => {
   }
 
   room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 3000);
+  room.save().catch(console.error); // Persist state changes
 };
 
 const startSelectionPhase = (stake: number) => {
@@ -774,8 +872,11 @@ const startSelectionPhase = (stake: number) => {
     return;
   }
   const room = roomStates.get(stake)!;
+  const room = roomStates.get(stake);
+  if (!room) return; // Should not happen if initialized correctly
   const SELECTION_PHASE_DURATION_MS = 40000; // 40 seconds
   room.state = 'SELECTION';
+  room.state = GameStateEnum.SELECTION;
   room.selectionStartTime = Date.now();
   room.selectionDuration = SELECTION_PHASE_DURATION_MS;
   broadcastPoolUpdate();
@@ -783,19 +884,22 @@ const startSelectionPhase = (stake: number) => {
   // Start 40s "Quick Pick" window to finalize Total Players for this round
   room.selectionTimer = setTimeout(() => { // Store the timer reference
     room.state = 'GAME';
+    room.state = GameStateEnum.GAME;
     room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
     broadcastPoolUpdate();
     runGameLoop(stake);
   }, 40000);
+  room.save().catch(e => logger.error('Room selection start save error', { error: e, stake })); // Persist state changes
 };
 
 const resetGame = (stake: number) => {
-  const room = roomStates.get(stake)!;
+  const room = roomStates.get(stake);
+  if (!room) return; // Should not happen if initialized correctly
   room.currentBalls = [];
   room.shuffledBalls = [];
   room.globalPool = 0;
   room.playerBoards.clear();
-  room.boardStatus.clear();
+  room.boardStatus.clear(); // Clear board status for new game
   room.currentGameId = generateGameId(stake);
   io.to(`room_${stake}`).emit('game:reset');
   
@@ -805,14 +909,20 @@ const resetGame = (stake: number) => {
     if (!hasLiveGames) {
       isGameRunning = false;
       stopRequested = false;
-      console.log("🛑 Game engine stopped gracefully after round completion.");
+      isGameRunning = false; // Stop engine
+      stopRequested = false; // Clear stop request
+      logger.info("Game engine stopped gracefully after round completion.");
       broadcastPoolUpdate();
       io.emit('game:stopped', 'Games are over for today. Please come back tomorrow to play!');
       return;
+    } else {
     }
   }
 
   startSelectionPhase(stake);
+  room.markModified('playerBoards'); // Mark Map as modified for Mongoose
+  room.markModified('boardStatus'); // Mark Map as modified for Mongoose
+  room.save().catch(e => logger.error('Room reset save error', { error: e, stake })); // Persist state changes
   broadcastPoolUpdate();
 };
 
@@ -823,46 +933,47 @@ const resetGame = (stake: number) => {
 dbPromise.then(async () => {
   try {
     await syncCache(); // Ensure cache is synced after DB connection
-
     io = new SocketIOServer(server, corsOptions); // Initialize Socket.io after DB is ready
-    registerSocketHandlers();
-
-    // Wait for admin to START the game via /admin/start-game.
-    // Game loops will not run until isGameRunning=true.
-    STAKES.forEach(stake => {
-      const room = roomStates.get(stake)!;
-      // Ensure room is idle on startup.
-      room.currentBalls = [];
-      room.shuffledBalls = [];
-      room.globalPool = 0;
-      room.playerBoards.clear();
-      room.boardStatus.clear();
-      room.state = 'SELECTION';
-      room.currentGameId = generateGameId(stake);
-    });
+    registerSocketHandlers(io); // Pass io to the handler
+    for (const stake of STAKES) {
+      let room = roomStates.get(stake);
+      if (!room) {
+        // Create new room state if it doesn't exist
+        room = await RoomStateModel.create({
+          stake,
+          currentGameId: generateGameId(stake),
+          state: GameStateEnum.SELECTION,
+        });
+        roomStates.set(stake, room);
+      }
+      // If game was in progress, restart selection phase or game loop
+      if (room.state === GameStateEnum.GAME || room.state === GameStateEnum.SELECTION) {
+        // For now, always reset to selection phase on startup
+        resetGame(stake);
+      }
+    }
 
     await Promise.all([
       mainBot.launch(),
       adminBot.launch()
     ]);
-    console.log("✅ User and Admin Bots initialized");
+    logger.info("User and Admin Bots initialized");
     
     const adminId = process.env.ADMIN_CHAT_ID;
     if (adminId) {
       adminBot.telegram.sendMessage(adminId, "🚀 <b>Bots Online</b>\nThe game server and both bots have started successfully.", { parse_mode: 'HTML' })
-        .catch(e => console.error("Failed to send startup message to admin:", e.message));
+        .catch(e => logger.error("Failed to send startup message to admin", { error: e.message }));
     }
   } catch (err) {
-    console.error("Failed to start application services:", err);
+    logger.error("Failed to start application services", { error: err });
   }
 }).catch(err => {
-  console.error("Critical: Application failed to start due to MongoDB connection failure.");
+  logger.error("Critical: Application failed to start due to MongoDB connection failure", { error: err });
 });
-
-// Socket.io Logic
-function registerSocketHandlers() {
+// Socket.io Logic (now accepts io as argument)
+function registerSocketHandlers(io: SocketIOServer) {
   io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.id}`);
+    logger.info(`User connected: ${socket.id}`);
 
   const { initData, user, userId: fallbackId } = socket.handshake.auth;
   let userId = fallbackId || `guest_${socket.id.substring(0, 4)}`;
@@ -872,14 +983,14 @@ function registerSocketHandlers() {
     userId = user?.id?.toString() || userId;
     isVerified = true;
     verifiedUsers.add(userId); // Mark user as verified if Telegram data is valid
-    console.log(`Verified Telegram User: ${user?.first_name} (@${user?.username})`);
+    logger.info(`Verified Telegram User: ${user?.first_name}`, { username: user?.username });
   } else {
-    console.log(`Unverified connection using ID: ${userId}`);
+    logger.info(`Unverified connection using ID: ${userId}`);
     // For development/testing, you might want to auto-verify guests:
     // verifiedUsers.add(userId);
   }
 
-  console.log(`Authenticated as: ${userId}`);
+  logger.debug(`Authenticated as: ${userId}`);
   socketMapping.set(userId, socket.id);
 
   // Fetch or Create User in DB
@@ -900,7 +1011,7 @@ function registerSocketHandlers() {
     }
     socket.emit('wallet:update', currentBalance);
     socket.emit('user:status', { isVerified: isUserVerified, phone: user?.phone });
-  }).catch(err => console.error(`Error fetching/creating user for socket ${socket.id}:`, err));
+  }).catch(err => logger.error(`Error fetching/creating user for socket ${socket.id}`, { error: err }));
   
   activePlayers++;
   broadcastPoolUpdate();
@@ -936,7 +1047,9 @@ function registerSocketHandlers() {
     const userRecord = await User.findOne({ userId });
     if (!userRecord) return;
 
-    const currentSelected = room.playerBoards.get(userId) || [];
+    // Ensure playerBoards is initialized as a Map if it's a plain object from DB
+    if (!(room.playerBoards instanceof Map)) room.playerBoards = new Map(Object.entries(room.playerBoards));
+    const currentSelected = room.playerBoards.get(userId)?.map(String) || []; // Convert to string for comparison
     const isSwapping = currentSelected.length > 0 && !currentSelected.includes(boardId);
     const isDeselecting = currentSelected.includes(boardId);
     const isFirstSelection = currentSelected.length === 0;
@@ -950,31 +1063,35 @@ function registerSocketHandlers() {
     if (isDeselecting) {
       // Refund logic
       userRecord.balance += stakeAmount;
-      await userRecord.save();
-      room.boardStatus.delete(boardId);
+      room.boardStatus.delete(boardId.toString());
       room.playerBoards.set(userId, []);
       room.globalPool -= stakeAmount;
-      socket.emit('wallet:update', userRecord.balance);
     } else if (isSwapping) {
       // Swap logic: Make previous available, take new one
       const oldId = currentSelected[0];
-      room.boardStatus.delete(oldId);
-      room.boardStatus.set(boardId, userId);
-      room.playerBoards.set(userId, [boardId]);
+      room.boardStatus.delete(oldId.toString());
+      room.boardStatus.set(boardId.toString(), userId);
+      room.playerBoards.set(userId, [parseInt(boardId, 10)]);
     } else if (isFirstSelection) {
       // New Selection logic: Check balance and deduct
       if (userRecord.balance < stakeAmount) {
         return socket.emit('message', 'Insufficient balance.');
       }
       userRecord.balance -= stakeAmount;
-      await userRecord.save();
-      room.boardStatus.set(boardId, userId);
-      room.playerBoards.set(userId, [boardId]);
+      room.boardStatus.set(boardId.toString(), userId);
+      room.playerBoards.set(userId, [parseInt(boardId, 10)]);
       room.globalPool += stakeAmount;
       totalVolume += stakeAmount;
       GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: stakeAmount } }, { upsert: true }).exec();
-      socket.emit('wallet:update', userRecord.balance);
     }
+    await userRecord.save().catch(e => logger.error('User record save error on board pick', { error: e, userId })); // Save user balance once
+
+    await userRecord.save().catch(e => logger.error('User record save error on board pick (re-save)', { error: e, userId }));
+    room.markModified('playerBoards'); // Mark Map as modified for Mongoose
+    room.markModified('boardStatus'); // Mark Map as modified for Mongoose
+    await room.save().catch(e => logger.error('Room save error on board pick', { error: e, stake: data.stake })); // Persist room state changes
+
+    socket.emit('wallet:update', userRecord.balance); // Ensure wallet update is sent after save
     
     io.to(`room_${data.stake}`).emit('game:board_sync', {
       takenBoards: Array.from(room.boardStatus.keys())
@@ -983,7 +1100,7 @@ function registerSocketHandlers() {
   });
 
     socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.id}`);
+      logger.info(`User disconnected: ${socket.id}`);
       socketMapping.delete(userId);
       activePlayers = Math.max(0, activePlayers - 1);
       broadcastPoolUpdate();
@@ -1002,28 +1119,27 @@ app.get('*', (req, res) => {
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
-    console.error(`❌ Deployment Error: index.html not found at ${indexPath}`);
+    logger.error(`Deployment Error: index.html not found at ${indexPath}`);
     res.status(404).send("Frontend build files not found. Please ensure 'npm run build' completed successfully.");
   }
 });
 
 // Handle Graceful Shutdown for Render
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+  logger.info('SIGTERM signal received: closing HTTP server');
   server.close(() => {
     mainBot.stop('SIGTERM'); // Stop main bot
     adminBot.stop('SIGTERM'); // Stop admin bot
-    mongoose.connection.close();
+    mongoose.connection.close().then(() => logger.info('Database connection closed.'));
   });
 });
 
 const HOST = '0.0.0.0';
 server.listen(Number(PORT), HOST, () => {
-  console.log(`Server listening on http://${HOST}:${PORT}`);
+  logger.info(`Server listening on http://${HOST}:${PORT}`);
   if (process.env.NODE_ENV === 'production') {
-    if (!process.env.TELEGRAM_BOT_TOKEN) console.warn("WARNING: TELEGRAM_BOT_TOKEN is not set!");
-    if (!process.env.FRONTEND_URL) console.warn("WARNING: FRONTEND_URL is not set! CORS might block connections.");
-    console.log(`Production Mode: Static files serving from /dist`);
-    console.log(`CORS Allowed Origin: ${process.env.FRONTEND_URL}`);
+    if (!process.env.TELEGRAM_BOT_TOKEN) logger.warn("TELEGRAM_BOT_TOKEN is not set!");
+    if (!process.env.FRONTEND_URL) logger.warn("FRONTEND_URL is not set! CORS might block connections.");
+    logger.info(`Production Mode: Static files serving from /dist`, { corsOrigin: process.env.FRONTEND_URL });
   }
 });

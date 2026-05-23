@@ -19,24 +19,16 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
   const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
 
   const t = {
-    back: 'Back',
-    wallet: 'Wallet',
-    refresh: 'Refresh',
-  };
+    back: 'Back', // Text for the back button
+    wallet: 'Wallet', // Label for wallet balance
+    refresh: 'Refresh', // Label for refresh button
+  }; // Translation object for various UI texts
 
-  useEffect(() => {
-    const handleGameInit = (data: { gameId: string; balls: number[] }) => {
-      // Payload is { gameId, balls } per socket typing.
-      // Selection UI uses BOARD_SYNC for taken boards and local timer for countdown.
-      void data;
-    };
-
+  useEffect(() => { // Effect hook for socket event listeners
     const handleBoardSync = (data: any) => {
       const taken = new Set<number>(data?.takenBoards ?? []);
       setTakenBoards(taken);
     };
-
-    socket.on(socketEvents.GAME_INIT, handleGameInit);
 
     socket.on(socketEvents.BOARD_SYNC, handleBoardSync);
     return () => {
@@ -125,7 +117,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
           
           <div className="flex flex-col items-center justify-center bg-white/5 p-1.5 rounded-xl border border-white/10">
             <ShoppingCart size={14} className="text-orange-400 mb-1" />
-            <span className="text-[10px] font-black text-white uppercase italic">10 ETB</span>
+            <span className="text-[10px] font-black text-white uppercase italic">{staked} ETB</span> {/* Display actual staked amount */}
           </div>
 
           <div className="flex flex-col items-center justify-center bg-white/5 p-1.5 rounded-xl border border-white/10">

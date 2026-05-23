@@ -33,7 +33,7 @@ export function StakeButton({ amount, players, isLive, isEngineActive, onPlay }:
       animate={isEngineActive ? "active" : "idle"}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.98 }}
-      onClick={() => onPlay(amount)}
+      onClick={() => onPlay(amount)} // Trigger onPlay function with the stake amount
       className="group relative overflow-hidden bg-white text-indigo-950 p-6 rounded-[32px] shadow-xl transition-all hover:bg-yellow-400 active:bg-yellow-500 flex flex-col items-start w-full"
     >
       <div className="flex justify-between items-center w-full mb-2">

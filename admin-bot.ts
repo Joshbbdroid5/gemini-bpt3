@@ -1,5 +1,6 @@
 import { Telegraf, Markup, Context } from 'telegraf';
 import dotenv from 'dotenv';
+import logger from './src/logger';
 
 dotenv.config();
 
@@ -225,7 +226,7 @@ adminBot.action('search_user', async (ctx: Context) => {
 
 adminBot.on('text', async (ctx) => {
   if (!ctx.from) {
-    console.warn('Received text message without sender information in admin bot.');
+    logger.warn('Received text message without sender information in admin bot.');
     return;
   }
   if (ctx.from.id.toString() !== ADMIN_CHAT_ID) return;
@@ -248,7 +249,7 @@ adminBot.on('text', async (ctx) => {
       
       await ctx.reply(msg, { parse_mode: 'HTML' });
     } catch (err) {
-      console.error('Search error:', err);
+      logger.error('Search error', { error: err });
       await ctx.reply('❌ Error: Could not fetch user data. Make sure the ID is correct.');
     }
   }
@@ -327,4 +328,4 @@ adminBot.action(/w_ref_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArr
     await ctx.reply('❌ Error contacting server.');
   }
 });
-adminBot.catch((err) => console.error('Admin Bot Error:', err));
+adminBot.catch((err) => logger.error('Admin Bot Global Error', { error: err }));

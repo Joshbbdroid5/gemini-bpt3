@@ -1,5 +1,6 @@
 import { Telegraf, Markup } from 'telegraf';
 import dotenv from 'dotenv';
+import logger from './src/logger';
 
 dotenv.config();
 
@@ -26,7 +27,7 @@ export async function notifyUser(userId: string, message: string) {
     try {
       await mainBot.telegram.sendMessage(chatId, message, { parse_mode: 'HTML' });
     } catch (e) {
-      console.error(`Could not notify user ${chatId}:`, e);
+      logger.error(`Could not notify user ${chatId}`, { error: e });
     }
   }
 }
@@ -56,7 +57,7 @@ mainBot.start(async (ctx) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, referredBy: referrerId, secret: ADMIN_SECRET }),
       });
-    } catch (err) { console.error('Referral failed:', err); }
+    } catch (err) { logger.error('Referral failed', { error: err, userId }); }
   }
 
   if (startPayload === 'deposit') return ctx.reply('💰 Choose your deposit method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'deposit_method_telebirr')]]));
@@ -179,7 +180,7 @@ mainBot.on('text', async (ctx) => {
         return ctx.reply(`❌ Request failed: ${data.error || 'Server error'}`);
       }
     } catch (err) {
-      console.error('Withdrawal request error:', err);
+      logger.error('Withdrawal request error', { error: err, userId });
       return ctx.reply('❌ Connection error. Please try again later.');
     }
   }
@@ -222,4 +223,4 @@ mainBot.action('invite', (ctx) => {
   return ctx.reply('Earn 5% bonuses!', Markup.inlineKeyboard([[Markup.button.url('📤 Share Link', `https://t.me/share/url?url=${link}`)]])); //
 });
 
-mainBot.catch((err) => console.error('Main Bot Error:', err));
+mainBot.catch((err) => logger.error('Main Bot Global Error', { error: err }));

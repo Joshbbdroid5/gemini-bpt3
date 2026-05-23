@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import AdminDashboard from './components/AdminDashboard';
+import AdminDashboard from './components/AdminDashboard'; // Importing the AdminDashboard component
 import './index.css';
 import ErrorBoundary from './ErrorBoundary';
 
@@ -9,7 +9,7 @@ const ADMIN_ID = import.meta.env.VITE_ADMIN_CHAT_ID;
 const AdminRoot = () => {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
 
-  useEffect(() => {
+  useEffect(() => { // Effect hook to check Telegram WebApp authorization
     const tg = (window as any).Telegram?.WebApp;
     const userId = tg?.initDataUnsafe?.user?.id?.toString();
     
@@ -25,7 +25,7 @@ const AdminRoot = () => {
 
   if (!authorized) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-[#0f170a] text-white p-6 text-center">
+      <div className="flex flex-col items-center justify-center h-screen bg-[#0f170a] text-white p-6 text-center"> {/* Unauthorized access message */}
         <h1 className="text-2xl font-black mb-2 text-red-500 uppercase italic">Access Denied</h1>
         <p className="text-gray-400 text-sm mb-6">This area is restricted to authorized administrators only.</p>
         <button onClick={() => window.location.href = '/'} className="bg-white text-black px-8 py-3 rounded-xl font-bold uppercase text-xs">
