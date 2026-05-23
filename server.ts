@@ -1032,7 +1032,7 @@ function registerSocketHandlers(io: SocketIOServer) {
     const isFirstSelection = currentSelected.length === 0;
 
     // Check if taken by someone else
-    const existingOwner = room.boardStatus.get(data.boardId);
+    const existingOwner = room.boardStatus.get(boardId.toString());
     if (existingOwner && existingOwner !== userId) {
       return socket.emit('message', 'Board already taken, please choose another.');
     }
