@@ -179,7 +179,7 @@ interface IRoomState {
   selectionStartTime?: number;
   selectionDuration?: number;
   playerBoards: Map<string, number[]>;
-  boardStatus: Map<string, string>;
+  boardStatus: Map<string, string>; // boardId string -> userId string
 }
 
 const roomStateSchema = new mongoose.Schema<IRoomState>({
@@ -243,8 +243,8 @@ async function syncCache() {
     // Load existing room states from DB
     const existingRoomStates = await RoomStateModel.find({});
     existingRoomStates.forEach(roomDoc => {
-      roomStates.set(roomDoc.stake, roomDoc);
-      // Re-initialize timers if needed, based on roomDoc.state and timestamps
+      // Map the Document to our internal RoomState interface
+      roomStates.set(roomDoc.stake, roomDoc as any);
     });
   } catch (err) {
     logger.error('Failed to sync cache from MongoDB', { error: err });
@@ -687,23 +687,21 @@ let isGameRunning = false;
 let stopRequested = false;
 let activePlayers = 0;
 
-type GameState = 'SELECTION' | 'GAME' | 'FINISHED';
-
 interface RoomState {
   stake: number;
   currentBalls: number[];
   shuffledBalls: number[];
   globalPool: number;
-  state: GameState;
+  state: GameStateEnum;
   currentGameId: string;
   selectionTimer?: NodeJS.Timeout;
   selectionStartTime?: number; // Timestamp when selection phase started
   selectionDuration?: number; // Total duration of selection phase in ms
-  selectionStartTime?: number;
-  selectionDuration?: number;
   playerBoards: Map<string, number[]>; // userId -> boardIds
-  boardStatus: Map<number, string>; // boardId -> userId (concurrency control)
+  boardStatus: Map<string, string>; // boardId -> userId (concurrency control)
   gameLoopTimeout?: any;
+  save?: () => Promise<any>;
+  markModified?: (path: string) => void;
 }
 
 const roomStates = new Map<number, RoomState>();
@@ -725,21 +723,6 @@ STAKES.forEach(stake => {
     boardStatus: new Map(),
   });
 });
-// Type alias for clarity, referencing the enum
-type GameState = GameStateEnum;
-
-// STAKES.forEach(stake => {
-//   roomStates.set(stake, {
-//     stake,
-//     currentBalls: [],
-//     shuffledBalls: [],
-//     globalPool: 0,
-//     state: GameStateEnum.SELECTION,
-//     currentGameId: generateGameId(stake),
-//     playerBoards: new Map(),
-//     boardStatus: new Map(),
-//   });
-// });
 
 const socketMapping = new Map<string, string>(); // userId -> socketId
 
@@ -806,7 +789,7 @@ const runGameLoop = (stake: number) => {
           const grid = boardsCache.get(boardId);
           const win = checkWin(grid, new Set(room.currentBalls) as any);
           
-          if (win.isWinner && !room.boardStatus.get(boardId.toString())) { // Ensure board hasn't been claimed by another winner
+          if (win.isWinner && !room.boardStatus.get(boardId.toString())) { 
             winnersThisRound.push({
               userId,
               boardId,
@@ -826,36 +809,32 @@ const runGameLoop = (stake: number) => {
 
         const splitPayout = totalPayout / winnersThisRound.length;
 
-        winnersThisRound.forEach(async (w) => {
-          room.boardStatus.set(w.boardId.toString(), w.userId); // Mark board as won
-          const winnerInfo = {
-            ...w,
-            payout: splitPayout,
-            gameId: room.currentGameId,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          };
+        Promise.all(winnersThisRound.map(async (w) => {
+            room.boardStatus.set(w.boardId.toString(), w.userId);
+            const winnerInfo = {
+              ...w,
+              payout: splitPayout,
+              gameId: room.currentGameId,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
 
-          const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
-          const sId = socketMapping.get(w.userId);
-          if (sId && user) io.to(sId).emit('wallet:update', user.balance);
-          io.to(`room_${stake}`).emit('game:winner', winnerInfo);
+            const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
+            const sId = socketMapping.get(w.userId);
+            if (sId && user) io.to(sId).emit('wallet:update', user.balance);
+            io.to(`room_${stake}`).emit('game:winner', winnerInfo);
 
-          // Archive for auditing
-          await GameArchive.create({
-            gameId: room.currentGameId,
-            winnerId: w.userId,
-            winnerBoardId: w.boardId,
-            prizePool: totalPayout,
-            houseRake: houseShare,
-            ballsDrawn: room.currentBalls
-          });
-          }).catch(e => logger.error('Game completion processing error', { error: e }));
-        });
-        room.markModified('boardStatus'); // Mark Map as modified for Mongoose
+            return GameArchive.create({
+              gameId: room.currentGameId,
+              winnerId: w.userId,
+              winnerBoardId: w.boardId,
+              prizePool: totalPayout,
+              houseRake: houseShare,
+              ballsDrawn: room.currentBalls
+            });
+        })).catch(e => logger.error('Game completion processing error', { error: e }));
+        
+        if (room.markModified) room.markModified('boardStatus');
       }
-    }
-    } // End of if (room.currentBalls.length < room.shuffledBalls.length)
-
   if (room.state === 'FINISHED' || room.currentBalls.length >= 75) {
     // 3-second winner declaration window as requested for the rapid-fire loop
     room.gameLoopTimeout = setTimeout(() => resetGame(stake), 3000);
@@ -863,7 +842,7 @@ const runGameLoop = (stake: number) => {
   }
 
   room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 3000);
-  room.save().catch(console.error); // Persist state changes
+  if (room.save) room.save().catch(console.error);
 };
 
 const startSelectionPhase = (stake: number) => {
@@ -871,11 +850,9 @@ const startSelectionPhase = (stake: number) => {
     console.log(`🚫 Prevented selection phase for stake ${stake} (stop requested).`);
     return;
   }
-  const room = roomStates.get(stake)!;
   const room = roomStates.get(stake);
   if (!room) return; // Should not happen if initialized correctly
   const SELECTION_PHASE_DURATION_MS = 40000; // 40 seconds
-  room.state = 'SELECTION';
   room.state = GameStateEnum.SELECTION;
   room.selectionStartTime = Date.now();
   room.selectionDuration = SELECTION_PHASE_DURATION_MS;
@@ -889,7 +866,7 @@ const startSelectionPhase = (stake: number) => {
     broadcastPoolUpdate();
     runGameLoop(stake);
   }, 40000);
-  room.save().catch(e => logger.error('Room selection start save error', { error: e, stake })); // Persist state changes
+  if (room.save) room.save().catch(e => logger.error('Room selection start save error', { error: e, stake }));
 };
 
 const resetGame = (stake: number) => {
@@ -920,9 +897,9 @@ const resetGame = (stake: number) => {
   }
 
   startSelectionPhase(stake);
-  room.markModified('playerBoards'); // Mark Map as modified for Mongoose
-  room.markModified('boardStatus'); // Mark Map as modified for Mongoose
-  room.save().catch(e => logger.error('Room reset save error', { error: e, stake })); // Persist state changes
+  if (room.markModified) room.markModified('playerBoards');
+  if (room.markModified) room.markModified('boardStatus');
+  if (room.save) room.save().catch(e => logger.error('Room reset save error', { error: e, stake }));
   broadcastPoolUpdate();
 };
 
@@ -944,7 +921,7 @@ dbPromise.then(async () => {
           currentGameId: generateGameId(stake),
           state: GameStateEnum.SELECTION,
         });
-        roomStates.set(stake, room);
+        roomStates.set(stake, room as any);
       }
       // If game was in progress, restart selection phase or game loop
       if (room.state === GameStateEnum.GAME || room.state === GameStateEnum.SELECTION) {
@@ -1049,9 +1026,9 @@ function registerSocketHandlers(io: SocketIOServer) {
 
     // Ensure playerBoards is initialized as a Map if it's a plain object from DB
     if (!(room.playerBoards instanceof Map)) room.playerBoards = new Map(Object.entries(room.playerBoards));
-    const currentSelected = room.playerBoards.get(userId)?.map(String) || []; // Convert to string for comparison
-    const isSwapping = currentSelected.length > 0 && !currentSelected.includes(boardId);
-    const isDeselecting = currentSelected.includes(boardId);
+    const currentSelected = (room.playerBoards.get(userId) || []).map(String);
+    const isSwapping = currentSelected.length > 0 && !currentSelected.includes(boardId.toString());
+    const isDeselecting = currentSelected.includes(boardId.toString());
     const isFirstSelection = currentSelected.length === 0;
 
     // Check if taken by someone else
@@ -1087,9 +1064,9 @@ function registerSocketHandlers(io: SocketIOServer) {
     await userRecord.save().catch(e => logger.error('User record save error on board pick', { error: e, userId })); // Save user balance once
 
     await userRecord.save().catch(e => logger.error('User record save error on board pick (re-save)', { error: e, userId }));
-    room.markModified('playerBoards'); // Mark Map as modified for Mongoose
-    room.markModified('boardStatus'); // Mark Map as modified for Mongoose
-    await room.save().catch(e => logger.error('Room save error on board pick', { error: e, stake: data.stake })); // Persist room state changes
+    if (room.markModified) room.markModified('playerBoards');
+    if (room.markModified) room.markModified('boardStatus');
+    if (room.save) await room.save().catch(e => logger.error('Room save error on board pick', { error: e, stake: data.stake }));
 
     socket.emit('wallet:update', userRecord.balance); // Ensure wallet update is sent after save
     

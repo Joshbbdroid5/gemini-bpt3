@@ -1,10 +1,11 @@
-const { NodeSDK } = require('@opentelemetry/sdk-node');
-const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
-const { OTLPMetricExporter } = require('@opentelemetry/exporter-metrics-otlp-proto');
-const { PeriodicExportingMetricReader } = require('@opentelemetry/sdk-metrics');
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
+import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import dotenv from 'dotenv';
 
 // Load environment variables
-require('dotenv').config();
+dotenv.config();
 
 const sdk = new NodeSDK({
   serviceName: 'bingo-app-render',
