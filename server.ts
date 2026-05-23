@@ -244,7 +244,7 @@ async function syncCache() {
     const existingRoomStates = await RoomStateModel.find({});
     existingRoomStates.forEach(roomDoc => {
       // Map the Document to our internal RoomState interface
-      roomStates.set(roomDoc.stake, roomDoc as any);
+      roomStates.set(roomDoc.stake, roomDoc as unknown as RoomState);
     });
   } catch (err) {
     logger.error('Failed to sync cache from MongoDB', { error: err });
@@ -697,9 +697,9 @@ interface RoomState {
   selectionTimer?: NodeJS.Timeout;
   selectionStartTime?: number; // Timestamp when selection phase started
   selectionDuration?: number; // Total duration of selection phase in ms
-  playerBoards: Map<string, number[]>; // userId -> boardIds
-  boardStatus: Map<string, string>; // boardId -> userId (concurrency control)
-  gameLoopTimeout?: any;
+  playerBoards: Map<string, number[]>;
+  boardStatus: Map<string, string>;
+  gameLoopTimeout?: NodeJS.Timeout;
   save?: () => Promise<any>;
   markModified?: (path: string) => void;
 }
@@ -717,7 +717,7 @@ STAKES.forEach(stake => {
     currentBalls: [],
     shuffledBalls: [],
     globalPool: 0,
-    state: 'SELECTION',
+    state: GameStateEnum.SELECTION,
     currentGameId: generateGameId(stake),
     playerBoards: new Map(),
     boardStatus: new Map(),
@@ -769,7 +769,7 @@ function shuffle(array: number[]) {
 }
 
 // Global interval for drawing balls
-const runGameLoop = (stake: number) => {
+function runGameLoop(stake: number) {
   const room = roomStates.get(stake)!;
 
   if (!isGameRunning || room.state !== GameStateEnum.GAME) {
@@ -835,6 +835,8 @@ const runGameLoop = (stake: number) => {
         
         if (room.markModified) room.markModified('boardStatus');
       }
+  }
+
   if (room.state === 'FINISHED' || room.currentBalls.length >= 75) {
     // 3-second winner declaration window as requested for the rapid-fire loop
     room.gameLoopTimeout = setTimeout(() => resetGame(stake), 3000);
@@ -843,9 +845,8 @@ const runGameLoop = (stake: number) => {
 
   room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 3000);
   if (room.save) room.save().catch(console.error);
-};
-
-const startSelectionPhase = (stake: number) => {
+}
+function startSelectionPhase(stake: number) {
   if (stopRequested) {
     console.log(`🚫 Prevented selection phase for stake ${stake} (stop requested).`);
     return;
@@ -860,16 +861,15 @@ const startSelectionPhase = (stake: number) => {
   
   // Start 40s "Quick Pick" window to finalize Total Players for this round
   room.selectionTimer = setTimeout(() => { // Store the timer reference
-    room.state = 'GAME';
     room.state = GameStateEnum.GAME;
     room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
     broadcastPoolUpdate();
     runGameLoop(stake);
   }, 40000);
   if (room.save) room.save().catch(e => logger.error('Room selection start save error', { error: e, stake }));
-};
+}
 
-const resetGame = (stake: number) => {
+function resetGame(stake: number) {
   const room = roomStates.get(stake);
   if (!room) return; // Should not happen if initialized correctly
   room.currentBalls = [];
@@ -884,8 +884,6 @@ const resetGame = (stake: number) => {
   if (stopRequested) {
     const hasLiveGames = Array.from(roomStates.values()).some(r => r.state === 'GAME');
     if (!hasLiveGames) {
-      isGameRunning = false;
-      stopRequested = false;
       isGameRunning = false; // Stop engine
       stopRequested = false; // Clear stop request
       logger.info("Game engine stopped gracefully after round completion.");
@@ -901,7 +899,7 @@ const resetGame = (stake: number) => {
   if (room.markModified) room.markModified('boardStatus');
   if (room.save) room.save().catch(e => logger.error('Room reset save error', { error: e, stake }));
   broadcastPoolUpdate();
-};
+}
 
 // Game starts only when admin explicitly starts it.
 
@@ -1027,12 +1025,12 @@ function registerSocketHandlers(io: SocketIOServer) {
     // Ensure playerBoards is initialized as a Map if it's a plain object from DB
     if (!(room.playerBoards instanceof Map)) room.playerBoards = new Map(Object.entries(room.playerBoards));
     const currentSelected = (room.playerBoards.get(userId) || []).map(String);
-    const isSwapping = currentSelected.length > 0 && !currentSelected.includes(boardId.toString());
-    const isDeselecting = currentSelected.includes(boardId.toString());
+    const isSwapping = currentSelected.length > 0 && !currentSelected.includes(String(boardId));
+    const isDeselecting = currentSelected.includes(String(boardId));
     const isFirstSelection = currentSelected.length === 0;
 
     // Check if taken by someone else
-    const existingOwner = room.boardStatus.get(boardId.toString());
+    const existingOwner = room.boardStatus.get(String(boardId));
     if (existingOwner && existingOwner !== userId) {
       return socket.emit('message', 'Board already taken, please choose another.');
     }
@@ -1040,23 +1038,23 @@ function registerSocketHandlers(io: SocketIOServer) {
     if (isDeselecting) {
       // Refund logic
       userRecord.balance += stakeAmount;
-      room.boardStatus.delete(boardId.toString());
+      room.boardStatus.delete(String(boardId));
       room.playerBoards.set(userId, []);
       room.globalPool -= stakeAmount;
     } else if (isSwapping) {
       // Swap logic: Make previous available, take new one
       const oldId = currentSelected[0];
-      room.boardStatus.delete(oldId.toString());
-      room.boardStatus.set(boardId.toString(), userId);
-      room.playerBoards.set(userId, [parseInt(boardId, 10)]);
+      room.boardStatus.delete(oldId);
+      room.boardStatus.set(String(boardId), userId);
+      room.playerBoards.set(userId, [boardId]);
     } else if (isFirstSelection) {
       // New Selection logic: Check balance and deduct
       if (userRecord.balance < stakeAmount) {
         return socket.emit('message', 'Insufficient balance.');
       }
       userRecord.balance -= stakeAmount;
-      room.boardStatus.set(boardId.toString(), userId);
-      room.playerBoards.set(userId, [parseInt(boardId, 10)]);
+      room.boardStatus.set(String(boardId), userId);
+      room.playerBoards.set(userId, [boardId]);
       room.globalPool += stakeAmount;
       totalVolume += stakeAmount;
       GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: stakeAmount } }, { upsert: true }).exec();
