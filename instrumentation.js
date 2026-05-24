@@ -1,3 +1,4 @@
+import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
@@ -6,6 +7,13 @@ import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
+
+// Enable internal diagnostic logging to see why exports might be failing
+diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
+
+if (!process.env.GRAFANA_AUTH_TOKEN || !process.env.GRAFANA_OTLP_ENDPOINT) {
+  console.error('OTEL ERROR: Missing Grafana credentials in environment variables.');
+}
 
 const sdk = new NodeSDK({
   serviceName: 'bingo-app-render',
@@ -16,7 +24,7 @@ const sdk = new NodeSDK({
         Authorization: `Basic ${process.env.GRAFANA_AUTH_TOKEN}`,
       },
     }),
-    exportIntervalMillis: 60000, // Send metrics every 60 seconds
+    exportIntervalMillis: 10000, // Reduced to 10s for faster debugging/verification
   }),
   instrumentations: [getNodeAutoInstrumentations()],
 });
