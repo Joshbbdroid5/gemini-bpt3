@@ -11,9 +11,12 @@ dotenv.config();
 // Enable internal diagnostic logging to see why exports might be failing
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
-if (!process.env.GRAFANA_AUTH_TOKEN || !process.env.GRAFANA_OTLP_ENDPOINT) {
+if (!process.env.GRAFANA_INSTANCE_ID || !process.env.GRAFANA_TOKEN || !process.env.GRAFANA_OTLP_ENDPOINT) {
   console.error('OTEL ERROR: Missing Grafana credentials in environment variables.');
 }
+
+// Construct the Base64 Auth header from raw credentials
+const authHeader = Buffer.from(`${process.env.GRAFANA_INSTANCE_ID}:${process.env.GRAFANA_TOKEN}`).toString('base64');
 
 const sdk = new NodeSDK({
   serviceName: 'bingo-app-render',
@@ -21,7 +24,7 @@ const sdk = new NodeSDK({
     exporter: new OTLPMetricExporter({
       url: `${process.env.GRAFANA_OTLP_ENDPOINT}/v1/metrics`,
       headers: {
-        Authorization: `Basic ${process.env.GRAFANA_AUTH_TOKEN}`,
+        Authorization: `Basic ${authHeader}`,
       },
     }),
     exportIntervalMillis: 10000, // Reduced to 10s for faster debugging/verification
