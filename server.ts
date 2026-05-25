@@ -67,7 +67,8 @@ app.use((req, res, next) => {
 app.use(cors(corsOptions.cors)); // Match REST API CORS policy to Socket.io
 app.use(express.json());
 
-const PORT = process.env.PORT || 3001;
+// Ensure PORT is strictly parsed as a decimal integer
+const PORT = parseInt(process.env.PORT || '3001', 10);
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo';
@@ -1109,9 +1110,16 @@ process.on('SIGTERM', () => {
   });
 });
 
+// Render requires binding to 0.0.0.0 to be reachable externally
 const HOST = '0.0.0.0';
-server.listen(Number(PORT), HOST, () => {
-  logger.info(`Server listening on http://${HOST}:${PORT}`);
+
+server.listen(PORT, HOST, () => {
+  logger.info('>>> Server process successfully bound to port', { 
+    port: PORT, 
+    host: HOST,
+    nodeEnv: process.env.NODE_ENV 
+  });
+  
   if (process.env.NODE_ENV === 'production') {
     if (!process.env.TELEGRAM_BOT_TOKEN) logger.warn("TELEGRAM_BOT_TOKEN is not set!");
     if (!process.env.FRONTEND_URL) logger.warn("FRONTEND_URL is not set! CORS might block connections.");

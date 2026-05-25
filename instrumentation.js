@@ -5,11 +5,14 @@ import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import dotenv from 'dotenv';
-import * as OpenTelemetryResources from '@opentelemetry/resources';
+import resourcesPkg from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 // Load environment variables
 dotenv.config();
+
+// Robust Resource constructor resolution to handle hybrid ESM/CJS environments
+const Resource = resourcesPkg.Resource || resourcesPkg.default?.Resource || resourcesPkg;
 
 // Enable internal diagnostic logging to see why exports might be failing
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
@@ -22,15 +25,15 @@ if (!hasRequiredEnv) {
   console.error('OTEL ERROR: Missing Grafana credentials in environment variables.');
 }
 
-// Construct the Base64 Auth header from raw credentials
-const authHeader = Buffer.from(`${process.env.GRAFANA_INSTANCE_ID}:${process.env.GRAFANA_AUTH_TOKEN}`).toString('base64');
-const commonHeaders = {
-  Authorization: `Basic ${authHeader}`,
-};
-
 if (hasRequiredEnv) {
+  // Construct the Base64 Auth header from raw credentials
+  const authHeader = Buffer.from(`${process.env.GRAFANA_INSTANCE_ID}:${process.env.GRAFANA_AUTH_TOKEN}`).toString('base64');
+  const commonHeaders = {
+    Authorization: `Basic ${authHeader}`,
+  };
+
   const sdk = new NodeSDK({
-    resource: new OpenTelemetryResources.Resource({
+    resource: new (Resource)({
       [ATTR_SERVICE_NAME]: 'bingo-app-render',
       [ATTR_SERVICE_VERSION]: '1.0.0',
     }),
@@ -51,11 +54,22 @@ if (hasRequiredEnv) {
         // Use a more robust filter to ensure export calls are never traced.
         // Tracing the export calls often leads to recursion and serialization errors.
         '@opentelemetry/instrumentation-http': {
-          ignoreOutgoingUrls: [(url) => url.includes('grafana.net')],
+          ignoreOutgoingUrls: [
+            (url) => url.includes('grafana.net'),
+            (url) => process.env.GRAFANA_OTLP_ENDPOINT && url.includes(process.env.GRAFANA_OTLP_ENDPOINT),
+          ],
         },
         // The 'fs' instrumentation is extremely noisy and can create thousands of 
         // spans during startup, which is the most common cause of this crash.
         '@opentelemetry/instrumentation-fs': {
+          enabled: false,
+        },
+        // Disabling net and dns resolves the "Cannot read properties of undefined (reading 'name')"
+        // error which occurs when these instrumentations fire during OTLP export serialization.
+        '@opentelemetry/instrumentation-net': {
+          enabled: false,
+        },
+        '@opentelemetry/instrumentation-dns': {
           enabled: false,
         },
       }),
