@@ -5,14 +5,14 @@ import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import dotenv from 'dotenv';
-import resourcesPkg from '@opentelemetry/resources';
+import * as resourcesPkg from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 // Load environment variables
 dotenv.config();
 
 // Robust Resource constructor resolution for hybrid ESM/CJS environments
-const Resource = resourcesPkg.Resource || resourcesPkg;
+const Resource = resourcesPkg.Resource || resourcesPkg.default?.Resource || resourcesPkg.default;
 
 // Enable internal diagnostic logging to see why exports might be failing
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
