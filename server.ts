@@ -233,7 +233,7 @@ async function syncCache() {
     logger.info(`Wallet cache synced: ${users.length} users loaded.`);
 
     // Sync Global Stats
-       const stats = await GlobalStats.findOne({ key: 'main_stats' }).lean();
+    const stats = await GlobalStats.findOne({ key: 'main_stats' }).lean();
     if (stats) {
       totalVolume = stats.totalVolume;
       totalProfit = stats.totalProfit;
@@ -974,12 +974,12 @@ function registerSocketHandlers(io: SocketIOServer) {
     let currentBalance = 0;
     let isUserVerified = false;
     if (!user) {
-      const newUser = await User.create({ userId, balance: 1000, isVerified: initData && verifyTelegramData(initData) });
+      const newUser = await User.create({ userId, balance: 1000, isVerified: isVerified });
       currentBalance = newUser.balance;
       isUserVerified = newUser.isVerified;
     } else {
       // Update verification status if it changed
-      if (initData && verifyTelegramData(initData) && !user.isVerified) {
+      if (isVerified && !user.isVerified) {
         await User.updateOne({ userId }, { isVerified: true }); // Update DB if now verified
       }
       currentBalance = user.balance;
@@ -1058,11 +1058,10 @@ function registerSocketHandlers(io: SocketIOServer) {
       room.playerBoards.set(userId, [boardId]);
       room.globalPool += stakeAmount;
       totalVolume += stakeAmount;
-      GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: stakeAmount } }, { upsert: true }).exec();
+      await GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: stakeAmount } }, { upsert: true }).catch(e => logger.error('Global stats volume update error', { error: e }));
     }
     await userRecord.save().catch(e => logger.error('User record save error on board pick', { error: e, userId })); // Save user balance once
 
-    await userRecord.save().catch(e => logger.error('User record save error on board pick (re-save)', { error: e, userId }));
     if (room.markModified) room.markModified('playerBoards');
     if (room.markModified) room.markModified('boardStatus');
     if (room.save) await room.save().catch(e => logger.error('Room save error on board pick', { error: e, stake: data.stake }));
