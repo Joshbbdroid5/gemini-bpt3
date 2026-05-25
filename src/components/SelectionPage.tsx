@@ -30,7 +30,8 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
       setTakenBoards(taken);
     };
 
-    socket.on(socketEvents.BOARD_SYNC, handleBoardSync);
+    // BOARD_SYNC provides { takenBoards }
+    socket.on(socketEvents.BOARD_SYNC, handleBoardSync as any);
     return () => {
       socket.off(socketEvents.BOARD_SYNC, handleBoardSync);
     };

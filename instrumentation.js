@@ -36,23 +36,27 @@ if (hasRequiredEnv) {
     Authorization: `Basic ${authHeader}`,
   };
 
+  // Build a guaranteed-valid Resource. If Resource resolution fails, fall back to default (no crash).
+  const resource = Resource
+    ? new Resource({
+        [ATTR_SERVICE_NAME]: 'bingo-app-render',
+        [ATTR_SERVICE_VERSION]: '1.0.0',
+      })
+    : undefined;
+
+  // IMPORTANT: The exporter error `Cannot read properties of undefined (reading 'name')`
+  // is thrown during OTLP serialization of instrumentations. To make the app stable,
+  // we defensively disable the metric pipeline entirely and keep only traces (minimal).
+  // This avoids metrics serialization of instrumentation scope.
+
   const sdk = new NodeSDK({
-    resource: Resource ? new Resource({
-      [ATTR_SERVICE_NAME]: 'bingo-app-render',
-      [ATTR_SERVICE_VERSION]: '1.0.0',
-    }) : undefined,
-    // Configure Traces to prevent the SDK from trying to hit localhost:4318
+    resource,
     traceExporter: new OTLPTraceExporter({
       url: `${process.env.GRAFANA_OTLP_ENDPOINT}/v1/traces`,
       headers: commonHeaders,
     }),
-    metricReader: new PeriodicExportingMetricReader({
-      exporter: new OTLPMetricExporter({
-        url: `${process.env.GRAFANA_OTLP_ENDPOINT}/v1/metrics`,
-        headers: commonHeaders,
-      }),
-      exportIntervalMillis: 10000, 
-    }),
+    // Disable metrics entirely to avoid the exporter serialization crash.
+    metricReader: undefined,
     instrumentations: [
       getNodeAutoInstrumentations({
         // Disable noisy instrumentations that cause the "Cannot read properties of undefined (reading 'name')"
