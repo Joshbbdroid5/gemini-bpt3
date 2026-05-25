@@ -5,7 +5,7 @@ import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import dotenv from 'dotenv';
-import { Resource } from '@opentelemetry/resources';
+import * as OpenTelemetryResources from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 // Load environment variables
@@ -30,7 +30,7 @@ const commonHeaders = {
 
 if (hasRequiredEnv) {
   const sdk = new NodeSDK({
-    resource: new Resource({
+    resource: new OpenTelemetryResources.Resource({
       [ATTR_SERVICE_NAME]: 'bingo-app-render',
       [ATTR_SERVICE_VERSION]: '1.0.0',
     }),
@@ -64,4 +64,15 @@ if (hasRequiredEnv) {
 
   sdk.start();
   console.log('OpenTelemetry Instrumentation started successfully');
+
+  // Ensure the SDK is shut down gracefully on process termination
+  const shutDown = () => {
+    sdk.shutdown()
+      .then(() => console.log('OTEL: Tracing and Metrics shut down successfully'))
+      .catch((error) => console.error('OTEL: Error shutting down', error))
+      .finally(() => process.exit(0));
+  };
+
+  process.on('SIGTERM', shutDown);
+  process.on('SIGINT', shutDown);
 }
