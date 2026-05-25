@@ -733,9 +733,6 @@ for (let i = 1; i <= 600; i++) {
   boardsCache.set(i, generateBoard(i));
 }
 
-// Mock database for verified users (In production, use a real DB)
-const verifiedUsers = new Set<string>(); 
-
 // We use a slower interval (3s) which is already good for free tier CPU limits
 // If you find the server lagging, you can increase this to 5s or 10s
 const broadcastPoolUpdate = () => {
@@ -770,7 +767,7 @@ function shuffle(array: number[]) {
 }
 
 // Global interval for drawing balls
-function runGameLoop(stake: number) {
+async function runGameLoop(stake: number) {
   const room = roomStates.get(stake)!;
 
   if (!isGameRunning || room.state !== GameStateEnum.GAME) {
@@ -806,7 +803,7 @@ function runGameLoop(stake: number) {
         const houseShare = room.globalPool * 0.4; // 40% to house
         
         totalProfit += houseShare;
-        GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalProfit: houseShare } }, { upsert: true }).exec();
+        await GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalProfit: houseShare } }, { upsert: true }).catch(e => logger.error('Global stats profit update error', { error: e }));
 
         const splitPayout = totalPayout / winnersThisRound.length;
 
@@ -845,7 +842,7 @@ function runGameLoop(stake: number) {
   }
 
   room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 3000);
-  if (room.save) room.save().catch(console.error);
+  if (room.save) await room.save().catch(console.error);
 }
 function startSelectionPhase(stake: number) {
   if (stopRequested) {
@@ -935,9 +932,8 @@ dbPromise.then(async () => {
     ]);
     logger.info("User and Admin Bots initialized");
     
-    const adminId = process.env.ADMIN_CHAT_ID;
-    if (adminId) {
-      adminBot.telegram.sendMessage(adminId, "🚀 <b>Bots Online</b>\nThe game server and both bots have started successfully.", { parse_mode: 'HTML' })
+    if (ADMIN_CHAT_ID) {
+      adminBot.telegram.sendMessage(ADMIN_CHAT_ID, "🚀 <b>Bots Online</b>\nThe game server and both bots have started successfully.", { parse_mode: 'HTML' })
         .catch(e => logger.error("Failed to send startup message to admin", { error: e.message }));
     }
   } catch (err) {
@@ -948,7 +944,7 @@ dbPromise.then(async () => {
 });
 // Socket.io Logic (now accepts io as argument)
 function registerSocketHandlers(io: SocketIOServer) {
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     logger.info(`User connected: ${socket.id}`);
 
   const { initData, user, userId: fallbackId } = socket.handshake.auth;
@@ -958,7 +954,6 @@ function registerSocketHandlers(io: SocketIOServer) {
   if (initData && verifyTelegramData(initData)) {
     userId = user?.id?.toString() || userId;
     isVerified = true;
-    verifiedUsers.add(userId); // Mark user as verified if Telegram data is valid
     logger.info(`Verified Telegram User: ${user?.first_name}`, { username: user?.username });
   } else {
     logger.info(`Unverified connection using ID: ${userId}`);
@@ -1086,8 +1081,19 @@ function registerSocketHandlers(io: SocketIOServer) {
 // Serve static files from the Vite build directory
 const distPath = path.join(__dirname, 'dist');
 const indexPath = path.join(distPath, 'index.html');
+const adminPath = path.join(distPath, 'admin.html');
 
 app.use(express.static(distPath));
+
+// Add explicit route for the admin dashboard
+app.get('/admin', (req, res) => {
+  if (fs.existsSync(adminPath)) {
+    res.sendFile(adminPath);
+  } else {
+    logger.error(`Dashboard Error: admin.html not found at ${adminPath}`);
+    res.status(404).send("Admin dashboard file not found. Ensure the build included admin.html.");
+  }
+});
 
 // Handle SPA routing: serve index.html for any unknown routes
 app.get('*', (req, res) => {
