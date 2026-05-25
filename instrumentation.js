@@ -11,8 +11,8 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic
 // Load environment variables
 dotenv.config();
 
-// Robust Resource constructor resolution to handle hybrid ESM/CJS environments
-const Resource = resourcesPkg.Resource || resourcesPkg.default?.Resource || resourcesPkg;
+// Robust Resource constructor resolution for hybrid ESM/CJS environments
+const Resource = resourcesPkg.Resource || resourcesPkg;
 
 // Enable internal diagnostic logging to see why exports might be failing
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
@@ -33,7 +33,7 @@ if (hasRequiredEnv) {
   };
 
   const sdk = new NodeSDK({
-    resource: new (Resource)({
+    resource: new Resource({
       [ATTR_SERVICE_NAME]: 'bingo-app-render',
       [ATTR_SERVICE_VERSION]: '1.0.0',
     }),
