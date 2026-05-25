@@ -17,7 +17,8 @@ const AdminRoot = () => {
     if (userId) {
       setAuthorized(userId === ADMIN_ID);
     } else {
-      setAuthorized(import.meta.env.DEV); 
+      // Allow regular browser access to reach the login screen
+      setAuthorized(true); 
     }
   }, []);
 

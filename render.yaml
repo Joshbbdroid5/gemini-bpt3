@@ -17,6 +17,8 @@ services:
       # Admin Chat ID (secret)
       - key: ADMIN_CHAT_ID
         sync: false # Prevent syncing to git, manage in Render dashboard
+      - key: VITE_ADMIN_CHAT_ID
+        sync: false # Required for frontend admin check
       # Admin Secret (secret)
       - key: ADMIN_SECRET
         sync: false # Prevent syncing to git, manage in Render dashboard
@@ -25,14 +27,14 @@ services:
         sync: false # Prevent syncing to git, manage in Render dashboard
       # Frontend URL (public, used by bot for WebApp link)
       - key: FRONTEND_URL
-        value:https://gemini-bpt3.onrender.com # Replace with your actual Render URL
+        value: https://gemini-bpt3.onrender.com # Replace with your actual Render URL
 
       # VITE_BACKEND_URL (used by the frontend to connect to the backend)
       - key: VITE_BACKEND_URL
-        value:https://gemini-bpt3.onrender.com # Usually same as FRONTEND_URL
+        value: https://gemini-bpt3.onrender.com # Usually same as FRONTEND_URL
       # VITE_API_URL (used by the admin-bot for internal API calls to the backend)
       - key: VITE_API_URL
-        value:https://gemini-bpt3.onrender.com # Should be the same as VITE_BACKEND_URL
+        value: https://gemini-bpt3.onrender.com # Should be the same as VITE_BACKEND_URL
       # VITE_TELEGRAM_BOT_USERNAME (used by frontend for bot deep links)
       - key: VITE_TELEGRAM_BOT_USERNAME
         value:LomyBingo75_bot # Replace with your actual bot username (without @)
