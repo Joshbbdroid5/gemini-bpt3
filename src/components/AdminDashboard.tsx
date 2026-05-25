@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power } from 'lucide-react';
+import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power, Check } from 'lucide-react';
 import { socket, socketEvents } from './socket';
 
 interface Props {
@@ -22,7 +22,7 @@ export default function AdminDashboard({ onBack }: Props) {
   const [adjustmentValues, setAdjustmentValues] = useState<Record<string, string>>({});
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [modalData, setModalData] = useState<{ userId: string; amount: number; type: 'add' | 'subtract' } | null>(null);
+  const [modalData, setModalData] = useState<{ userId: string; amount: number; type: 'add' | 'subtract' | 'set' } | null>(null);
  // Backend URL from environment variables, with a fallback for local development
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -72,8 +72,8 @@ export default function AdminDashboard({ onBack }: Props) {
     };
   }, [isAuthenticated, secret, backendUrl]); // Re-run effect if isAuthenticated or secret changes
 
-  const triggerUpdateBalance = (userId: string, amount: number, type: 'add' | 'subtract') => {
-    if (isNaN(amount) || amount <= 0) return; // Validate amount: must be a positive number
+  const triggerUpdateBalance = (userId: string, amount: number, type: 'add' | 'subtract' | 'set') => {
+    if (isNaN(amount) || (type !== 'set' && amount <= 0) || (type === 'set' && amount < 0)) return; 
     setModalData({ userId, amount, type });
     setShowConfirmModal(true);
   };
@@ -81,13 +81,15 @@ export default function AdminDashboard({ onBack }: Props) {
   const confirmUpdateBalance = async () => {
     if (!modalData) return;
     const { userId, amount, type } = modalData;
+    const mode = type === 'set' ? 'set' : 'adjust';
     setIsUpdating(userId);
     setShowConfirmModal(false); // Close modal immediately
     try {
+      const finalAmount = type === 'add' ? amount : (type === 'subtract' ? -amount : amount);
       const response = await fetch(`${backendUrl}/admin/update-wallet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, amount, secret })
+        body: JSON.stringify({ userId, amount: finalAmount, secret, mode })
       }); // Send request to update wallet balance
 
       if (response.ok) {
@@ -95,7 +97,8 @@ export default function AdminDashboard({ onBack }: Props) {
         setAdjustmentValues(prev => ({ ...prev, [userId]: '' }));
         // Refresh the list to show new balance
         await fetchWallets(); //
-        toast.success(`${type === 'add' ? 'Added' : 'Subtracted'} ${amount} ETB ${type === 'add' ? 'to' : 'from'} ${userId}`);
+        const actionText = type === 'set' ? `Set balance to ${amount}` : (type === 'add' ? `Added ${amount}` : `Subtracted ${amount}`);
+        toast.success(`${actionText} ETB for ${userId}`);
       } else { // Handle errors from the server
         const errorData = await response.json();
         toast.error(`Failed: ${errorData.error || 'Server error'}`);
@@ -376,6 +379,13 @@ export default function AdminDashboard({ onBack }: Props) {
                   className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 disabled:opacity-30"
                   aria-label="Increase Balance" // Button to increase balance
                 ><Plus size={14} /></button>
+                <button 
+                  onClick={() => triggerUpdateBalance(id, Math.abs(Number(adjustmentValues[id])), 'set')}
+                  disabled={isUpdating === id || !adjustmentValues[id]}
+                  className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 disabled:opacity-30"
+                  title="Set Balance Exactly"
+                  aria-label="Set Exact Balance"
+                ><Check size={14} /></button>
               </div>
             </div>
           </div>
@@ -401,9 +411,9 @@ export default function AdminDashboard({ onBack }: Props) {
           >
             <h3 className="text-xl font-black text-white uppercase italic mb-4">Confirm Balance Adjustment</h3>
             <p className="text-gray-300 mb-6">
-              Are you sure you want to {modalData?.type === 'add' ? 'add' : 'subtract'} 
+              Are you sure you want to {modalData?.type === 'set' ? 'SET' : (modalData?.type === 'add' ? 'add' : 'subtract')} 
               <span className="font-bold text-yellow-400 mx-1">{modalData?.amount} ETB</span> 
-              {modalData?.type === 'add' ? ' to' : ' from'} user 
+              {modalData?.type === 'set' ? 'as the TOTAL balance for' : (modalData?.type === 'add' ? ' to' : ' from')} user 
               <span className="font-bold text-indigo-300 mx-1">{modalData?.userId}</span>'s wallet?
             </p>
             <div className="flex gap-3">

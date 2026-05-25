@@ -363,7 +363,7 @@ app.get('/admin/pending-withdrawals', async (req, res) => {
 // ADMIN ENDPOINT: Manually update user wallet
 // This is used by your bot/admin tool to add ETB after manual payment
 app.post('/admin/update-wallet', async (req, res) => {
-  const { userId, amount, secret } = req.body;
+  const { userId, amount, secret, mode = 'adjust' } = req.body;
 
   if (secret !== ADMIN_SECRET) {
     return res.status(403).json({ error: 'Unauthorized' });
@@ -374,18 +374,39 @@ app.post('/admin/update-wallet', async (req, res) => {
   }
 
   try {
-    const user = await User.findOneAndUpdate(
+    // Find the user to check current balance before applying the update
+    const user = await User.findOne({ userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (mode === 'set') {
+      if (amount < 0) return res.status(400).json({ error: 'Balance cannot be negative.' });
+    } else {
+      // Prevent balance from going negative during adjustment
+      if (amount < 0 && (user.balance + amount) < 0) {
+        return res.status(400).json({ error: 'Cannot subtract, resulting balance would be negative.' });
+      }
+    }
+
+    const updateOp = mode === 'set' ? { $set: { balance: amount } } : { $inc: { balance: amount } };
+    const updatedUser = await User.findOneAndUpdate(
       { userId },
-      { $inc: { balance: amount } },
-      { upsert: true, new: true, runValidators: true }
+      updateOp,
+      { new: true, runValidators: true } // `new: true` returns the updated document
     );
 
-    if (user) userWallets.set(userId, user.balance); // Update in-memory cache
+    if (!updatedUser) {
+      return res.status(500).json({ error: 'Failed to update user balance.' });
+    }
+
+    userWallets.set(userId, updatedUser.balance); // Update in-memory cache
+
     // REFERRAL LOGIC: Reward the inviter with 5% of the deposit
-    if (user?.referredBy) {
+    if (mode === 'adjust' && amount > 0 && updatedUser?.referredBy) {
       const bonus = amount * 0.05;
-      const referrer = await User.findOneAndUpdate(
-        { userId: user.referredBy },
+      await User.findOneAndUpdate(
+        { userId: updatedUser.referredBy },
         { $inc: { balance: bonus } },
         { new: true }
       );
@@ -396,8 +417,8 @@ app.post('/admin/update-wallet', async (req, res) => {
 
     // Notify the user via Socket if they are currently connected
     const socketId = socketMapping.get(userId);
-    if (socketId && user) {
-      io.to(socketId).emit('wallet:update', user.balance);
+    if (socketId) {
+      io.to(socketId).emit('wallet:update', updatedUser.balance);
     }
 
     // Log the top-up transaction
@@ -409,14 +430,23 @@ app.post('/admin/update-wallet', async (req, res) => {
     });
 
     // Notify User and Admin
+    let notificationMessage = '';
+    if (mode === 'set') {
+      notificationMessage = `💳 <b>Balance Set!</b>\nYour balance has been set to <b>${amount} ETB</b>.`;
+    } else {
+      notificationMessage = amount > 0
+        ? `🎊 <b>Payment Approved!</b>\nYour balance has been updated with <b>${amount} ETB</b>. Good luck!`
+        : `💸 <b>Balance Adjusted!</b>\nYour balance has been adjusted by <b>${Math.abs(amount)} ETB</b>.`;
+    }
+
     await Promise.all([
-      notifyUser(userId, `🎊 <b>Payment Approved!</b>\nYour balance has been updated with <b>${amount} ETB</b>. Good luck!`),
-      ADMIN_CHAT_ID ? adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `✅ <b>Approval Log:</b> User <code>${userId}</code> credited with ${amount} ETB.`, { parse_mode: 'HTML' }) : Promise.resolve()
+      notifyUser(userId, notificationMessage),
+      ADMIN_CHAT_ID ? adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `✅ <b>Admin Log:</b> User <code>${userId}</code> balance adjusted by ${amount} ETB. New balance: ${updatedUser.balance} ETB.`, { parse_mode: 'HTML' }) : Promise.resolve()
     ]).catch(e => logger.error('Approval notification failed', { error: e }));
 
-    res.json({ success: true, newBalance: user?.balance });
+    res.json({ success: true, newBalance: updatedUser.balance });
   } catch (err) {
-    logger.error("Wallet Update Error", { error: err, userId }); // Log the real error
+    logger.error("Wallet Update Error", { error: err, userId, amount }); // Log the real error
     if (err instanceof MongooseError) {
       return res.status(400).json({ error: 'Database operation failed', details: err.message });
     }
