@@ -1,7 +1,11 @@
 import { io, Socket } from 'socket.io-client';
 
-// This URL will be updated once we deploy the Node.js server
-const SOCKET_URL: string = import.meta.env.VITE_BACKEND_URL || window.location.origin;
+const isNode = typeof process !== 'undefined' && process.versions && !!process.versions.node;
+
+// Environment-aware URL resolution to prevent Node.js crashes
+const SOCKET_URL: string = isNode 
+  ? (process.env.VITE_BACKEND_URL || 'http://localhost:3001')
+  : (import.meta.env.VITE_BACKEND_URL || window.location.origin);
 
 export const socketEvents = {
   // Outgoing Events (Player -> Server)
