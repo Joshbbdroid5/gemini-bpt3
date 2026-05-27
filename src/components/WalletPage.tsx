@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion'; // Importing motion and AnimatePresence for animations
+import { motion, AnimatePresence } from 'framer-motion';
 import { Wallet, ArrowLeft, RefreshCw, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 interface Props {
@@ -18,7 +18,7 @@ export default function WalletPage({
   onBack 
 }: Props) {
   const [activeTab, setActiveTab] = useState<'balance' | 'history'>('balance');
- // Translation object for various UI texts
+
   const t = {
     back: 'Back',
     wallet: 'Wallet',

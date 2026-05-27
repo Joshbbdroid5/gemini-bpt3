@@ -11,6 +11,7 @@ import { adminBot } from './admin-bot';
 import { Markup } from 'telegraf';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { socketEvents } from './src/components/socket'; // Import socketEvents
 import mongoose, { Error as MongooseError } from 'mongoose';
 import logger from './src/logger';
 import client from 'prom-client';
@@ -651,6 +652,7 @@ app.post('/admin/toggle-maintenance', (req, res) => {
     });
   }
 
+  broadcastPoolUpdate();
   res.json({ success: true, isMaintenanceMode });
 });
 
@@ -736,7 +738,7 @@ interface RoomState {
 }
 
 const roomStates = new Map<number, RoomState>();
-const STAKES = [10];
+const STAKES = [10]; // Only 10 ETB stake is allowed
 
 function generateGameId(stake: number) {
   return `LB-${stake}-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -784,7 +786,8 @@ const broadcastPoolUpdate = () => {
   io.emit('game:pool_sync', {
     rooms: allRoomStats,
     totalActive: activePlayers,
-    isEngineActive: engineActive
+    isEngineActive: engineActive,
+    isMaintenance: isMaintenanceMode
   });
 };
 
@@ -993,6 +996,20 @@ function registerSocketHandlers(io: SocketIOServer) {
 
   logger.debug(`Authenticated as: ${userId}`);
   socketMapping.set(userId, socket.id);
+
+  // Force Start Round (Admin Only)
+  socket.on(socketEvents.FORCE_START, () => { // Use the imported event name
+    STAKES.forEach(stake => {
+      const room = roomStates.get(stake);
+      if (room && room.state === GameStateEnum.SELECTION) {
+        if (room.selectionTimer) clearTimeout(room.selectionTimer);
+        room.state = GameStateEnum.GAME;
+        room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
+        broadcastPoolUpdate();
+        runGameLoop(stake);
+      }
+    });
+  });
 
   // Fetch or Create User in DB
   User.findOne({ userId }).then(async (user: any) => {

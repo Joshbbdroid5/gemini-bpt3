@@ -1,13 +1,12 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
- // Defining props for the ErrorBoundary component
+
 interface Props {
   children?: ReactNode;
-  fallback?: ReactNode; // Optional fallback UI prop
+  fallback?: ReactNode;
 }
-
 interface State {
   hasError: boolean;
-} // Defining state for the ErrorBoundary component
+}
 
 class ErrorBoundary extends Component<Props, State> {
   public state: State = {
@@ -15,13 +14,11 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(_: Error): State {
-    // Update state so the next render will show the fallback UI. This static method is called after an error has been thrown by a descendant component.
     return { hasError: true };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo); // Log the error to the console
-    // You can also log the error to an error reporting service here, e.g., Sentry.captureException(error, { extra: errorInfo });
+    console.error("Uncaught error:", error, errorInfo);
   }
 
   public render() {
@@ -31,7 +28,15 @@ class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
       return (
-      <h1 className="text-red-500 text-center p-5 text-xl font-bold">Something went wrong.</h1>
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#0f170a]">
+          <h1 className="text-red-500 text-2xl font-black uppercase italic tracking-tighter mb-4">
+            Something went wrong
+          </h1>
+          <p className="text-gray-400 text-sm mb-8 max-w-xs leading-relaxed font-medium">An unexpected error occurred. Please try reloading the application.</p>
+          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-white text-black rounded-xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-transform">
+            Reload Page
+          </button>
+        </div>
       );
     }
 

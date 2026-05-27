@@ -53,7 +53,7 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, t }:
   ), [winner.patterns]);
 
   return (
-    <div key={winner.id} className="bg-white/5 p-3 rounded-2xl border border-white/5"> {/* Use winner.id as key */}
+    <div key={winner.id} className="bg-white/5 p-3 rounded-2xl border border-white/5">
       <div className="flex justify-between items-center mb-2">
         <div className="flex flex-col">
           <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
@@ -501,8 +501,8 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
                 <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
                   <div>
                     {winners.map((winner: any, idx: number) => (
-                      <WinnerCard
-                        key={idx} 
+                      <WinnerCard 
+                        key={winner.id}
                         winner={winner} 
                         winnersCount={winners.length} 
                         totalPrize={stats.derash} 

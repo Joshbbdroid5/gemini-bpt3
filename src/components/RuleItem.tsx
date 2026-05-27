@@ -1,12 +1,12 @@
 import React from 'react';
- // RuleItem component definition
+
 export default function RuleItem({
   number,
   text,
 }: {
   number: string;
   text: string;
-}) { // Destructuring props: number (string) and text (string)
+}) {
   return (
     <div className="flex gap-4">
       <div className="shrink-0 w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600 border border-indigo-100">

@@ -69,7 +69,7 @@ export default function HistoryPage({ history, onBack }: Props) {
             </div>
             {history.slice().reverse().map((entry, idx) => ( // Map through history entries, reversed for most recent first
             <motion.div
-              key={idx}
+              key={entry.gameId}
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ delay: idx * 0.05 }}

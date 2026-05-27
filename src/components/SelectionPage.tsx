@@ -76,7 +76,7 @@ export default function SelectionPage({ staked, wallet, onComplete, onBack }: Pr
       if (isCurrentlySelected) {
         next.delete(id);
       } else {
-        next.clear(); // Enforce 1 board limit locally
+        next.clear(); // Enforce 1 board limit
         next.add(id);
       }
       return next;

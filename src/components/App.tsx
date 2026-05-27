@@ -3,9 +3,9 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { Info, X, Trophy, RefreshCw, Clock } from 'lucide-react';
-import Header from './Header';
+import { Info, X, Trophy, RefreshCw, Clock, AlertTriangle } from 'lucide-react';
 import Dashboard from './Dashboard';
+import Header from './Header';
 import ErrorBoundary from '../ErrorBoundary';
 import SelectionPage from './SelectionPage';
 import GamePage from './GamePage';
@@ -82,6 +82,8 @@ export default function App() {
   const [connectionError, setConnectionError] = useState(false);
   const [myId, setMyId] = useState<string>('');
   const [showEngineIdleModal, setShowEngineIdleModal] = useState(false);
+  const [telegramDisplayName, setTelegramDisplayName] = useState<string>('');
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
 
@@ -111,25 +113,44 @@ export default function App() {
     isEngineActive: false
   };
 
+  // Engine Watchdog: Automatically return to home if the engine becomes idle
+  // or maintenance mode is enabled while the user is in a phase that requires an active session.
+  useEffect(() => {
+    const hasStats = Object.keys(allRoomStats).length > 0;
+    const engineIsIdle = hasStats && !currentRoomStats.isEngineActive;
+    
+    if ((engineIsIdle || isMaintenanceMode) && (phase === 'game' || phase === 'selection')) {
+      setPhase('home');
+      if (engineIsIdle) setShowEngineIdleModal(true);
+    }
+  }, [allRoomStats, phase, currentRoomStats.isEngineActive, isMaintenanceMode]);
+
   // Homepage Play uses only stake=10 and decides between selection vs watching.
-  const handleHomePlay = () => {
-    if (!currentRoomStats.isEngineActive) {
+  const handleHomePlay = (amount: number) => {
+    if (isMaintenanceMode) {
+      alert("The system is currently under maintenance. New games cannot be started.");
+      return;
+    }
+
+    // Get stats for the *requested* stake amount, not the current state's stake
+    const requestedRoomStats = allRoomStats[amount] || {
+      pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false
+    };
+
+    if (!requestedRoomStats.isEngineActive) {
       setShowEngineIdleModal(true);
       return;
     } // Show modal if game engine is not active
 
-    if (currentRoomStats.isLive) {
+    setStake(amount); // Update current stake choice
+
+    if (requestedRoomStats.isLive) {
       setSelectedBoardIds([]); // watching-only
       setPhase('game');
       return;
     } // If game is live, go to game page in watching-only mode
     setPhase('selection');
   };
-
-
-
-
-
 
 
   // Handle Socket Connection
@@ -145,14 +166,11 @@ export default function App() {
 
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: any) => {
-      if (data.rooms) { // Update all room stats if provided
-        const rooms: Record<string, any> = { ...data.rooms };
-        Object.keys(rooms).forEach((k) => {
-          rooms[k].isEngineActive = data.isEngineActive;
-        });
-        setAllRoomStats(rooms);
+      if (data.rooms) {
+        setAllRoomStats(data.rooms);
       }
       if (data.totalActive !== void 0) setTotalActivePlayers(data.totalActive);
+      if (data.isMaintenance !== void 0) setIsMaintenanceMode(data.isMaintenance);
     };
     const handleWinHistory = (history: any[]) => setWinningHistory(history);
 
@@ -199,7 +217,6 @@ export default function App() {
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.GAME_INIT, handleInit);
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
-    socket.on(socketEvents.BALL_DRAWN, () => { /* isLive is updated via pool_sync */ });
     socket.on(socketEvents.GAME_RESET, () => { 
       // Only auto-redirect if the user was actually in a game or selection
       // This prevents users browsing their Profile/History from being yanked away
@@ -213,9 +230,7 @@ export default function App() {
     });
     socket.on(socketEvents.GAME_STATUS, handleGameStatus);
     socket.on(socketEvents.GAME_STOPPED, (msg?: string) => handleGameStopped(msg));
-    socket.on('connect_error', handleConnectError);
-    // Set a timeout to catch connection failures
-    // Set a timeout to catch connection failures
+    socket.on('connect_error', handleConnectError); // Set a timeout to catch connection failures
     const timeoutId = setTimeout(() => {
       // Hard fallback: prevent permanent overlay when socket events never arrive.
       if (!socket.connected) {
@@ -245,7 +260,13 @@ export default function App() {
     const tg = window.Telegram?.WebApp;
     if (tg) { // Check if Telegram WebApp is available
       tg.expand(); // Open full screen in Telegram
-      const user = tg.initDataUnsafe?.user;
+      const user = tg.initDataUnsafe?.user; // Get user data from Telegram
+      if (user) {
+        // Construct display name from first_name, last_name, or username
+        const displayName = user.first_name || user.username || '';
+        const lastName = user.last_name ? ` ${user.last_name}` : '';
+        setTelegramDisplayName(`${displayName}${lastName}`.trim());
+      }
       if (user?.id) setMyId(user.id.toString());
 
       connectToGame({
@@ -273,23 +294,18 @@ export default function App() {
     };
   }, []);
 
-  const startSelection = () => {
-    // If game is already live, send user directly to GamePage in watching-only mode.
-    if (currentRoomStats.isLive) { // Check if the game is currently live
-      setSelectedBoardIds([]);
-      setPhase('game');
-      return;
-    }
-    // Otherwise, allow board selection and betting.
-    // Otherwise, allow board selection and betting.
-    setPhase('selection');
-  };
-
   const completeSelection = (ids: number[]) => {
     setSelectedBoardIds(ids);
 
+    // Guard: Prevent proceeding to game if engine stopped during selection
+    if (!currentRoomStats.isEngineActive) {
+      setShowEngineIdleModal(true);
+      setPhase('home');
+      return;
+    }
+
     // Prevent playing if not verified
-    if (!isVerified) { // Check if the user is verified
+    if (isVerified === false) { // Check if the user is verified
       alert("Please verify your phone number in the bot first!");
       return;
     }
@@ -301,40 +317,6 @@ export default function App() {
     }, 3000);
   };
 
-  const handleTopUp = (amount: number) => {
-    if (!IS_BOT_CONFIGURED) {
-      alert(`Configuration Error: VITE_TELEGRAM_BOT_USERNAME is not set (Current: ${BOT_USERNAME})`); // Alert if bot username is not configured
-      return;
-    }
-    if (window.Telegram?.WebApp) {
-      // Using the 'start' parameter to pass structured data to the bot
-      const payload = `topup_${amount}_${myId}`; // Example payload: topup_100_guest_1234
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(payload)}`);
-    } else {
-      alert("This feature is only available in Telegram WebApp.");
-    }
-  };
-
-  const handleDeposit = () => {
-    if (!IS_BOT_CONFIGURED) return alert("Bot username not set. Please check Render Environment variables.");
-    if (window.Telegram?.WebApp) { // Open Telegram link for deposit
-       window.Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=deposit`);
-    } else {
-       window.open(`https://t.me/${BOT_USERNAME}?start=deposit`, '_blank');
-    }
-  };
-
-  const handleWithdraw = () => {
-    if (!IS_BOT_CONFIGURED) return alert("Bot username not set. Please check Render Environment variables.");
-    if (window.Telegram?.WebApp) { // Open Telegram link for withdrawal
-       window.Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=withdraw`);
-    } else {
-       window.open(`https://t.me/${BOT_USERNAME}?start=withdraw`, '_blank');
-    }
-  };
-
-
-
   const addHistoryEntry = (entry: HistoryEntry) => {
     setHistory(prev => [...prev, entry]);
   };
@@ -344,20 +326,26 @@ export default function App() {
     setBottomTab('game'); // Ensure the tab highlight moves back to the "Game/Play" tab
   }, []);
 
+  const handleViewHistory = useCallback(() => {
+    setPhase('history');
+    setBottomTab('history');
+  }, []);
+
   const handleTabChange = useCallback(
     (tab: BottomTabKey) => {
       setBottomTab(tab);
 
       if (tab === 'game') { // Handle navigation to game tab
-        // If user is in selection, keep it. Otherwise go to game.
-        if (phase === 'selection') return;
-        setPhase('game');
+        // If user is already in a game or selection, stay there.
+        // Otherwise, return to the Home dashboard.
+        if (phase === 'selection' || phase === 'game') return;
+        setPhase('home');
       } else if (tab === 'history') { // Handle navigation to history tab
         setPhase('history');
       } else if (tab === 'wallet') {
-        setPhase('wallet' as any);
+        setPhase('wallet');
       } else if (tab === 'profile') {
-        setPhase('profile' as any);
+        setPhase('profile');
       }
     },
     [phase]
@@ -366,6 +354,16 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen max-h-screen font-sans selection:bg-yellow-100 selection:text-yellow-900 overflow-hidden relative bg-[#0f170a]">
     <ErrorBoundary fallback={<div className="fixed inset-0 z-150 bg-red-800 flex items-center justify-center text-white text-2xl">Application crashed! Please refresh.</div>}> {/* ErrorBoundary for the entire app */}
+        {/* Global Maintenance Banner */}
+        {isMaintenanceMode && (
+          <div className="bg-red-600 text-white px-4 py-2 z-[202] flex items-center justify-center gap-2 shadow-lg shrink-0">
+            <AlertTriangle size={14} className="animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-center">
+              Maintenance Mode: System paused. New bets are currently disabled.
+            </span>
+          </div>
+        )}
+
         {/* Animated background overlay for transitions */}
         <AnimatePresence>
           <motion.div
@@ -399,7 +397,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {isVerified === false && (
+            {isVerified === false && !connectionError && (
               <motion.div // Verification required overlay
                 key="verify"
                 className="fixed inset-0 z-150 bg-primary flex flex-col items-center justify-center p-8 text-center"
@@ -420,7 +418,7 @@ export default function App() {
               </motion.div>
             )}
 
-              {phase === 'home' && (
+              {isVerified === true && phase === 'home' && (
               <motion.div // Home page content
                 key="home"
                 initial={{ opacity: 0 }}
@@ -431,11 +429,29 @@ export default function App() {
                 <Dashboard
                   onPlay={handleHomePlay}
                   allStats={allRoomStats}
+                  isMaintenanceMode={isMaintenanceMode}
                 />
               </motion.div>
             )}
 
-            {phase === 'game' && (
+            {isVerified === true && phase === 'selection' && (
+              <motion.div // Selection page content
+                key="selection"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 flex flex-col min-h-0"
+              >
+                <SelectionPage 
+                  staked={stake} 
+                  wallet={wallet} 
+                  onComplete={completeSelection} 
+                  onBack={handleBackToHome} 
+                />
+              </motion.div>
+            )}
+
+            {isVerified === true && phase === 'game' && (
               <motion.div // Game page content
                 key="game"
                 initial={{ y: 300, opacity: 0 }}
@@ -452,7 +468,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {phase === 'history' && (
+            {isVerified === true && phase === 'history' && (
               <motion.div // History page content
                 key="history"
                 initial={{ opacity: 0 }}
@@ -464,7 +480,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {phase === 'wallet' && (
+            {isVerified === true && phase === 'wallet' && (
               <motion.div // Wallet page content
                 key="wallet"
                 initial={{ opacity: 0 }}
@@ -482,7 +498,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {phase === 'profile' && (
+            {isVerified === true && phase === 'profile' && (
               <motion.div // Profile page content
                 key="profile"
                 initial={{ opacity: 0 }}
@@ -495,6 +511,8 @@ export default function App() {
                   walletBalance={wallet}
                   gamesWon={history.filter(h => h.isMyWin).length}
                   totalEarnings={history.reduce((sum, h) => h.isMyWin ? sum + h.payoutPerWinner : sum, 0)}
+                  telegramDisplayName={telegramDisplayName}
+                  onViewHistory={handleViewHistory}
                 />
               </motion.div>
             )}
@@ -574,7 +592,7 @@ export default function App() {
                     ><X size={20} /></button>
                   </div>
                   <div className="space-y-6">
-                    <RuleItem number="1" text="Select your entry fee (10 ETB or 20 ETB) to start." />
+                    <RuleItem number="1" text="Stake 10 ETB to enter the round." />
                     <RuleItem number="2" text="Pick your board from the 600 available options within 60 seconds." />
                     <RuleItem number="3" text="Wait for the system to call a ball every 3 seconds." />
                     <RuleItem number="4" text="Numbers are marked automatically. Complete a row, column, diagonal, or four corners to win." />

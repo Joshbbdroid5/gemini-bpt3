@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
-// NOTE: This file previously triggered TS "Cannot find name 'div'" errors.
-// That error typically happens when the file is not treated as TSX. This comment clarifies the previous issue.
-// Ensure the file extension is .tsx (it is) and keep JSX within the function return.
 import toast, { Toaster } from 'react-hot-toast';
-
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power, Check } from 'lucide-react';
 import { socket, socketEvents } from './socket';
@@ -16,14 +12,14 @@ export default function AdminDashboard({ onBack }: Props) {
   const [secret, setSecret] = useState('');
   const [wallets, setWallets] = useState<Record<string, number>>({});
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [stats, setStats] = useState({ totalVolume: 0, totalProfit: 0, activeBets: 0, isMaintenanceMode: false, isGameRunning: false, stopRequested: false });
+  const [stats, setStats] = useState({ totalVolume: 0, totalProfit: 0, activeBets: 0, isMaintenanceMode: false, isGameRunning: false, stopRequested: false, isEngineActive: false });
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [adjustmentValues, setAdjustmentValues] = useState<Record<string, string>>({});
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [modalData, setModalData] = useState<{ userId: string; amount: number; type: 'add' | 'subtract' | 'set' } | null>(null);
- // Backend URL from environment variables, with a fallback for local development
+  // Backend URL from environment variables, with a fallback for local development
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
   const fetchWallets = async () => {
@@ -50,6 +46,7 @@ export default function AdminDashboard({ onBack }: Props) {
         setIsAuthenticated(true);
       } else { // Handle unauthorized or server errors
         toast.error(`Unauthorized or server error (${response.status})`);
+        if (response.status === 403) setIsAuthenticated(false);
       }
     } catch (err) {
       console.error('Admin login fetch error:', err);
@@ -90,13 +87,13 @@ export default function AdminDashboard({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, amount: finalAmount, secret, mode })
-      }); // Send request to update wallet balance
+      });
 
       if (response.ok) {
         // Clear the input for this user
         setAdjustmentValues(prev => ({ ...prev, [userId]: '' }));
         // Refresh the list to show new balance
-        await fetchWallets(); //
+        await fetchWallets();
         const actionText = type === 'set' ? `Set balance to ${amount}` : (type === 'add' ? `Added ${amount}` : `Subtracted ${amount}`);
         toast.success(`${actionText} ETB for ${userId}`);
       } else { // Handle errors from the server
@@ -119,7 +116,7 @@ export default function AdminDashboard({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret, enabled: nextState })
-      }); // Send request to toggle maintenance mode
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -139,7 +136,7 @@ export default function AdminDashboard({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret })
-      }); // Send request to start game engine
+      });
       const data = await response.json();
       if (response.ok) {
         toast.success(data.message || 'Game engine started!');
@@ -161,7 +158,7 @@ export default function AdminDashboard({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret })
-      }); // Send request to stop game engine
+      });
       const data = await response.json();
       if (response.ok) {
         toast.success(data.message || 'Stop request sent');
@@ -205,8 +202,8 @@ export default function AdminDashboard({ onBack }: Props) {
 
   return (
     <>
-    <div className="flex-1 flex flex-col bg-primary overflow-hidden">
-      <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between"> {/* Header for the admin dashboard */}
+    <div className="flex-1 flex flex-col bg-primary overflow-hidden h-full">
+      <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-2 bg-white/5 rounded-full" aria-label="Go back"><ArrowLeft size={18} /></button>
           <h2 className="font-black text-white uppercase italic">Wallet Manager</h2>
@@ -218,7 +215,7 @@ export default function AdminDashboard({ onBack }: Props) {
 
       {/* System Controls */}
       <div className="px-4 pt-4">
-        <div className={`p-4 rounded-2xl border flex items-center justify-between transition-colors ${ // Maintenance mode toggle
+        <div className={`p-4 rounded-2xl border flex items-center justify-between transition-colors ${
           stats.isMaintenanceMode
             ? 'bg-red-500/10 border-red-500/30' 
             : 'bg-green-500/10 border-green-500/30'
@@ -245,20 +242,20 @@ export default function AdminDashboard({ onBack }: Props) {
         </div>
 
         {/* Game Engine Control */}
-        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-between"> {/* Game engine control */}
+        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-full ${stats.isGameRunning ? (stats.stopRequested ? 'bg-orange-500' : 'bg-indigo-500') : 'bg-gray-600'} text-white`}>
+            <div className={`p-2 rounded-full ${stats.isEngineActive ? 'bg-indigo-500' : (stats.stopRequested ? 'bg-orange-500' : 'bg-gray-600')} text-white`}>
               <Activity size={20} />
             </div>
             <div>
               <h3 className="text-white font-black uppercase text-xs tracking-wider">Game Engine</h3>
               <p className="text-[10px] text-gray-400 uppercase font-bold">
-                {stats.isGameRunning ? (stats.stopRequested ? 'Stopping (Round Active)' : 'Engine Running') : 'Engine Idle'}
+                {stats.isEngineActive ? 'Engine Running' : (stats.stopRequested ? 'Stopping (Round Active)' : 'Engine Idle')}
               </p>
             </div>
           </div>
           <div className="flex gap-2">
-            {!stats.isGameRunning ? ( // Render Start Engine button if not running
+            {!stats.isGameRunning ? (
               <button 
                 onClick={handleStartEngine}
                 disabled={loading}
@@ -266,7 +263,7 @@ export default function AdminDashboard({ onBack }: Props) {
               >
                 Start Engine
               </button>
-            ) : ( // Render Stop Engine button if running
+            ) : (
               <button 
                 onClick={handleStopEngine}
                 disabled={stats.stopRequested || loading}
@@ -283,7 +280,7 @@ export default function AdminDashboard({ onBack }: Props) {
         </div>
 
         {/* Force Start */}
-        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5"> {/* Force start game button */}
+        <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/5">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="text-white font-black uppercase text-xs tracking-wider">Force Start</h3>
@@ -346,8 +343,9 @@ export default function AdminDashboard({ onBack }: Props) {
           <div key={id} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="text-[10px] font-black text-indigo-300 uppercase leading-none mb-1">User ID</span>
-                <span className="text-xs font-bold text-white font-mono">{id}</span>
+                <span className="text-[10px] font-black text-indigo-300 uppercase leading-none mb-1">Username</span>
+                <span className="text-xs font-bold text-white font-mono leading-none">{id}</span>
+                <span className="text-[8px] text-gray-500 italic mt-1 font-medium">ID: {id}</span>
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-black text-gray-500 uppercase leading-none block mb-1">Balance</span>

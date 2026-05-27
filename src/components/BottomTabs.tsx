@@ -26,25 +26,19 @@ const TabButton = ({
   return (
     <button
       onClick={onClick}
-      className={
-        'flex-1 flex flex-col items-center justify-center gap-1 h-full py-2 transition-all relative ' +
-        (active 
-          ? 'text-yellow-300 scale-110'
-          : 'text-gray-300 hover:text-white/90')
-      }
+      className={`flex-1 flex flex-col items-center justify-center gap-1 h-full py-2 transition-all relative ${
+        active ? 'text-yellow-300 scale-110' : 'text-gray-300 hover:text-white/90'
+      }`}
       aria-label={label}
     >
       <div
-        className={
-          'w-8 h-8 rounded-xl flex items-center justify-center border transition-all ' +
-          (active
-            ? 'bg-white/10 border-yellow-400/30 shadow-[0_0_22px_rgba(250,204,21,0.15)]'
-            : 'bg-white/5 border-white/10')
-        }
+        className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-all ${
+          active ? 'bg-white/10 border-yellow-400/30 shadow-[0_0_22px_rgba(250,204,21,0.15)]' : 'bg-white/5 border-white/10'
+        }`}
       >
         {icon}
       </div>
-      <span className={'text-[9px] font-black uppercase tracking-widest leading-none ' + (active ? '' : 'opacity-70')}>
+      <span className={`text-[9px] font-black uppercase tracking-widest leading-none ${active ? '' : 'opacity-70'}`}>
         {label}
       </span>
       {active && (
