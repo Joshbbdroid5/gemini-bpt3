@@ -26,8 +26,17 @@ function requireAdminSecret(ctx: Context): boolean { // Explicitly typed ctx
 if (!BOT_TOKEN) throw new Error('TELEGRAM_ADMIN_BOT_TOKEN is required');
 
 export const adminBot = new Telegraf<Context>(BOT_TOKEN); // Explicitly typed Telegraf instance
-adminBot.start((ctx: Context) => ctx.reply('🚀 Welcome, Admin. Use /manage to control the server.')); // Explicitly typed ctx
 
+const manageKeyboard = Markup.inlineKeyboard([
+  [Markup.button.callback('🚀 Start Engine', 'engine_start'), Markup.button.callback('🛑 Stop Engine', 'engine_stop')],
+  [Markup.button.callback('🛡️ Maint ON', 'maint_on'), Markup.button.callback('✅ Maint OFF', 'maint_off')],
+  [Markup.button.callback('📥 Pending Deposits', 'view_pending')],
+  [Markup.button.callback('📤 Pending Withdrawals', 'view_withdrawals')],
+  [Markup.button.callback('📊 View Server Stats', 'view_stats')],
+  [Markup.button.callback('🔍 Search User', 'search_user')],
+]);
+
+adminBot.start((ctx: Context) => ctx.reply('🚀 Welcome, Admin. Use /manage to control the server.')); // Explicitly typed ctx
 
 adminBot.command('manage', (ctx) => {
   if (ctx.from.id.toString() !== ADMIN_CHAT_ID) {
@@ -38,14 +47,7 @@ adminBot.command('manage', (ctx) => {
     '🛠 <b>Server Management</b>\n\nSelect a management function below:',
     {
       parse_mode: 'HTML',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('� Start Engine', 'engine_start'), Markup.button.callback('🛑 Stop Engine', 'engine_stop')],
-        [Markup.button.callback('🛡️ Maint ON', 'maint_on'), Markup.button.callback('✅ Maint OFF', 'maint_off')],
-        [Markup.button.callback(' Pending Deposits', 'view_pending')],
-        [Markup.button.callback('📤 Pending Withdrawals', 'view_withdrawals')],
-        [Markup.button.callback('📊 View Server Stats', 'view_stats')],
-        [Markup.button.callback('🔍 Search User', 'search_user')],
-      ]),
+      ...manageKeyboard,
     }
   );
 });
@@ -64,7 +66,11 @@ adminBot.action(/maint_(on|off)/, async (ctx: Context & { match: RegExpExecArray
     });
 
     const data = await response.json();
-    await ctx.editMessageText(`Status: ${data.isMaintenanceMode ? '🛑 Maintenance Mode Active' : '✅ Game Server Running'}`);
+    await ctx.editMessageText(
+      `Status: ${data.isMaintenanceMode ? '🛑 Maintenance Mode Active' : '✅ Game Server Running'}`,
+      Markup.inlineKeyboard([[Markup.button.callback('🔙 Back to Menu', 'manage_menu')]])
+    );
+    await ctx.answerCbQuery(data.isMaintenanceMode ? '🛡️ Maintenance Enabled' : '✅ Maintenance Disabled');
   } catch (err: any) {
     await ctx.reply('❌ Error: Could not reach the game server.');
   }
@@ -82,7 +88,10 @@ adminBot.action('engine_start', async (ctx: Context) => {
     });
     const data = await response.json();
     await ctx.answerCbQuery(data.message || '🚀 Engine Started');
-    await ctx.reply(`✅ <b>Engine Status:</b> ${data.message || 'Started'}`, { parse_mode: 'HTML' });
+    await ctx.editMessageText(
+      `✅ <b>Engine Status:</b> ${data.message || 'Started'}`, 
+      { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Back to Menu', 'manage_menu')]]) }
+    );
   } catch (err) {
     await ctx.reply('❌ Error: Could not start engine.');
   }
@@ -129,14 +138,7 @@ adminBot.action('manage_menu', async (ctx: Context) => {
     '🛠 <b>Server Management</b>\n\nSelect a management function below:',
     {
       parse_mode: 'HTML',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback(' Start Engine', 'engine_start'), Markup.button.callback('🛑 Stop Engine', 'engine_stop')],
-        [Markup.button.callback('🛡️ Maint ON', 'maint_on'), Markup.button.callback('✅ Maint OFF', 'maint_off')],
-        [Markup.button.callback(' Pending Deposits', 'view_pending')],
-        [Markup.button.callback('📤 Pending Withdrawals', 'view_withdrawals')],
-        [Markup.button.callback('📊 View Server Stats', 'view_stats')],
-        [Markup.button.callback('🔍 Search User', 'search_user')],
-      ]),
+      ...manageKeyboard,
     }
   );
 });
@@ -328,4 +330,8 @@ adminBot.action(/w_ref_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArr
     await ctx.reply('❌ Error contacting server.');
   }
 });
-adminBot.catch((err) => logger.error('Admin Bot Global Error', { error: err }));
+adminBot.catch((err) => {
+  // The .catch handler expects a function that returns MaybePromise<void>.
+  // logger.error returns the logger instance, so we wrap the call in an arrow function.
+  logger.error('Admin Bot Global Error', { error: err });
+});

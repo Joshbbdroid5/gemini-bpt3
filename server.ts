@@ -15,6 +15,8 @@ import { socketEvents } from './src/components/socket'; // Import socketEvents
 import mongoose, { Error as MongooseError } from 'mongoose';
 import logger from './src/logger';
 import client from 'prom-client';
+import { metrics, Counter, ObservableGauge } from '@opentelemetry/api';
+import { GameState, RoomStats, PoolUpdateData } from './src/types';
 
 dotenv.config();
 
@@ -44,13 +46,10 @@ const allowedOrigins = process.env.NODE_ENV === 'production' && process.env.FRON
   ? process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, ""))
   : ["http://localhost:5173", "http://127.0.0.1:5173"];
 
-const corsOptions = {
-  cors: {
-    // CRITICAL: Prevent other sites from connecting to your socket
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true
-  }
+const corsConfig = {
+  origin: allowedOrigins,
+  methods: ["GET", "POST"],
+  credentials: true
 };
 
 app.use((req, res, next) => {
@@ -65,7 +64,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors(corsOptions.cors)); // Match REST API CORS policy to Socket.io
+app.use(cors(corsConfig)); // Match REST API CORS policy to Socket.io
 app.use(express.json());
 
 // Ensure PORT is strictly parsed as a decimal integer
@@ -163,20 +162,13 @@ const userSchema = new mongoose.Schema<IUser>({
 });
 const User = mongoose.model<IUser>('User', userSchema);
 
-// GameState enum for Mongoose schema
-enum GameStateEnum {
-  SELECTION = 'SELECTION',
-  GAME = 'GAME',
-  FINISHED = 'FINISHED',
-}
-
 // RoomState Schema for persistence
 interface IRoomState {
   stake: number;
   currentBalls: number[];
   shuffledBalls: number[];
   globalPool: number;
-  state: GameStateEnum;
+  state: GameState;
   currentGameId: string;
   selectionStartTime?: number;
   selectionDuration?: number;
@@ -189,7 +181,7 @@ const roomStateSchema = new mongoose.Schema<IRoomState>({
   currentBalls: { type: [Number], default: [] },
   shuffledBalls: { type: [Number], default: [] },
   globalPool: { type: Number, default: 0 },
-  state: { type: String, enum: Object.values(GameStateEnum), default: GameStateEnum.SELECTION },
+  state: { type: String, enum: Object.values(GameState), default: GameState.SELECTION },
   currentGameId: { type: String, required: true },
   selectionStartTime: { type: Number },
   selectionDuration: { type: Number },
@@ -246,7 +238,12 @@ async function syncCache() {
     const existingRoomStates = await RoomStateModel.find({});
     existingRoomStates.forEach(roomDoc => {
       // Map the Document to our internal RoomState interface
-      roomStates.set(roomDoc.stake, roomDoc as unknown as RoomState);
+      const roomState: RoomState = { 
+        ...roomDoc.toObject(),
+        playerBoards: new Map(roomDoc.playerBoards),
+        boardStatus: new Map(roomDoc.boardStatus),
+      };
+      roomStates.set(roomDoc.stake, roomState);
     });
   } catch (err) {
     logger.error('Failed to sync cache from MongoDB', { error: err });
@@ -576,7 +573,7 @@ app.post('/admin/verify-user', async (req, res) => {
     // Notify connected socket that they are now verified
     const socketId = socketMapping.get(userId);
     if (socketId) {
-      io.to(socketId).emit('user:status', { isVerified: true, phone });
+      io.to(socketId).emit(socketEvents.USER_STATUS, { isVerified: true, phone });
     }
 
     if (ADMIN_CHAT_ID) {
@@ -720,12 +717,36 @@ let isGameRunning = false;
 let stopRequested = false;
 let activePlayers = 0;
 
+// OpenTelemetry Business Metrics
+const meter = metrics.getMeter('bingo-business-logic', '1.0.0');
+
+// Tracks the number of rooms currently in the LIVE (GAME) state
+const activeGamesGauge = meter.createObservableGauge('bingo_active_games', {
+  description: 'Number of games currently in the drawing phase',
+});
+activeGamesGauge.addCallback((result) => {
+  const count = Array.from(roomStates.values()).filter(r => r.state === GameState.GAME).length;
+  result.observe(count);
+});
+
+// Tracks the total volume of ETB staked (lifetime of this process + DB sync)
+const totalVolumeGauge = meter.createObservableGauge('bingo_total_volume_etb', {
+  description: 'Total amount of ETB staked across all rounds',
+});
+totalVolumeGauge.addCallback((result) => {
+  result.observe(totalVolume);
+});
+
+const jackpotWinsCounter = meter.createCounter('bingo_jackpot_wins_total', {
+  description: 'Total number of winning boards declared',
+});
+
 interface RoomState {
   stake: number;
   currentBalls: number[];
   shuffledBalls: number[];
   globalPool: number;
-  state: GameStateEnum;
+  state: GameState;
   currentGameId: string;
   selectionTimer?: NodeJS.Timeout;
   selectionStartTime?: number; // Timestamp when selection phase started
@@ -750,7 +771,7 @@ STAKES.forEach(stake => {
     currentBalls: [],
     shuffledBalls: [],
     globalPool: 0,
-    state: GameStateEnum.SELECTION,
+    state: GameState.SELECTION,
     currentGameId: generateGameId(stake),
     playerBoards: new Map(),
     boardStatus: new Map(),
@@ -768,7 +789,7 @@ for (let i = 1; i <= 600; i++) {
 // We use a slower interval (3s) which is already good for free tier CPU limits
 // If you find the server lagging, you can increase this to 5s or 10s
 const broadcastPoolUpdate = () => {
-  const allRoomStats: Record<number, any> = {};
+  const allRoomStats: Record<number, RoomStats> = {};
   const engineActive = isGameRunning && !stopRequested;
   
   STAKES.forEach(stake => {
@@ -778,17 +799,18 @@ const broadcastPoolUpdate = () => {
       players: room.playerBoards.size,
       gameId: room.currentGameId,
       state: room.state,
-      isLive: room.state === 'GAME',
+      isLive: room.state === GameState.GAME,
       isEngineActive: engineActive
     };
   });
 
-  io.emit('game:pool_sync', {
+  const poolUpdateData: PoolUpdateData = {
     rooms: allRoomStats,
     totalActive: activePlayers,
     isEngineActive: engineActive,
-    isMaintenance: isMaintenanceMode
-  });
+    isMaintenance: isMaintenanceMode,
+  };
+  io.emit(socketEvents.POOL_UPDATE, poolUpdateData);
 };
 
 function shuffle(array: number[]) {
@@ -803,14 +825,14 @@ function shuffle(array: number[]) {
 async function runGameLoop(stake: number) {
   const room = roomStates.get(stake)!;
 
-  if (!isGameRunning || room.state !== GameStateEnum.GAME) {
+  if (!isGameRunning || room.state !== GameState.GAME) {
     return;
   }
 
   if (room.currentBalls.length < room.shuffledBalls.length) {
     const ball = room.shuffledBalls[room.currentBalls.length];
     room.currentBalls.push(ball);
-    io.to(`room_${stake}`).emit('game:ball', ball);
+    io.to(`room_${stake}`).emit(socketEvents.BALL_DRAWN, ball);
 
       // AUTO-CLAIM CHECK: Collect all winners for this specific ball
       const winnersThisRound: any[] = [];
@@ -818,7 +840,7 @@ async function runGameLoop(stake: number) {
       room.playerBoards.forEach((boardIds, userId) => {
         for (const boardId of boardIds) {
           const grid = boardsCache.get(boardId);
-          const win = checkWin(grid, new Set(room.currentBalls) as any);
+          const win = checkWin(grid, new Set(room.currentBalls));
           
           if (win.isWinner && !room.boardStatus.get(boardId.toString())) { 
             winnersThisRound.push({
@@ -831,7 +853,7 @@ async function runGameLoop(stake: number) {
       });
 
       if (winnersThisRound.length > 0) {
-        room.state = GameStateEnum.FINISHED;
+        room.state = GameState.FINISHED;
         const totalPayout = room.globalPool * 0.6; // 60% to players
         const houseShare = room.globalPool * 0.4; // 40% to house
         
@@ -849,10 +871,11 @@ async function runGameLoop(stake: number) {
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
 
+            jackpotWinsCounter.add(1);
             const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
             const sId = socketMapping.get(w.userId);
-            if (sId && user) io.to(sId).emit('wallet:update', user.balance);
-            io.to(`room_${stake}`).emit('game:winner', winnerInfo);
+            if (sId && user) io.to(sId).emit(socketEvents.WALLET_UPDATE, user.balance);
+            io.to(`room_${stake}`).emit(socketEvents.NEW_WINNER, winnerInfo);
 
             return GameArchive.create({
               gameId: room.currentGameId,
@@ -868,7 +891,7 @@ async function runGameLoop(stake: number) {
       }
   }
 
-  if (room.state === 'FINISHED' || room.currentBalls.length >= 75) {
+  if (room.state === GameState.FINISHED || room.currentBalls.length >= 75) {
     // 3-second winner declaration window as requested for the rapid-fire loop
     room.gameLoopTimeout = setTimeout(() => resetGame(stake), 3000);
     return; // Exit the loop
@@ -885,14 +908,14 @@ function startSelectionPhase(stake: number) {
   const room = roomStates.get(stake);
   if (!room) return; // Should not happen if initialized correctly
   const SELECTION_PHASE_DURATION_MS = 40000; // 40 seconds
-  room.state = GameStateEnum.SELECTION;
+  room.state = GameState.SELECTION;
   room.selectionStartTime = Date.now();
   room.selectionDuration = SELECTION_PHASE_DURATION_MS;
   broadcastPoolUpdate();
   
   // Start 40s "Quick Pick" window to finalize Total Players for this round
   room.selectionTimer = setTimeout(() => { // Store the timer reference
-    room.state = GameStateEnum.GAME;
+    room.state = GameState.GAME;
     room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
     broadcastPoolUpdate();
     runGameLoop(stake);
@@ -909,17 +932,27 @@ function resetGame(stake: number) {
   room.playerBoards.clear();
   room.boardStatus.clear(); // Clear board status for new game
   room.currentGameId = generateGameId(stake);
-  io.to(`room_${stake}`).emit('game:reset');
+  io.to(`room_${stake}`).emit(socketEvents.GAME_RESET);
   
   // Check if a stop was requested and no other rooms are still in a game
   if (stopRequested) {
-    const hasLiveGames = Array.from(roomStates.values()).some(r => r.state === 'GAME');
+    const hasLiveGames = Array.from(roomStates.values()).some(r => r.state === GameState.GAME);
     if (!hasLiveGames) {
       isGameRunning = false; // Stop engine
+      roomStates.forEach(room => {
+        if (room.selectionTimer) {
+          clearTimeout(room.selectionTimer);
+          room.selectionTimer = undefined;
+        }
+        if (room.gameLoopTimeout) {
+          clearTimeout(room.gameLoopTimeout);
+          room.gameLoopTimeout = undefined;
+        }
+      });
       stopRequested = false; // Clear stop request
       logger.info("Game engine stopped gracefully after round completion.");
       broadcastPoolUpdate();
-      io.emit('game:stopped', 'Games are over for today. Please come back tomorrow to play!');
+      io.emit(socketEvents.GAME_STOPPED, 'Games are over for today. Please come back tomorrow to play!');
       return;
     } else {
     }
@@ -939,7 +972,7 @@ function resetGame(stake: number) {
 dbPromise.then(async () => {
   try {
     await syncCache(); // Ensure cache is synced after DB connection
-    io = new SocketIOServer(server, corsOptions); // Initialize Socket.io after DB is ready
+    io = new SocketIOServer(server, { cors: corsConfig }); // Initialize Socket.io after DB is ready
     registerSocketHandlers(io); // Pass io to the handler
     for (const stake of STAKES) {
       let room = roomStates.get(stake);
@@ -948,12 +981,12 @@ dbPromise.then(async () => {
         room = await RoomStateModel.create({
           stake,
           currentGameId: generateGameId(stake),
-          state: GameStateEnum.SELECTION,
+          state: GameState.SELECTION,
         });
         roomStates.set(stake, room as any);
       }
       // If game was in progress, restart selection phase or game loop
-      if (room.state === GameStateEnum.GAME || room.state === GameStateEnum.SELECTION) {
+      if (room.state === GameState.GAME || room.state === GameState.SELECTION) {
         // For now, always reset to selection phase on startup
         resetGame(stake);
       }
@@ -1001,9 +1034,9 @@ function registerSocketHandlers(io: SocketIOServer) {
   socket.on(socketEvents.FORCE_START, () => { // Use the imported event name
     STAKES.forEach(stake => {
       const room = roomStates.get(stake);
-      if (room && room.state === GameStateEnum.SELECTION) {
+      if (room && room.state === GameState.SELECTION) {
         if (room.selectionTimer) clearTimeout(room.selectionTimer);
-        room.state = GameStateEnum.GAME;
+        room.state = GameState.GAME;
         room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
         broadcastPoolUpdate();
         runGameLoop(stake);
@@ -1027,15 +1060,15 @@ function registerSocketHandlers(io: SocketIOServer) {
       currentBalance = user.balance;
       isUserVerified = user.isVerified;
     }
-    socket.emit('wallet:update', currentBalance);
-    socket.emit('user:status', { isVerified: isUserVerified, phone: user?.phone });
+    socket.emit(socketEvents.WALLET_UPDATE, currentBalance);
+    socket.emit(socketEvents.USER_STATUS, { isVerified: isUserVerified, phone: user?.phone });
   }).catch(err => logger.error(`Error fetching/creating user for socket ${socket.id}`, { error: err }));
   
   activePlayers++;
   broadcastPoolUpdate();
 
   // Joining a specific room
-  socket.on('room:join', async (stake: number) => {
+  socket.on(socketEvents.JOIN_ROOM, async (stake: number) => {
     if (!STAKES.includes(stake)) return;
     
     STAKES.forEach(s => socket.leave(`room_${s}`));
@@ -1043,7 +1076,7 @@ function registerSocketHandlers(io: SocketIOServer) {
     
     const room = roomStates.get(stake)!;
 
-    socket.emit('game:init', {
+    socket.emit(socketEvents.GAME_INIT, {
       balls: room.currentBalls,
       gameId: room.currentGameId,
       selectionTimeLeft: room.selectionStartTime && room.selectionDuration
@@ -1055,9 +1088,9 @@ function registerSocketHandlers(io: SocketIOServer) {
 
 
   // Concurrency-Controlled Board Selection
-  socket.on('game:pick_board', async (data: { boardId: number; stake: number }) => {
+  socket.on(socketEvents.PICK_BOARD, async (data: { boardId: number; stake: number }) => {
     const room = roomStates.get(data.stake);
-    if (!room || room.state !== 'SELECTION') return;
+    if (!room || room.state !== GameState.SELECTION) return;
 
     const boardId = data.boardId;
     const stakeAmount = data.stake;
@@ -1066,7 +1099,7 @@ function registerSocketHandlers(io: SocketIOServer) {
     if (!userRecord) return;
 
     // Ensure playerBoards is initialized as a Map if it's a plain object from DB
-    if (!(room.playerBoards instanceof Map)) room.playerBoards = new Map(Object.entries(room.playerBoards));
+    if (typeof room.playerBoards.get !== 'function') room.playerBoards = new Map(Object.entries(room.playerBoards));
     const currentSelected = (room.playerBoards.get(userId) || []).map(String);
     const isSwapping = currentSelected.length > 0 && !currentSelected.includes(String(boardId));
     const isDeselecting = currentSelected.includes(String(boardId));
@@ -1108,9 +1141,9 @@ function registerSocketHandlers(io: SocketIOServer) {
     if (room.markModified) room.markModified('boardStatus');
     if (room.save) await room.save().catch(e => logger.error('Room save error on board pick', { error: e, stake: data.stake }));
 
-    socket.emit('wallet:update', userRecord.balance); // Ensure wallet update is sent after save
+    socket.emit(socketEvents.WALLET_UPDATE, userRecord.balance); // Ensure wallet update is sent after save
     
-    io.to(`room_${data.stake}`).emit('game:board_sync', {
+    io.to(`room_${data.stake}`).emit(socketEvents.BOARD_SYNC, {
       takenBoards: Array.from(room.boardStatus.keys())
     });
     broadcastPoolUpdate();

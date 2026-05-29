@@ -10,12 +10,11 @@ import ErrorBoundary from '../ErrorBoundary';
 import SelectionPage from './SelectionPage';
 import GamePage from './GamePage';
 import HistoryPage from './HistoryPage';
-
 import ProfilePage from './ProfilePage';
 import WalletPage from './WalletPage';
 import BottomTabs, { BottomTabKey } from './BottomTabs';
 import RuleItem from './RuleItem';
-import { HistoryEntry, AppPhase } from '../types';
+import { HistoryEntry, AppPhase, RoomStats, PoolUpdateData, GameState } from '../types'; // Import new types
 import { connectToGame, disconnectFromGame, socket, socketEvents } from './socket';
 
 const t = {
@@ -87,7 +86,7 @@ export default function App() {
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
 
-  const [allRoomStats, setAllRoomStats] = useState<Record<number, any>>({});
+  const [allRoomStats, setAllRoomStats] = useState<Record<number, RoomStats>>({});
   const [totalActivePlayers, setTotalActivePlayers] = useState(0); // State to track total active players across all rooms
 
   // Use a ref for stake to avoid stale closures in socket handlers
@@ -105,7 +104,7 @@ export default function App() {
     localStorage.setItem('bingo_history', JSON.stringify(history));
   }, [phase, bottomTab, stake, selectedBoardIds, history]);
 
-  const currentRoomStats = allRoomStats[stake] || { // Get stats for the current stake room, or default values
+  const currentRoomStats: RoomStats = allRoomStats[stake] || { // Get stats for the current stake room, or default values
     pool: 0,
     players: 0,
     gameId: '---',
@@ -133,7 +132,7 @@ export default function App() {
     }
 
     // Get stats for the *requested* stake amount, not the current state's stake
-    const requestedRoomStats = allRoomStats[amount] || {
+    const requestedRoomStats: RoomStats = allRoomStats[amount] || { // Use RoomStats type
       pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false
     };
 
@@ -165,14 +164,14 @@ export default function App() {
     };
 
     const handleWallet = (balance: number) => setWallet(balance);
-    const handlePoolUpdate = (data: any) => {
+    const handlePoolUpdate = (data: PoolUpdateData) => {
       if (data.rooms) {
         setAllRoomStats(data.rooms);
       }
       if (data.totalActive !== void 0) setTotalActivePlayers(data.totalActive);
       if (data.isMaintenance !== void 0) setIsMaintenanceMode(data.isMaintenance);
     };
-    const handleWinHistory = (history: any[]) => setWinningHistory(history);
+    const handleWinHistory = (history: HistoryEntry[]) => setWinningHistory(history);
 
     const handleInit = (data: { gameId: string; balls: number[] }) => {
       setAllRoomStats(prev => {

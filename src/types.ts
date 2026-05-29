@@ -5,13 +5,28 @@ export interface BingoCell {
 
 export type BingoBoardData = BingoCell[][];
 
-export type AppPhase = 'lobby' | 'home' | 'selection' | 'game' | 'history' | 'wallet' | 'profile' | 'verifying' | 'admin';
+export type AppPhase = 'home' | 'selection' | 'game' | 'history' | 'wallet' | 'profile';
 
-export interface GameStats {
-  gameId: string;
+export enum GameState {
+  SELECTION = 'SELECTION',
+  GAME = 'GAME',
+  FINISHED = 'FINISHED',
+}
+
+export interface RoomStats {
+  pool: number;
   players: number;
-  staked: number;
-  derash: number;
+  gameId: string;
+  state: GameState;
+  isLive: boolean;
+  isEngineActive: boolean;
+}
+
+export interface PoolUpdateData {
+  rooms: Record<number, RoomStats>;
+  totalActive: number;
+  isEngineActive: boolean;
+  isMaintenance: boolean;
 }
 
 export interface HistoryEntry {

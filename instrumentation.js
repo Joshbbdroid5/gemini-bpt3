@@ -1,8 +1,8 @@
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
-import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import dotenv from 'dotenv';
 import * as resourcesPkg from '@opentelemetry/resources';
@@ -11,15 +11,15 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic
 // Load environment variables
 dotenv.config();
 
+// Enable internal diagnostic logging to catch configuration issues early
+diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.WARN);
+
 // Fix: Robust Resource constructor resolution for hybrid ESM/CJS environments.
 // tsx/Node ESM sometimes wraps CJS exports in a .default property. 
 // We must ensure we pick a function (the constructor) rather than the module object.
 const Resource = typeof resourcesPkg.Resource === 'function' 
   ? resourcesPkg.Resource 
   : (resourcesPkg.default && typeof resourcesPkg.default.Resource === 'function' ? resourcesPkg.default.Resource : null);
-
-// Enable internal diagnostic logging to see why exports might be failing
-diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
 const hasRequiredEnv = process.env.GRAFANA_INSTANCE_ID && 
                        process.env.GRAFANA_AUTH_TOKEN && 
@@ -44,23 +44,23 @@ if (hasRequiredEnv) {
       })
     : undefined;
 
-  // IMPORTANT: The exporter error `Cannot read properties of undefined (reading 'name')`
-  // is thrown during OTLP serialization of instrumentations. To make the app stable,
-  // we defensively disable the metric pipeline entirely and keep only traces (minimal).
-  // This avoids metrics serialization of instrumentation scope.
-
   const sdk = new NodeSDK({
     resource,
     traceExporter: new OTLPTraceExporter({
       url: `${process.env.GRAFANA_OTLP_ENDPOINT}/v1/traces`,
       headers: commonHeaders,
     }),
-    // Disable metrics entirely to avoid the exporter serialization crash.
-    metricReader: undefined,
+    metricReader: new PeriodicExportingMetricReader({
+      exporter: new OTLPMetricExporter({
+        url: `${process.env.GRAFANA_OTLP_ENDPOINT}/v1/metrics`,
+        headers: commonHeaders,
+      }),
+      // Export metrics every 60 seconds to stay within free tier limits
+      exportIntervalMillis: 60000,
+    }),
     instrumentations: [
       getNodeAutoInstrumentations({
-        // Disable noisy instrumentations that cause the "Cannot read properties of undefined (reading 'name')"
-        // error. This error happens when these instrumentations fire during OTLP export serialization.
+        // Filter instrumentations to avoid crashes during OTLP export serialization
         '@opentelemetry/instrumentation-http': {
           ignoreOutgoingUrls: [
             (url) => url.includes('grafana.net'),
@@ -86,7 +86,7 @@ if (hasRequiredEnv) {
   // Ensure the SDK is shut down gracefully on process termination
   const shutDown = () => {
     sdk.shutdown()
-      .then(() => console.log('OTEL: Tracing and Metrics shut down successfully'))
+      .then(() => console.log('OTEL: Tracing shut down successfully'))
       .catch((error) => console.error('OTEL: Error shutting down', error));
   };
 

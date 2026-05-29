@@ -1,4 +1,4 @@
-import { Telegraf, Markup } from 'telegraf';
+import { Telegraf, Markup, Context } from 'telegraf';
 import dotenv from 'dotenv';
 import logger from './src/logger';
 
@@ -15,8 +15,8 @@ const PAYMENT_PHONE = rawPhone && rawPhone.length > 5 ? rawPhone : '0978015131';
 const TELEBIRR_ACCOUNT_NUMBER = PAYMENT_PHONE;
 
 if (!BOT_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN is required');
-//
-export const mainBot = new Telegraf(BOT_TOKEN);
+
+export const mainBot = new Telegraf<Context>(BOT_TOKEN);
 
 /**
  * Shared helper for server notifications (called by server.ts)
@@ -45,7 +45,7 @@ const clearState = (userId: string) => depositWithdrawState.delete(userId);
 
 // --- 1. Start / Welcome ---
 mainBot.start(async (ctx) => {
-  const startPayload = (ctx as any).startPayload;
+  const startPayload = ctx.payload;
 
   // Referral handling
   if (startPayload && startPayload.startsWith('ref_')) {
@@ -113,7 +113,7 @@ mainBot.on('contact', async (ctx) => {
   try {
     await fetch(`${API_URL}/admin/verify-user`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ userId: userId.toString(), phone, secret: ADMIN_SECRET }),
     });
     await ctx.reply(`✅ Registered with: ${phone}`, Markup.removeKeyboard());
@@ -128,7 +128,7 @@ mainBot.action('play', async (ctx) => {
   if (!data.isVerified) return ctx.reply('⚠️ Register first.', Markup.inlineKeyboard([[Markup.button.callback('📝 Register', 'register')]]));
   return ctx.reply('Good luck! 🎮', Markup.inlineKeyboard([[Markup.button.webApp('Launch Game', FRONTEND_URL as string)]]));
 });
-//
+
 mainBot.action('deposit', (ctx) => ctx.reply('💰 Choose method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'deposit_method_telebirr')]])));
 
 mainBot.action('deposit_method_telebirr', async (ctx) => {
@@ -137,7 +137,7 @@ mainBot.action('deposit_method_telebirr', async (ctx) => {
   return ctx.reply(`🏦 <b>Deposit via Telebirr</b>\n\nPay to: <code>${TELEBIRR_ACCOUNT_NUMBER}</code>\nEnter deposit amount:`, { parse_mode: 'HTML', reply_markup: { force_reply: true } });
 });
 
-mainBot.action('withdraw', (ctx) => ctx.reply('💸 Choose method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'withdraw_method_telebirr')]]))); //
+mainBot.action('withdraw', (ctx) => ctx.reply('💸 Choose method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'withdraw_method_telebirr')]])));
 
 mainBot.action('withdraw_method_telebirr', async (ctx) => {
   await ctx.answerCbQuery();
@@ -149,7 +149,7 @@ mainBot.on('text', async (ctx) => {
   const text = ctx.message.text;
   const userId = ctx.from.id.toString();
   const isReply = ctx.message.reply_to_message;
-  const replyText = (isReply as any)?.text || '';
+  const replyText = isReply && 'text' in isReply ? isReply.text : '';
   const state = getState(userId);
 
   if (state.mode === 'deposit') {
@@ -213,14 +213,18 @@ mainBot.action('help_support', async (ctx) => {
 mainBot.action('show_rules', (ctx) => ctx.reply(
   '📜 <b>Bingo Rules</b>\n\n' +
     '1. Choose your stake and select your boards.\n' +
-    '2. Numbers are drawn every 5 seconds.\n' +
+    '2. Numbers are drawn every 3 seconds.\n' +
     '3. First player to complete a Row, Column, Diagonal, or 4 Corners wins!\n' +
-    '4. Winner takes 80% of the total game pool.',
+    '4. Winner takes 60% of the total game pool.',
   { parse_mode: 'HTML' }
 ));
 mainBot.action('invite', (ctx) => {
   const link = `https://t.me/${ctx.botInfo.username}?start=ref_${ctx.from.id}`;
-  return ctx.reply('Earn 5% bonuses!', Markup.inlineKeyboard([[Markup.button.url('📤 Share Link', `https://t.me/share/url?url=${link}`)]])); //
+  return ctx.reply('Earn 5% bonuses!', Markup.inlineKeyboard([[Markup.button.url('📤 Share Link', `https://t.me/share/url?url=${link}`)]]));
 });
 
-mainBot.catch((err) => logger.error('Main Bot Global Error', { error: err }));
+mainBot.catch((err) => {
+  // The .catch handler expects a function that returns MaybePromise<void>.
+  // logger.error returns the logger instance, so we wrap the call in an arrow function.
+  logger.error('Main Bot Global Error', { error: err });
+});
