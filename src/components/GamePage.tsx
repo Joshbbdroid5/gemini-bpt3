@@ -2,22 +2,28 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Volume2, VolumeX, RefreshCw, LogOut } from 'lucide-react';
 import { generateBoard, WinningPattern } from '../logic';
-import { BingoBoardData, GameStats, HistoryEntry } from '../types';
+import { BingoBoardData, HistoryEntry } from '../types';
 import { socket, socketEvents } from './socket';
 
 interface Props {
   selectedBoardIds: number[];
-  stakedPerBoard: number;
   onRestart: () => void;
   onLeaveToHome: () => void;
   onGameEnd: (entry: HistoryEntry) => void;
+}
+
+interface GameStats {
+  gameId: string;
+  players: number;
+  staked: number;
+  derash: number;
 }
 
 const t = {
   gameId: 'Game ID',
   players: 'Players',
   bet: 'Bet',
-  derash: 'Prize (60%)',
+  derash: 'Derash',
   called: 'Called',
   watchingOnly: 'Watching Only',
   watchingText: 'The game has started. Please wait for the next round.',
@@ -122,7 +128,7 @@ const BoardCell = memo(({ value, isMarked, isCurrentBall, isPendingMark, onToggl
   );
 });
 
-export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, onLeaveToHome, onGameEnd }: Props) {
+export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, onGameEnd }: Props) {
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[]; payout: number }[]>([]);
@@ -201,8 +207,10 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
       if (data.balls.length > 0) setCurrentBall(data.balls[data.balls.length - 1]); // Set current ball to the last chronologically drawn
     };
 
-    const handlePoolUpdate = (data: { pool: number; players: number; gameId: string }) => {
-      setGameMetadata(data);
+    const handlePoolUpdate = (data: any) => { // PoolUpdateData now contains single room
+      if (data.room) { 
+        setGameMetadata({ pool: data.room.pool, players: data.room.players, gameId: data.room.gameId });
+      }
     };
 
     const handleReset = () => {
@@ -235,14 +243,14 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
     socket.on(socketEvents.BALL_DRAWN, handleNewBall);
     socket.on(socketEvents.GAME_INIT, handleInit);
-    socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
+    socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate); // Use simplified handlePoolUpdate
     socket.on(socketEvents.GAME_RESET, handleReset);
     socket.on(socketEvents.NEW_WINNER, handleServerWinner);
 
     // Pre-warm Data: Request latest game state immediately upon mounting
     // This ensures we have the correct ball history and game metadata
     // if the game was already in progress or if we joined late.
-    socket.emit(socketEvents.JOIN_ROOM, stakedPerBoard); 
+    socket.emit(socketEvents.JOIN_ROOM); // No stake argument needed
 
     return () => {
       socket.off(socketEvents.BALL_DRAWN, handleNewBall);
@@ -253,15 +261,15 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
     };
   }, []); // Bound once on mount, cleaned up once on unmount
   
-  // Game Stats
+  // Game Stats (fixed stake)
   const stats: GameStats = useMemo(() => ({
     gameId: gameMetadata.gameId,
     players: gameMetadata.players,
-    staked: stakedPerBoard || 10,
+    staked: 10,
     derash: gameMetadata.pool
-  }), [gameMetadata, stakedPerBoard]);
+  }), [gameMetadata]);
 
-  // Boards data
+  // Boards data (fixed stake)
   const boardsData = useMemo(() => {
     return selectedBoardIds.map((id: number) => ({
       id,
@@ -338,7 +346,7 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
   return (
     <div className="flex-1 flex flex-col bg-primary text-white overflow-hidden select-none">
       {/* Top Stats - 5 Columns */}
-      <div className="grid grid-cols-5 gap-1 p-2 bg-[#2d2e4d]">
+      <div className="grid grid-cols-5 gap-1.5 p-3 bg-black/40 border-b border-white/5">
         <CompactStat label={t.gameId} value={stats.gameId.slice(0, 8)} />
         <CompactStat label={t.players} value={stats.players} />
         <CompactStat label={t.bet} value={stats.staked} />
@@ -370,11 +378,11 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
           {/* Recent Balls History + Mute */}
           <div className="flex items-center justify-between p-1">
             <div className="flex gap-1">
-               {historyBalls.map((n) => (
-                 <div key={n} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border-2 ${getBallColor(n)}`}>
-                   {getLetter(n)}-{n}
-                 </div>
-               ))}
+              {historyBalls.map((n) => (
+                <div key={n} className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black border-2 opacity-60 ${getBallColor(n)}`}>
+                  {getLetter(n)}-{n}
+                </div>
+              ))}
             </div>
             <div className="flex items-center gap-3">
               <button 
@@ -535,9 +543,9 @@ export default function GamePage({ selectedBoardIds, stakedPerBoard, onRestart, 
 
 const CompactStat = memo(({ label, value }: { label: string, value: string | number }) => {
   return (
-    <div className="flex flex-col items-center justify-center bg-white/5 rounded-md py-1 border border-white/5">
+    <div className="flex flex-col items-center justify-center bg-white/5 rounded-xl py-2 border border-white/5">
        <span className="text-[9px] text-gray-400 font-black uppercase tracking-tight leading-none mb-0.5">{label}</span>
-       <span className="text-[12px] font-black italic leading-none">{value}</span>
+       <span className="text-[11px] font-black italic leading-none text-lime-400">{value}</span>
     </div>
   );
 });

@@ -44,8 +44,8 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  [socketEvents.JOIN_ROOM]: (roomId: number) => void;
-  [socketEvents.PICK_BOARD]: (data: { boardId: number; stake: number }) => void;
+  [socketEvents.JOIN_ROOM]: () => void;
+  [socketEvents.PICK_BOARD]: (data: { boardId: number }) => void;
   [socketEvents.FORCE_START]: () => void;
 }
 

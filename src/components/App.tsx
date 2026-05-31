@@ -51,12 +51,6 @@ export default function App() {
     }
     return 'game';
   });
-
-  const [stake, setStake] = useState<number>(() => {
-    const saved = localStorage.getItem('bingo_stake');
-    const parsed = saved ? parseInt(saved) : 10;
-    return isNaN(parsed) ? 10 : parsed;
-  });
   const [wallet, setWallet] = useState<number>(0);
   const [selectedBoardIds, setSelectedBoardIds] = useState<number[]>(() => {
     try {
@@ -86,25 +80,20 @@ export default function App() {
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
 
-  const [allRoomStats, setAllRoomStats] = useState<Record<number, RoomStats>>({});
+  const [roomStats, setRoomStats] = useState<RoomStats>({ // Single room stats
+    pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false, state: GameState.SELECTION
+  });
   const [totalActivePlayers, setTotalActivePlayers] = useState(0); // State to track total active players across all rooms
-
-  // Use a ref for stake to avoid stale closures in socket handlers
-  const stakeRef = useRef(stake);
-  useEffect(() => {
-    stakeRef.current = stake;
-  }, [stake]);
 
   // Persist navigation state to localStorage
   useEffect(() => {
     localStorage.setItem('bingo_phase', phase);
     localStorage.setItem('bingo_tab', bottomTab);
-    localStorage.setItem('bingo_stake', stake.toString());
     localStorage.setItem('bingo_selected_ids', JSON.stringify(selectedBoardIds));
     localStorage.setItem('bingo_history', JSON.stringify(history));
-  }, [phase, bottomTab, stake, selectedBoardIds, history]);
+  }, [phase, bottomTab, selectedBoardIds, history]);
 
-  const currentRoomStats: RoomStats = allRoomStats[stake] || { // Get stats for the current stake room, or default values
+  const currentRoomStats: RoomStats = roomStats || { // Get stats for the current stake room, or default values
     pool: 0,
     players: 0,
     gameId: '---',
@@ -114,36 +103,28 @@ export default function App() {
 
   // Engine Watchdog: Automatically return to home if the engine becomes idle
   // or maintenance mode is enabled while the user is in a phase that requires an active session.
-  useEffect(() => {
-    const hasStats = Object.keys(allRoomStats).length > 0;
-    const engineIsIdle = hasStats && !currentRoomStats.isEngineActive;
+  useEffect(() => {    
+    const engineIsIdle = !roomStats.isEngineActive;
     
     if ((engineIsIdle || isMaintenanceMode) && (phase === 'game' || phase === 'selection')) {
       setPhase('home');
       if (engineIsIdle) setShowEngineIdleModal(true);
     }
-  }, [allRoomStats, phase, currentRoomStats.isEngineActive, isMaintenanceMode]);
+  }, [roomStats, phase, isMaintenanceMode]);
 
   // Homepage Play uses only stake=10 and decides between selection vs watching.
-  const handleHomePlay = (amount: number) => {
+  const handleHomePlay = () => { // No amount argument needed
     if (isMaintenanceMode) {
       alert("The system is currently under maintenance. New games cannot be started.");
       return;
     }
 
-    // Get stats for the *requested* stake amount, not the current state's stake
-    const requestedRoomStats: RoomStats = allRoomStats[amount] || { // Use RoomStats type
-      pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false
-    };
-
-    if (!requestedRoomStats.isEngineActive) {
+    if (!roomStats.isEngineActive) { // Use single roomStats
       setShowEngineIdleModal(true);
       return;
     } // Show modal if game engine is not active
-
-    setStake(amount); // Update current stake choice
-
-    if (requestedRoomStats.isLive) {
+    
+    if (roomStats.isLive) { // Use single roomStats
       setSelectedBoardIds([]); // watching-only
       setPhase('game');
       return;
@@ -164,19 +145,16 @@ export default function App() {
     };
 
     const handleWallet = (balance: number) => setWallet(balance);
-    const handlePoolUpdate = (data: PoolUpdateData) => {
-      if (data.rooms) {
-        setAllRoomStats(data.rooms);
-      }
+    const handlePoolUpdate = (data: PoolUpdateData) => { // PoolUpdateData now contains single room
+      if (data.room) setRoomStats(data.room); // Update single room stats
       if (data.totalActive !== void 0) setTotalActivePlayers(data.totalActive);
       if (data.isMaintenance !== void 0) setIsMaintenanceMode(data.isMaintenance);
     };
     const handleWinHistory = (history: HistoryEntry[]) => setWinningHistory(history);
 
     const handleInit = (data: { gameId: string; balls: number[] }) => {
-      setAllRoomStats(prev => {
-        const current = prev[stakeRef.current] || {};
-        return { ...prev, [stakeRef.current]: { ...current, gameId: data.gameId } };
+      setRoomStats(prev => {
+        return { ...prev, gameId: data.gameId };
       });
     };
 
@@ -188,26 +166,19 @@ export default function App() {
 
     // Admin-controlled game lifecycle
     const handleGameStatus = (status: { isGameRunning: boolean; gameId: string }) => {
-      setAllRoomStats((prev) => {
-        const next = { ...prev };
-        next[stakeRef.current] = {
-          ...next[stakeRef.current],
-          gameId: status.gameId,
-          isLive: status.isGameRunning,
+      setRoomStats(prev => {
+        return {
+          ...prev, gameId: status.gameId, isLive: status.isGameRunning
         };
-        return next;
       });
     };
 
     const handleGameStopped = (msg?: string) => {
       if (msg) alert(msg); // Show message if provided
       setPhase('home');
-      setAllRoomStats(prev => {
-        const next = { ...prev };
-        if (next[stakeRef.current]) {
-          next[stakeRef.current] = { ...next[stakeRef.current], isLive: false, isEngineActive: false };
-        }
-        return next;
+      setRoomStats(prev => {
+        // Reset single room stats
+        return { ...prev, isLive: false, isEngineActive: false, state: GameState.FINISHED };
       });
     };
 
@@ -273,7 +244,7 @@ export default function App() {
         initData: tg.initData,
         user: user // Pass Telegram user data to connectToGame
       });
-      socket.emit('room:join', stake); // Join the correct initial room
+      socket.emit('room:join'); // Join the single fixed room
     } else {
 
       // Fallback for browser testing
@@ -283,8 +254,8 @@ export default function App() {
         guestId = `guest_${Math.floor(1000 + Math.random() * 9000)}`;
         localStorage.setItem('bingoGuestId', guestId);
       }
-      connectToGame({ userId: guestId }); // Connect as guest user
-      socket.emit('room:join', stake); // Join the correct initial room
+      connectToGame({ userId: guestId });
+      socket.emit('room:join'); // Join the single fixed stake room
       setMyId(guestId); // Set myId for guest users
     }
     return () => {
@@ -417,7 +388,7 @@ export default function App() {
               </motion.div>
             )}
 
-              {isVerified === true && phase === 'home' && (
+            {isVerified === true && phase === 'home' && (
               <motion.div // Home page content
                 key="home"
                 initial={{ opacity: 0 }}
@@ -426,8 +397,8 @@ export default function App() {
                 className="flex-1 flex flex-col min-h-0"
               >
                 <Dashboard
-                  onPlay={handleHomePlay}
-                  allStats={allRoomStats}
+                  onPlay={() => handleHomePlay()} // No amount argument
+                  roomStats={roomStats}
                   isMaintenanceMode={isMaintenanceMode}
                 />
               </motion.div>
@@ -442,7 +413,6 @@ export default function App() {
                 className="flex-1 flex flex-col min-h-0"
               >
                 <SelectionPage 
-                  staked={stake} 
                   wallet={wallet} 
                   onComplete={completeSelection} 
                   onBack={handleBackToHome} 
@@ -459,7 +429,6 @@ export default function App() {
               >
                 <GamePage 
                   selectedBoardIds={selectedBoardIds} 
-                  stakedPerBoard={stake} 
                   onRestart={() => setPhase('selection')} 
                   onLeaveToHome={handleBackToHome}
                   onGameEnd={addHistoryEntry}

@@ -2,15 +2,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { StakeButton } from './StakeButton';
 import { Wrench, Hammer } from 'lucide-react';
 
-interface Props {
-  onPlay: (stake: number) => void;
-  allStats: Record<number, { players: number; isLive: boolean; isEngineActive: boolean }>;
+interface Props { // Updated Props for single room
+  onPlay: () => void; // No stake argument needed
+  roomStats: { players: number; isLive: boolean; isEngineActive: boolean }; // Single room stats
   isMaintenanceMode?: boolean;
 }
 
-export default function Dashboard({ onPlay, allStats, isMaintenanceMode }: Props) {
-  const stakeAmount = 10;
-  const stats = allStats[stakeAmount] || { players: 0, isLive: false, isEngineActive: false };
+export default function Dashboard({ onPlay, roomStats, isMaintenanceMode }: Props) { // Use roomStats directly
+  const stats = roomStats || { players: 0, isLive: false, isEngineActive: false }; // Use single roomStats
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
       {/* Welcome message and game title */}
@@ -19,11 +18,11 @@ export default function Dashboard({ onPlay, allStats, isMaintenanceMode }: Props
         animate={{ y: 0, opacity: 1 }}
         className="mb-8"
       >
-        <span className="text-xl font-black uppercase tracking-[0.3em] text-lime-400 mb-2 block">
+        <span className="text-lg font-black uppercase tracking-[0.4em] text-lime-400/80 mb-2 block">
           Welcome to Lomi Bingo
         </span>
-        <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-tight whitespace-pre-line drop-shadow-lg">
-          Stake 10 ETB & Play
+        <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic leading-none drop-shadow-2xl">
+          Ready to Win?
         </h2>
       </motion.div>
 
@@ -57,7 +56,7 @@ export default function Dashboard({ onPlay, allStats, isMaintenanceMode }: Props
       {/* Entry Fee Buttons */}
       <div className="flex flex-col gap-6 w-full max-w-xs">
         <StakeButton
-          amount={stakeAmount}
+          amount={10}
           players={stats.players}
           isLive={stats.isLive}
           isEngineActive={stats.isEngineActive}

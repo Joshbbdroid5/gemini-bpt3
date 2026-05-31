@@ -23,7 +23,7 @@ export interface RoomStats {
 }
 
 export interface PoolUpdateData {
-  rooms: Record<number, RoomStats>;
+  room: RoomStats; // Single room stats
   totalActive: number;
   isEngineActive: boolean;
   isMaintenance: boolean;

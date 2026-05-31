@@ -7,7 +7,7 @@ interface StakeButtonProps {
   players: number;
   isLive: boolean;
   isEngineActive: boolean;
-  onPlay: (amount: number) => void;
+  onPlay: () => void; // No amount argument needed for fixed stake
   isDisabled?: boolean;
 }
 
@@ -36,7 +36,7 @@ export function StakeButton({ amount, players, isLive, isEngineActive, onPlay, i
       whileHover={isDisabled ? {} : { scale: 1.05 }}
       whileTap={isDisabled ? {} : { scale: 0.98 }}
       disabled={isDisabled}
-      onClick={() => onPlay(amount)}
+      onClick={onPlay} // Call onPlay directly
       className={`group relative overflow-hidden bg-white text-indigo-950 p-6 rounded-[32px] shadow-xl transition-all flex flex-col items-start w-full ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:bg-yellow-400 active:bg-yellow-500'}`}
     >
       <div className="flex justify-between items-center w-full mb-2">

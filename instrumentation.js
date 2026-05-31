@@ -1,8 +1,9 @@
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
-import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { ConsoleSpanExporter, BatchSpanProcessor, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import dotenv from 'dotenv';
 import * as resourcesPkg from '@opentelemetry/resources';
@@ -46,10 +47,13 @@ if (hasRequiredEnv) {
 
   const sdk = new NodeSDK({
     resource,
-    traceExporter: new OTLPTraceExporter({
-      url: `${process.env.GRAFANA_OTLP_ENDPOINT}/v1/traces`,
-      headers: commonHeaders,
-    }),
+    spanProcessors: [
+      new BatchSpanProcessor(new OTLPTraceExporter({
+        url: `${process.env.GRAFANA_OTLP_ENDPOINT}/v1/traces`,
+        headers: commonHeaders,
+      })),
+      ...(process.env.DEBUG_OTEL === 'true' ? [new SimpleSpanProcessor(new ConsoleSpanExporter())] : [])
+    ],
     metricReader: new PeriodicExportingMetricReader({
       exporter: new OTLPMetricExporter({
         url: `${process.env.GRAFANA_OTLP_ENDPOINT}/v1/metrics`,
@@ -64,6 +68,7 @@ if (hasRequiredEnv) {
         '@opentelemetry/instrumentation-http': {
           ignoreOutgoingUrls: [
             (url) => url.includes('grafana.net'),
+            (url) => url.includes('otlp'),
             (url) => process.env.GRAFANA_OTLP_ENDPOINT && url.includes(process.env.GRAFANA_OTLP_ENDPOINT),
           ],
         },

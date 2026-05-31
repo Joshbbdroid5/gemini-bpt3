@@ -102,6 +102,18 @@ const dbPromise = mongoose.connect(MONGODB_URI, {
     throw err; // Re-throw to prevent further initialization
   });
 
+// Global Game State Object to track server-wide status
+const globalGameState = {
+  totalVolume: 0,
+  totalProfit: 0,
+  isMaintenanceMode: false,
+  isGameRunning: false,
+  stopRequested: false,
+  activePlayers: 0,
+};
+
+const SINGLE_STAKE = 10;
+
 // TopUpHistory Schema
 interface ITopUpHistory {
   userId: string;
@@ -164,7 +176,6 @@ const User = mongoose.model<IUser>('User', userSchema);
 
 // RoomState Schema for persistence
 interface IRoomState {
-  stake: number;
   currentBalls: number[];
   shuffledBalls: number[];
   globalPool: number;
@@ -177,7 +188,6 @@ interface IRoomState {
 }
 
 const roomStateSchema = new mongoose.Schema<IRoomState>({
-  stake: { type: Number, required: true, unique: true },
   currentBalls: { type: [Number], default: [] },
   shuffledBalls: { type: [Number], default: [] },
   globalPool: { type: Number, default: 0 },
@@ -228,23 +238,21 @@ async function syncCache() {
     // Sync Global Stats
     const stats = await GlobalStats.findOne({ key: 'main_stats' }).lean();
     if (stats) {
-      totalVolume = stats.totalVolume;
-      totalProfit = stats.totalProfit;
+      globalGameState.totalVolume = stats.totalVolume;
+      globalGameState.totalProfit = stats.totalProfit;
     } else {
       await GlobalStats.create({ key: 'main_stats', totalVolume: 0, totalProfit: 0 }); // Ensure stats exist
     }
 
     // Load existing room states from DB
-    const existingRoomStates = await RoomStateModel.find({});
-    existingRoomStates.forEach(roomDoc => {
-      // Map the Document to our internal RoomState interface
-      const roomState: RoomState = { 
+    const roomDoc = await RoomStateModel.findOne();
+    if (roomDoc) {
+      singleRoomState = { 
         ...roomDoc.toObject(),
         playerBoards: new Map(roomDoc.playerBoards),
         boardStatus: new Map(roomDoc.boardStatus),
       };
-      roomStates.set(roomDoc.stake, roomState);
-    });
+    }
   } catch (err) {
     logger.error('Failed to sync cache from MongoDB', { error: err });
   }
@@ -624,7 +632,15 @@ app.post('/admin/wallets', (req, res) => {
   }
   res.json({
     wallets: Object.fromEntries(userWallets),
-    stats: { totalVolume, totalProfit, activeBets: Array.from(roomStates.values()).reduce((a, b) => a + b.globalPool, 0), isMaintenanceMode, isGameRunning, stopRequested, isEngineActive: isGameRunning && !stopRequested }
+    stats: { 
+      totalVolume: globalGameState.totalVolume, 
+      totalProfit: globalGameState.totalProfit, 
+      activeBets: singleRoomState.globalPool, 
+      isMaintenanceMode: globalGameState.isMaintenanceMode, 
+      isGameRunning: globalGameState.isGameRunning, 
+      stopRequested: globalGameState.stopRequested, 
+      isEngineActive: globalGameState.isGameRunning && !globalGameState.stopRequested 
+    }
   });
 });
 
@@ -635,22 +651,19 @@ app.post('/admin/toggle-maintenance', (req, res) => {
     return res.status(403).json({ error: 'Unauthorized' });
   }
 
-  const wasMaintenance = isMaintenanceMode;
-  isMaintenanceMode = enabled;
+  const wasMaintenance = globalGameState.isMaintenanceMode;
+  globalGameState.isMaintenanceMode = enabled;
 
-  if (wasMaintenance && !isMaintenanceMode) {
+  if (wasMaintenance && !globalGameState.isMaintenanceMode) {
     logger.info("Maintenance mode deactivated. Resuming game loops.");
-    STAKES.forEach(stake => {
-      const room = roomStates.get(stake);
-      if (room && room.gameLoopTimeout) {
-        clearTimeout(room.gameLoopTimeout);
-      }
-      runGameLoop(stake);
-    });
+    if (singleRoomState.gameLoopTimeout) {
+      clearTimeout(singleRoomState.gameLoopTimeout);
+    }
+    runGameLoop();
   }
 
   broadcastPoolUpdate();
-  res.json({ success: true, isMaintenanceMode });
+  res.json({ success: true, isMaintenanceMode: globalGameState.isMaintenanceMode });
 });
 
 // ADMIN ENDPOINT: Explicitly start the game cycle
@@ -658,22 +671,18 @@ app.post('/admin/start-game', (req, res) => {
   const { secret } = req.body;
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
 
-  const alreadyRunning = isGameRunning && !stopRequested;
+  const alreadyRunning = globalGameState.isGameRunning && !globalGameState.stopRequested;
   if (alreadyRunning) return res.json({ success: true, message: "Game already running" });
   
-  isGameRunning = true;
-  stopRequested = false;
+  globalGameState.isGameRunning = true;
+  globalGameState.stopRequested = false;
   logger.info("Admin started the game engine.");
-  
-  STAKES.forEach(stake => {
-    const room = roomStates.get(stake)!;
-    // Clear existing timer if any to avoid double triggers
-    if (room.selectionTimer) clearTimeout(room.selectionTimer);
-    startSelectionPhase(stake);
-  });
+
+  if (singleRoomState.selectionTimer) clearTimeout(singleRoomState.selectionTimer);
+  startSelectionPhase();
   broadcastPoolUpdate();
 
-  res.json({ success: true, isGameRunning });
+  res.json({ success: true, isGameRunning: globalGameState.isGameRunning });
 });
 
 // ADMIN ENDPOINT: Gracefully stop the game engine
@@ -681,43 +690,30 @@ app.post('/admin/stop-game', (req, res) => {
   const { secret } = req.body;
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
 
-  if (!isGameRunning) return res.json({ success: true, isGameRunning, message: "Engine already idle" });
+  if (!globalGameState.isGameRunning) return res.json({ success: true, isGameRunning: false, message: "Engine already idle" });
 
-  const hasLiveGames = Array.from(roomStates.values()).some(r => r.state === 'GAME');
-  
+  const hasLiveGames = singleRoomState.state === GameState.GAME;
+
   if (!hasLiveGames) {
     // Stop immediately if no rounds are in progress
-    isGameRunning = false;
-    stopRequested = false;
-    roomStates.forEach(room => {
-      if (room.selectionTimer) {
-        clearTimeout(room.selectionTimer);
-        room.selectionTimer = undefined;
-      }
-    });
+    globalGameState.isGameRunning = false;
+    globalGameState.stopRequested = false;
+    if (singleRoomState.selectionTimer) clearTimeout(singleRoomState.selectionTimer);
     logger.info("Admin stopped the game engine immediately.");
     broadcastPoolUpdate();
     const stopMsg = "Games are over for today. Please come back tomorrow to play!";
     io.emit('game:stopped', stopMsg);
-    return res.json({ success: true, isGameRunning, message: stopMsg });
+    return res.json({ success: true, isGameRunning: false, message: stopMsg });
   } else {
     // Set flag to stop after current rounds finish
-    stopRequested = true;
+    globalGameState.stopRequested = true;
     logger.info("Graceful stop requested. Waiting for rounds to finish.");
     broadcastPoolUpdate();
-    return res.json({ success: true, isGameRunning, stopRequested, message: "Stop requested. Waiting for live rounds to finish." });
+    return res.json({ success: true, isGameRunning: true, stopRequested: true, message: "Stop requested. Waiting for live rounds to finish." });
   }
 });
 
-// Global Game State
-let totalVolume = 0;
-let totalProfit = 0;
-let isMaintenanceMode = false;
-let isGameRunning = false;
-let stopRequested = false;
-let activePlayers = 0;
-
-// OpenTelemetry Business Metrics
+// OpenTelemetry Business Metrics (meter version updated for clarity)
 const meter = metrics.getMeter('bingo-business-logic', '1.0.0');
 
 // Tracks the number of rooms currently in the LIVE (GAME) state
@@ -725,7 +721,7 @@ const activeGamesGauge = meter.createObservableGauge('bingo_active_games', {
   description: 'Number of games currently in the drawing phase',
 });
 activeGamesGauge.addCallback((result) => {
-  const count = Array.from(roomStates.values()).filter(r => r.state === GameState.GAME).length;
+  const count = singleRoomState.state === GameState.GAME ? 1 : 0;
   result.observe(count);
 });
 
@@ -734,7 +730,7 @@ const totalVolumeGauge = meter.createObservableGauge('bingo_total_volume_etb', {
   description: 'Total amount of ETB staked across all rounds',
 });
 totalVolumeGauge.addCallback((result) => {
-  result.observe(totalVolume);
+  result.observe(globalGameState.totalVolume);
 });
 
 const jackpotWinsCounter = meter.createCounter('bingo_jackpot_wins_total', {
@@ -742,7 +738,6 @@ const jackpotWinsCounter = meter.createCounter('bingo_jackpot_wins_total', {
 });
 
 interface RoomState {
-  stake: number;
   currentBalls: number[];
   shuffledBalls: number[];
   globalPool: number;
@@ -757,26 +752,20 @@ interface RoomState {
   save?: () => Promise<any>;
   markModified?: (path: string) => void;
 }
-
-const roomStates = new Map<number, RoomState>();
-const STAKES = [10]; // Only 10 ETB stake is allowed
-
-function generateGameId(stake: number) {
-  return `LB-${stake}-${Math.floor(100000 + Math.random() * 900000)}`;
+function generateGameId() {
+  return `LB-${SINGLE_STAKE}-${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
-STAKES.forEach(stake => {
-  roomStates.set(stake, {
-    stake,
-    currentBalls: [],
-    shuffledBalls: [],
-    globalPool: 0,
-    state: GameState.SELECTION,
-    currentGameId: generateGameId(stake),
-    playerBoards: new Map(),
-    boardStatus: new Map(),
-  });
-});
+// Single room state
+let singleRoomState: RoomState = {
+  currentBalls: [],
+  shuffledBalls: [],
+  globalPool: 0,
+  state: GameState.SELECTION,
+  currentGameId: generateGameId(),
+  playerBoards: new Map(),
+  boardStatus: new Map(),
+};
 
 const socketMapping = new Map<string, string>(); // userId -> socketId
 
@@ -788,29 +777,26 @@ for (let i = 1; i <= 600; i++) {
 
 // We use a slower interval (3s) which is already good for free tier CPU limits
 // If you find the server lagging, you can increase this to 5s or 10s
-const broadcastPoolUpdate = () => {
-  const allRoomStats: Record<number, RoomStats> = {};
-  const engineActive = isGameRunning && !stopRequested;
-  
-  STAKES.forEach(stake => {
-    const room = roomStates.get(stake)!;
-    allRoomStats[stake] = {
-      pool: room.globalPool * 0.6, // Dynamic prize calculation: 60% of current pool
-      players: room.playerBoards.size,
-      gameId: room.currentGameId,
-      state: room.state,
-      isLive: room.state === GameState.GAME,
-      isEngineActive: engineActive
-    };
-  });
+const broadcastPoolUpdate = (ioInstance: SocketIOServer = io) => { // Accept io instance as argument
+  const engineActive = globalGameState.isGameRunning && !globalGameState.stopRequested;
 
-  const poolUpdateData: PoolUpdateData = {
-    rooms: allRoomStats,
-    totalActive: activePlayers,
-    isEngineActive: engineActive,
-    isMaintenance: isMaintenanceMode,
+  const roomStats: RoomStats = {
+    pool: singleRoomState.globalPool * 0.6, // Dynamic prize calculation: 60% of current pool
+    players: singleRoomState.playerBoards.size,
+    gameId: singleRoomState.currentGameId,
+    state: singleRoomState.state,
+    isLive: singleRoomState.state === GameState.GAME,
+    isEngineActive: engineActive
   };
-  io.emit(socketEvents.POOL_UPDATE, poolUpdateData);
+
+  // Emit directly the single room stats
+  const poolUpdateData: PoolUpdateData = { 
+    room: roomStats, // Changed from 'rooms' to 'room'
+    totalActive: globalGameState.activePlayers,
+    isEngineActive: engineActive,
+    isMaintenance: globalGameState.isMaintenanceMode,
+  };
+  ioInstance.emit(socketEvents.POOL_UPDATE, poolUpdateData);
 };
 
 function shuffle(array: number[]) {
@@ -822,27 +808,25 @@ function shuffle(array: number[]) {
 }
 
 // Global interval for drawing balls
-async function runGameLoop(stake: number) {
-  const room = roomStates.get(stake)!;
-
-  if (!isGameRunning || room.state !== GameState.GAME) {
+async function runGameLoop() {
+  if (!globalGameState.isGameRunning || singleRoomState.state !== GameState.GAME) {
     return;
   }
 
-  if (room.currentBalls.length < room.shuffledBalls.length) {
-    const ball = room.shuffledBalls[room.currentBalls.length];
-    room.currentBalls.push(ball);
-    io.to(`room_${stake}`).emit(socketEvents.BALL_DRAWN, ball);
+  if (singleRoomState.currentBalls.length < singleRoomState.shuffledBalls.length) {
+    const ball = singleRoomState.shuffledBalls[singleRoomState.currentBalls.length];
+    singleRoomState.currentBalls.push(ball);
+    io.emit(socketEvents.BALL_DRAWN, ball); // Emit to all connected clients
 
       // AUTO-CLAIM CHECK: Collect all winners for this specific ball
       const winnersThisRound: any[] = [];
-      
-      room.playerBoards.forEach((boardIds, userId) => {
+
+      singleRoomState.playerBoards.forEach((boardIds, userId) => {
         for (const boardId of boardIds) {
           const grid = boardsCache.get(boardId);
-          const win = checkWin(grid, new Set(room.currentBalls));
+          const win = checkWin(grid, new Set(singleRoomState.currentBalls));
           
-          if (win.isWinner && !room.boardStatus.get(boardId.toString())) { 
+          if (win.isWinner && !singleRoomState.boardStatus.get(boardId.toString())) { 
             winnersThisRound.push({
               userId,
               boardId,
@@ -853,115 +837,109 @@ async function runGameLoop(stake: number) {
       });
 
       if (winnersThisRound.length > 0) {
-        room.state = GameState.FINISHED;
-        const totalPayout = room.globalPool * 0.6; // 60% to players
-        const houseShare = room.globalPool * 0.4; // 40% to house
+        singleRoomState.state = GameState.FINISHED;
+        const totalPayout = singleRoomState.globalPool * 0.6; // 60% to players
+        const houseShare = singleRoomState.globalPool * 0.4; // 40% to house
         
-        totalProfit += houseShare;
+        globalGameState.totalProfit += houseShare;
         await GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalProfit: houseShare } }, { upsert: true }).catch(e => logger.error('Global stats profit update error', { error: e }));
 
         const splitPayout = totalPayout / winnersThisRound.length;
 
         Promise.all(winnersThisRound.map(async (w) => {
-            room.boardStatus.set(w.boardId.toString(), w.userId);
+            singleRoomState.boardStatus.set(w.boardId.toString(), w.userId);
             const winnerInfo = {
               ...w,
               payout: splitPayout,
-              gameId: room.currentGameId,
+              gameId: singleRoomState.currentGameId,
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
 
             jackpotWinsCounter.add(1);
             const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
             const sId = socketMapping.get(w.userId);
-            if (sId && user) io.to(sId).emit(socketEvents.WALLET_UPDATE, user.balance);
-            io.to(`room_${stake}`).emit(socketEvents.NEW_WINNER, winnerInfo);
+            if (sId && user) io.to(sId).emit(socketEvents.WALLET_UPDATE, user.balance); // Emit to specific user
+            io.emit(socketEvents.NEW_WINNER, winnerInfo); // Emit to all in the room
 
             return GameArchive.create({
-              gameId: room.currentGameId,
+              gameId: singleRoomState.currentGameId,
               winnerId: w.userId,
               winnerBoardId: w.boardId,
               prizePool: totalPayout,
               houseRake: houseShare,
-              ballsDrawn: room.currentBalls
+              ballsDrawn: singleRoomState.currentBalls
             });
         })).catch(e => logger.error('Game completion processing error', { error: e }));
         
-        if (room.markModified) room.markModified('boardStatus');
+        if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
       }
   }
 
-  if (room.state === GameState.FINISHED || room.currentBalls.length >= 75) {
+  if (singleRoomState.state === GameState.FINISHED || singleRoomState.currentBalls.length >= 75) {
     // 3-second winner declaration window as requested for the rapid-fire loop
-    room.gameLoopTimeout = setTimeout(() => resetGame(stake), 3000);
+    singleRoomState.gameLoopTimeout = setTimeout(() => resetGame(), 3000);
     return; // Exit the loop
   }
 
-  room.gameLoopTimeout = setTimeout(() => runGameLoop(stake), 3000);
-  if (room.save) await room.save().catch(console.error);
+  singleRoomState.gameLoopTimeout = setTimeout(() => runGameLoop(), 3000);
+  if (singleRoomState.save) await singleRoomState.save().catch(console.error);
 }
-function startSelectionPhase(stake: number) {
-  if (stopRequested) {
-    console.log(`🚫 Prevented selection phase for stake ${stake} (stop requested).`);
+function startSelectionPhase() {
+  if (globalGameState.stopRequested) {
+    console.log(`🚫 Prevented selection phase (stop requested).`);
     return;
   }
-  const room = roomStates.get(stake);
-  if (!room) return; // Should not happen if initialized correctly
   const SELECTION_PHASE_DURATION_MS = 40000; // 40 seconds
-  room.state = GameState.SELECTION;
-  room.selectionStartTime = Date.now();
-  room.selectionDuration = SELECTION_PHASE_DURATION_MS;
+  singleRoomState.state = GameState.SELECTION;
+  singleRoomState.selectionStartTime = Date.now();
+  singleRoomState.selectionDuration = SELECTION_PHASE_DURATION_MS;
   broadcastPoolUpdate();
   
   // Start 40s "Quick Pick" window to finalize Total Players for this round
-  room.selectionTimer = setTimeout(() => { // Store the timer reference
-    room.state = GameState.GAME;
-    room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
+  singleRoomState.selectionTimer = setTimeout(() => { // Store the timer reference
+    singleRoomState.state = GameState.GAME;
+    singleRoomState.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
     broadcastPoolUpdate();
-    runGameLoop(stake);
+    runGameLoop();
   }, 40000);
-  if (room.save) room.save().catch(e => logger.error('Room selection start save error', { error: e, stake }));
+  if (singleRoomState.save) singleRoomState.save().catch(e => logger.error('Room selection start save error', { error: e, stake: SINGLE_STAKE }));
 }
 
-function resetGame(stake: number) {
-  const room = roomStates.get(stake);
-  if (!room) return; // Should not happen if initialized correctly
-  room.currentBalls = [];
-  room.shuffledBalls = [];
-  room.globalPool = 0;
-  room.playerBoards.clear();
-  room.boardStatus.clear(); // Clear board status for new game
-  room.currentGameId = generateGameId(stake);
-  io.to(`room_${stake}`).emit(socketEvents.GAME_RESET);
+function resetGame() {
+  singleRoomState.currentBalls = [];
+  singleRoomState.shuffledBalls = [];
+  singleRoomState.globalPool = 0;
+  singleRoomState.playerBoards.clear();
+  singleRoomState.boardStatus.clear(); // Clear board status for new game
+  singleRoomState.currentGameId = generateGameId();
+  io.emit(socketEvents.GAME_RESET); // Emit to all connected clients
   
   // Check if a stop was requested and no other rooms are still in a game
-  if (stopRequested) {
-    const hasLiveGames = Array.from(roomStates.values()).some(r => r.state === GameState.GAME);
+  if (globalGameState.stopRequested) {
+    const hasLiveGames = singleRoomState.state === GameState.GAME; // Only one room now
     if (!hasLiveGames) {
-      isGameRunning = false; // Stop engine
-      roomStates.forEach(room => {
-        if (room.selectionTimer) {
-          clearTimeout(room.selectionTimer);
-          room.selectionTimer = undefined;
-        }
-        if (room.gameLoopTimeout) {
-          clearTimeout(room.gameLoopTimeout);
-          room.gameLoopTimeout = undefined;
-        }
-      });
-      stopRequested = false; // Clear stop request
+      globalGameState.isGameRunning = false; // Stop engine
+      if (singleRoomState.selectionTimer) {
+        clearTimeout(singleRoomState.selectionTimer);
+        singleRoomState.selectionTimer = undefined;
+      }
+      if (singleRoomState.gameLoopTimeout) {
+        clearTimeout(singleRoomState.gameLoopTimeout);
+        singleRoomState.gameLoopTimeout = undefined;
+      }
+      globalGameState.stopRequested = false; // Clear stop request
       logger.info("Game engine stopped gracefully after round completion.");
       broadcastPoolUpdate();
-      io.emit(socketEvents.GAME_STOPPED, 'Games are over for today. Please come back tomorrow to play!');
+      io.emit('game:stopped', 'Games are over for today. Please come back tomorrow to play!');
       return;
     } else {
     }
   }
 
-  startSelectionPhase(stake);
-  if (room.markModified) room.markModified('playerBoards');
-  if (room.markModified) room.markModified('boardStatus');
-  if (room.save) room.save().catch(e => logger.error('Room reset save error', { error: e, stake }));
+  startSelectionPhase();
+  if (singleRoomState.markModified) singleRoomState.markModified('playerBoards');
+  if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
+  if (singleRoomState.save) singleRoomState.save().catch(e => logger.error('Room reset save error', { error: e, stake: SINGLE_STAKE }));
   broadcastPoolUpdate();
 }
 
@@ -969,38 +947,31 @@ function resetGame(stake: number) {
 
 // Per-round winning payout modal timing etc will be addressed in later steps.
 
-dbPromise.then(async () => {
-  try {
-    await syncCache(); // Ensure cache is synced after DB connection
-    io = new SocketIOServer(server, { cors: corsConfig }); // Initialize Socket.io after DB is ready
-    registerSocketHandlers(io); // Pass io to the handler
-    for (const stake of STAKES) {
-      let room = roomStates.get(stake);
-      if (!room) {
-        // Create new room state if it doesn't exist
-        room = await RoomStateModel.create({
-          stake,
-          currentGameId: generateGameId(stake),
-          state: GameState.SELECTION,
-        });
-        roomStates.set(stake, room as any);
-      }
-      // If game was in progress, restart selection phase or game loop
-      if (room.state === GameState.GAME || room.state === GameState.SELECTION) {
-        // For now, always reset to selection phase on startup
-        resetGame(stake);
-      }
-    }
+dbPromise.then(async (conn) => {
+  io = new SocketIOServer(server, { cors: corsConfig });
+  
+  await syncCache();
+  registerSocketHandlers(io);
 
-    await Promise.all([
-      mainBot.launch(),
-      adminBot.launch()
-    ]);
+  // Ensure the single room state exists in DB and is loaded
+  if (!singleRoomState.currentGameId || !singleRoomState.playerBoards) {
+    const roomDoc = await RoomStateModel.findOneAndUpdate(
+      {},
+      { $setOnInsert: { currentGameId: generateGameId(), state: GameState.SELECTION, globalPool: 0, currentBalls: [], shuffledBalls: [], playerBoards: new Map(), boardStatus: new Map() } },
+      { upsert: true, new: true }
+    );
+    if (roomDoc) {
+      singleRoomState = { ...roomDoc.toObject(), playerBoards: new Map(roomDoc.playerBoards), boardStatus: new Map(roomDoc.boardStatus) };
+    }
+  }
+  resetGame();
+
+  try {
+    await Promise.all([mainBot.launch(), adminBot.launch()]);
     logger.info("User and Admin Bots initialized");
     
-    if (ADMIN_CHAT_ID) {
-      adminBot.telegram.sendMessage(ADMIN_CHAT_ID, "🚀 <b>Bots Online</b>\nThe game server and both bots have started successfully.", { parse_mode: 'HTML' })
-        .catch(e => logger.error("Failed to send startup message to admin", { error: e.message }));
+    if (ADMIN_CHAT_ID && ADMIN_CHAT_ID !== 'YOUR_ADMIN_CHAT_ID_HERE') {
+      adminBot.telegram.sendMessage(ADMIN_CHAT_ID, "🚀 <b>Bots Online</b>\nThe game server and both bots have started successfully.", { parse_mode: 'HTML' }).catch(e => logger.error("Failed to send startup message", { error: e.message }));
     }
   } catch (err) {
     logger.error("Failed to start application services", { error: err });
@@ -1031,17 +1002,14 @@ function registerSocketHandlers(io: SocketIOServer) {
   socketMapping.set(userId, socket.id);
 
   // Force Start Round (Admin Only)
-  socket.on(socketEvents.FORCE_START, () => { // Use the imported event name
-    STAKES.forEach(stake => {
-      const room = roomStates.get(stake);
-      if (room && room.state === GameState.SELECTION) {
-        if (room.selectionTimer) clearTimeout(room.selectionTimer);
-        room.state = GameState.GAME;
-        room.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
-        broadcastPoolUpdate();
-        runGameLoop(stake);
-      }
-    });
+  socket.on(socketEvents.FORCE_START, () => {
+    if (singleRoomState.state === GameState.SELECTION) {
+      if (singleRoomState.selectionTimer) clearTimeout(singleRoomState.selectionTimer);
+      singleRoomState.state = GameState.GAME;
+      singleRoomState.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
+      broadcastPoolUpdate();
+      runGameLoop();
+    }
   });
 
   // Fetch or Create User in DB
@@ -1064,49 +1032,46 @@ function registerSocketHandlers(io: SocketIOServer) {
     socket.emit(socketEvents.USER_STATUS, { isVerified: isUserVerified, phone: user?.phone });
   }).catch(err => logger.error(`Error fetching/creating user for socket ${socket.id}`, { error: err }));
   
-  activePlayers++;
-  broadcastPoolUpdate();
+  globalGameState.activePlayers++;
+  broadcastPoolUpdate(io); // Pass io instance to broadcastPoolUpdate
 
   // Joining a specific room
-  socket.on(socketEvents.JOIN_ROOM, async (stake: number) => {
-    if (!STAKES.includes(stake)) return;
-    
-    STAKES.forEach(s => socket.leave(`room_${s}`));
-    socket.join(`room_${stake}`);
-    
-    const room = roomStates.get(stake)!;
+  socket.on(socketEvents.JOIN_ROOM, async () => {
+    socket.rooms.forEach(room => {
+      if (room !== socket.id) socket.leave(room as string);
+    });
+    socket.join(`room_${SINGLE_STAKE}`);
 
     socket.emit(socketEvents.GAME_INIT, {
-      balls: room.currentBalls,
-      gameId: room.currentGameId,
-      selectionTimeLeft: room.selectionStartTime && room.selectionDuration
-        ? Math.max(0, Math.ceil((room.selectionStartTime + room.selectionDuration - Date.now()) / 1000))
+      balls: singleRoomState.currentBalls,
+      gameId: singleRoomState.currentGameId,
+      selectionTimeLeft: singleRoomState.selectionStartTime && singleRoomState.selectionDuration
+        ? Math.max(0, Math.ceil((singleRoomState.selectionStartTime + singleRoomState.selectionDuration - Date.now()) / 1000))
         : 0,
-      takenBoards: Array.from(room.boardStatus.keys())
+      takenBoards: Array.from(singleRoomState.boardStatus.keys())
     });
   });
 
 
   // Concurrency-Controlled Board Selection
-  socket.on(socketEvents.PICK_BOARD, async (data: { boardId: number; stake: number }) => {
-    const room = roomStates.get(data.stake);
-    if (!room || room.state !== GameState.SELECTION) return;
+  socket.on(socketEvents.PICK_BOARD, async (data: { boardId: number }) => { // No stake argument needed
+    if (singleRoomState.state !== GameState.SELECTION) return;
 
     const boardId = data.boardId;
-    const stakeAmount = data.stake;
+    const stakeAmount = SINGLE_STAKE; // Fixed stake
 
     const userRecord = await User.findOne({ userId });
     if (!userRecord) return;
 
     // Ensure playerBoards is initialized as a Map if it's a plain object from DB
-    if (typeof room.playerBoards.get !== 'function') room.playerBoards = new Map(Object.entries(room.playerBoards));
-    const currentSelected = (room.playerBoards.get(userId) || []).map(String);
+    if (typeof singleRoomState.playerBoards.get !== 'function') singleRoomState.playerBoards = new Map(Object.entries(singleRoomState.playerBoards));
+    const currentSelected = (singleRoomState.playerBoards.get(userId) || []).map(String);
     const isSwapping = currentSelected.length > 0 && !currentSelected.includes(String(boardId));
     const isDeselecting = currentSelected.includes(String(boardId));
     const isFirstSelection = currentSelected.length === 0;
 
     // Check if taken by someone else
-    const existingOwner = room.boardStatus.get(String(boardId));
+    const existingOwner = singleRoomState.boardStatus.get(String(boardId));
     if (existingOwner && existingOwner !== userId) {
       return socket.emit('message', 'Board already taken, please choose another.');
     }
@@ -1114,37 +1079,37 @@ function registerSocketHandlers(io: SocketIOServer) {
     if (isDeselecting) {
       // Refund logic
       userRecord.balance += stakeAmount;
-      room.boardStatus.delete(String(boardId));
-      room.playerBoards.set(userId, []);
-      room.globalPool -= stakeAmount;
+      singleRoomState.boardStatus.delete(String(boardId));
+      singleRoomState.playerBoards.set(userId, []);
+      singleRoomState.globalPool -= stakeAmount;
     } else if (isSwapping) {
       // Swap logic: Make previous available, take new one
       const oldId = currentSelected[0];
-      room.boardStatus.delete(oldId);
-      room.boardStatus.set(String(boardId), userId);
-      room.playerBoards.set(userId, [boardId]);
+      singleRoomState.boardStatus.delete(oldId);
+      singleRoomState.boardStatus.set(String(boardId), userId);
+      singleRoomState.playerBoards.set(userId, [boardId]);
     } else if (isFirstSelection) {
       // New Selection logic: Check balance and deduct
       if (userRecord.balance < stakeAmount) {
         return socket.emit('message', 'Insufficient balance.');
       }
       userRecord.balance -= stakeAmount;
-      room.boardStatus.set(String(boardId), userId);
-      room.playerBoards.set(userId, [boardId]);
-      room.globalPool += stakeAmount;
-      totalVolume += stakeAmount;
+      singleRoomState.boardStatus.set(String(boardId), userId);
+      singleRoomState.playerBoards.set(userId, [boardId]);
+      singleRoomState.globalPool += stakeAmount;
+      globalGameState.totalVolume += stakeAmount;
       await GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: stakeAmount } }, { upsert: true }).catch(e => logger.error('Global stats volume update error', { error: e }));
     }
     await userRecord.save().catch(e => logger.error('User record save error on board pick', { error: e, userId })); // Save user balance once
 
-    if (room.markModified) room.markModified('playerBoards');
-    if (room.markModified) room.markModified('boardStatus');
-    if (room.save) await room.save().catch(e => logger.error('Room save error on board pick', { error: e, stake: data.stake }));
+    if (singleRoomState.markModified) singleRoomState.markModified('playerBoards');
+    if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
+    if (singleRoomState.save) await singleRoomState.save().catch(e => logger.error('Room save error on board pick', { error: e }));
 
     socket.emit(socketEvents.WALLET_UPDATE, userRecord.balance); // Ensure wallet update is sent after save
     
-    io.to(`room_${data.stake}`).emit(socketEvents.BOARD_SYNC, {
-      takenBoards: Array.from(room.boardStatus.keys())
+    io.emit(socketEvents.BOARD_SYNC, { // Emit to all in the single room
+      takenBoards: Array.from(singleRoomState.boardStatus.keys())
     });
     broadcastPoolUpdate();
   });
@@ -1152,7 +1117,7 @@ function registerSocketHandlers(io: SocketIOServer) {
     socket.on('disconnect', () => {
       logger.info(`User disconnected: ${socket.id}`);
       socketMapping.delete(userId);
-      activePlayers = Math.max(0, activePlayers - 1);
+      globalGameState.activePlayers = Math.max(0, globalGameState.activePlayers - 1);
       broadcastPoolUpdate();
     });
   });
