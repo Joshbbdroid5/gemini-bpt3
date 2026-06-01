@@ -160,6 +160,7 @@ const PendingWithdrawal = mongoose.model<IPendingWithdrawal>('PendingWithdrawal'
 // User Schema
 interface IUser {
   userId: string;
+  username?: string;
   balance: number;
   isVerified: boolean;
   referredBy?: string;
@@ -167,7 +168,8 @@ interface IUser {
 }
 const userSchema = new mongoose.Schema<IUser>({
   userId: { type: String, required: true, unique: true },
-  balance: { type: Number, default: 1000 },
+  username: { type: String },
+  balance: { type: Number, default: 0 }, // Default to 0, awarded only upon verification
   isVerified: { type: Boolean, default: false },
   referredBy: { type: String },
   phone: { type: String }
@@ -308,7 +310,8 @@ app.post('/admin/create-user', async (req, res) => {
       { upsert: true, new: true }
     );
     if (ADMIN_CHAT_ID) {
-      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `👤 <b>New User Created:</b> <code>${userId}</code>${referredBy ? ` (Referred by: ${referredBy})` : ''}`, { parse_mode: 'HTML' }).catch(e => logger.error('Admin notify error', { error: e }));
+      const displayId = user.username ? `${user.username}\n<i>ID: ${userId}</i>` : `<code>${userId}</code>`;
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `👤 <b>New User Created:</b>\n${displayId}${referredBy ? `\n(Referred by: ${referredBy})` : ''}`, { parse_mode: 'HTML' }).catch(e => logger.error('Admin notify error', { error: e }));
     }
     res.json({ success: true, user });
   } catch (err) {
@@ -326,8 +329,11 @@ app.post('/admin/add-pending-deposit', async (req, res) => {
     
     // Use adminBot to notify admin of the request
     if (ADMIN_CHAT_ID) {
+      const user = await User.findOne({ userId });
+      const displayId = user?.username ? `${user.username}\n<i>ID: ${userId}</i>` : `<code>${userId}</code>`;
+
       await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, 
-        `🚨 <b>NEW TOP-UP REQUEST</b>\n\n👤 <b>User:</b> <code>${userId}</code>\n💰 <b>Amount:</b> ${amount} ETB\n🧾 <b>SMS:</b>\n${telebirrSms}`,
+        `🚨 <b>NEW TOP-UP REQUEST</b>\n\n👤 <b>User:</b>\n${displayId}\n💰 <b>Amount:</b> ${amount} ETB\n🧾 <b>SMS:</b>\n${telebirrSms}`,
         {
           parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
@@ -347,8 +353,12 @@ app.get('/admin/pending-deposits', async (req, res) => {
   const { secret } = req.query;
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
   try {
-    const pending = await PendingDeposit.find().sort({ timestamp: -1 });
-    res.json(pending);
+    const pending = await PendingDeposit.find().sort({ timestamp: -1 }).lean();
+    const results = await Promise.all(pending.map(async (dep) => {
+      const u = await User.findOne({ userId: dep.userId }).select('username').lean();
+      return { ...dep, username: u?.username };
+    }));
+    res.json(results);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch pending deposits' });
   }
@@ -359,8 +369,12 @@ app.get('/admin/pending-withdrawals', async (req, res) => {
   const { secret } = req.query;
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
   try {
-    const pending = await PendingWithdrawal.find().sort({ timestamp: -1 });
-    res.json(pending);
+    const pending = await PendingWithdrawal.find().sort({ timestamp: -1 }).lean();
+    const results = await Promise.all(pending.map(async (w) => {
+      const u = await User.findOne({ userId: w.userId }).select('username').lean();
+      return { ...w, username: u?.username };
+    }));
+    res.json(results);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch pending withdrawals' });
   }
@@ -484,8 +498,9 @@ app.post('/admin/withdraw-request', async (req, res) => {
     await PendingWithdrawal.create({ userId, amount });
 
     if (ADMIN_CHAT_ID) {
+      const displayId = user.username ? `${user.username}\n<i>ID: ${userId}</i>` : `<code>${userId}</code>`;
       await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, 
-        `💸 <b>NEW WITHDRAWAL REQUEST</b>\n\n👤 <b>User:</b> <code>${userId}</code>\n💰 <b>Amount:</b> ${amount} ETB\n📱 <b>Phone:</b> <code>${user.phone || 'N/A'}</code>`,
+        `💸 <b>NEW WITHDRAWAL REQUEST</b>\n\n👤 <b>User:</b>\n${displayId}\n💰 <b>Amount:</b> ${amount} ETB\n📱 <b>Phone:</b> <code>${user.phone || 'N/A'}</code>`,
         {
           parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
@@ -572,9 +587,19 @@ app.post('/admin/verify-user', async (req, res) => {
     }
 
     const existingUser = await User.findOne({ userId });
+    
+    // Only award the initial registration bonus (1000 ETB) if the user is verifying for the first time
+    const balanceUpdate = (!existingUser || !existingUser.isVerified) ? { balance: 1000 } : {};
+
     const user = await User.findOneAndUpdate(
       { userId },
-      { isVerified: true, phone }, // Assuming you might want to add a phone field to User schema
+      { 
+        $set: { 
+          isVerified: true, 
+          phone,
+          ...balanceUpdate 
+        } 
+      },
       { upsert: true, new: true }
     );
 
@@ -582,10 +607,12 @@ app.post('/admin/verify-user', async (req, res) => {
     const socketId = socketMapping.get(userId);
     if (socketId) {
       io.to(socketId).emit(socketEvents.USER_STATUS, { isVerified: true, phone });
+      io.to(socketId).emit(socketEvents.WALLET_UPDATE, user.balance);
     }
 
     if (ADMIN_CHAT_ID) {
-      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `📱 <b>User Registered:</b> <code>${userId}</code> has verified phone: <code>${phone}</code>`, { parse_mode: 'HTML' }).catch(e => logger.error('Admin registration notify error', { error: e }));
+      const displayId = user.username ? `${user.username}\n<i>ID: ${userId}</i>` : `<code>${userId}</code>`;
+      await adminBot.telegram.sendMessage(ADMIN_CHAT_ID, `📱 <b>User Registered:</b>\n${displayId}\nhas verified phone: <code>${phone}</code>`, { parse_mode: 'HTML' }).catch(e => logger.error('Admin registration notify error', { error: e }));
     }
 
     res.json({ success: true, isNewUser: !existingUser?.phone });
@@ -601,16 +628,50 @@ app.get('/admin/user-info', async (req, res) => {
   if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
 
   try {
-    const user = await User.findOne({ userId: userId as string });
+    const target = userId as string;
+    // Search by ID or Username (with or without @ prefix)
+    const user = await User.findOne({
+      $or: [
+        { userId: target },
+        { username: target },
+        { username: target.startsWith('@') ? target : `@${target}` }
+      ]
+    });
+
     if (!user) {
-      return res.json({ balance: 0, isVerified: false });
+      return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ balance: user.balance, isVerified: user.isVerified });
+    res.json({ userId: user.userId, balance: user.balance, username: user.username });
   } catch (err) {
     logger.error("User Info Fetch Error", { error: err, userId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ADMIN ENDPOINT: Delete a user
+app.post('/admin/delete-user', async (req, res) => {
+  const { userId, secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const deletedUser = await User.findOneAndDelete({ userId });
+    if (!deletedUser) return res.status(404).json({ error: 'User not found' });
+
+    userWallets.delete(userId);
+    const socketId = socketMapping.get(userId);
+    if (socketId && io) {
+      io.to(socketId).emit('game:stopped', 'Your account has been deleted by an administrator.');
+      io.sockets.sockets.get(socketId)?.disconnect();
+      socketMapping.delete(userId);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error("User Deletion Error", { error: err, userId });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 // ADMIN ENDPOINT: Check user status
 app.get('/admin/check-user', async (req, res) => {
@@ -625,17 +686,26 @@ app.get('/admin/check-user', async (req, res) => {
 });
 
 // ADMIN ENDPOINT: Fetch all wallets
-app.post('/admin/wallets', (req, res) => {
+app.post('/admin/wallets', async (req, res) => {
   const { secret } = req.body;
   if (secret !== ADMIN_SECRET) {
     return res.status(403).json({ error: 'Unauthorized' });
   }
+
+  const allUsers = await User.find({}).lean();
+  const verifiedCount = allUsers.filter(u => u.isVerified).length;
+  const walletData: Record<string, { balance: number; username?: string }> = {};
+  allUsers.forEach(u => {
+    walletData[u.userId] = { balance: u.balance, username: u.username };
+  });
+
   res.json({
-    wallets: Object.fromEntries(userWallets),
+    wallets: walletData,
     stats: { 
       totalVolume: globalGameState.totalVolume, 
       totalProfit: globalGameState.totalProfit, 
       activeBets: singleRoomState.globalPool, 
+      totalUsers: allUsers.length,
       isMaintenanceMode: globalGameState.isMaintenanceMode, 
       isGameRunning: globalGameState.isGameRunning, 
       stopRequested: globalGameState.stopRequested, 
@@ -780,13 +850,18 @@ for (let i = 1; i <= 600; i++) {
 const broadcastPoolUpdate = (ioInstance: SocketIOServer = io) => { // Accept io instance as argument
   const engineActive = globalGameState.isGameRunning && !globalGameState.stopRequested;
 
-  const roomStats: RoomStats = {
+  const selectionTimeLeft = singleRoomState.selectionStartTime && singleRoomState.selectionDuration
+    ? Math.max(0, Math.ceil((singleRoomState.selectionStartTime + singleRoomState.selectionDuration - Date.now()) / 1000))
+    : 0;
+
+  const roomStats: RoomStats & { selectionTimeLeft: number } = {
     pool: singleRoomState.globalPool * 0.6, // Dynamic prize calculation: 60% of current pool
-    players: singleRoomState.playerBoards.size,
+    players: singleRoomState.boardStatus.size, // Accurate count of unique users with a selected board
     gameId: singleRoomState.currentGameId,
     state: singleRoomState.state,
     isLive: singleRoomState.state === GameState.GAME,
-    isEngineActive: engineActive
+    isEngineActive: engineActive,
+    selectionTimeLeft: selectionTimeLeft
   };
 
   // Emit directly the single room stats
@@ -900,7 +975,8 @@ function startSelectionPhase() {
     singleRoomState.state = GameState.GAME;
     singleRoomState.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
     broadcastPoolUpdate();
-    runGameLoop();
+    // Give clients a 2s buffer to transition from Selection to Game page before drawing balls
+    setTimeout(() => runGameLoop(), 2000);
   }, 40000);
   if (singleRoomState.save) singleRoomState.save().catch(e => logger.error('Room selection start save error', { error: e, stake: SINGLE_STAKE }));
 }
@@ -987,11 +1063,12 @@ function registerSocketHandlers(io: SocketIOServer) {
   const { initData, user, userId: fallbackId } = socket.handshake.auth;
   let userId = fallbackId || `guest_${socket.id.substring(0, 4)}`;
   let isVerified = false;
+  const telegramUsername = user?.username ? `@${user.username}` : user?.first_name || 'Guest';
 
   if (initData && verifyTelegramData(initData)) {
     userId = user?.id?.toString() || userId;
     isVerified = true;
-    logger.info(`Verified Telegram User: ${user?.first_name}`, { username: user?.username });
+    logger.info(`Verified Telegram User: ${telegramUsername}`, { userId });
   } else {
     logger.info(`Unverified connection using ID: ${userId}`);
     // For development/testing, you might want to auto-verify guests:
@@ -1008,7 +1085,8 @@ function registerSocketHandlers(io: SocketIOServer) {
       singleRoomState.state = GameState.GAME;
       singleRoomState.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
       broadcastPoolUpdate();
-      runGameLoop();
+      // Buffer for clients to switch pages
+      setTimeout(() => runGameLoop(), 2000);
     }
   });
 
@@ -1017,14 +1095,21 @@ function registerSocketHandlers(io: SocketIOServer) {
     let currentBalance = 0;
     let isUserVerified = false;
     if (!user) {
-      const newUser = await User.create({ userId, balance: 1000, isVerified: isVerified });
+      const newUser = await User.create({ userId, username: telegramUsername, balance: 1000, isVerified: isVerified });
       currentBalance = newUser.balance;
       isUserVerified = newUser.isVerified;
     } else {
-      // Update verification status if it changed
-      if (isVerified && !user.isVerified) {
-        await User.updateOne({ userId }, { isVerified: true }); // Update DB if now verified
+      // Update verification status or username if it changed
+      let update: any = {};
+      if (isVerified && !user.isVerified) update.isVerified = true;
+      if (telegramUsername !== 'Guest' && user.username !== telegramUsername) {
+        update.username = telegramUsername;
       }
+
+      if (Object.keys(update).length > 0) {
+        await User.updateOne({ userId }, { $set: update });
+      }
+      
       currentBalance = user.balance;
       isUserVerified = user.isVerified;
     }
@@ -1048,7 +1133,9 @@ function registerSocketHandlers(io: SocketIOServer) {
       selectionTimeLeft: singleRoomState.selectionStartTime && singleRoomState.selectionDuration
         ? Math.max(0, Math.ceil((singleRoomState.selectionStartTime + singleRoomState.selectionDuration - Date.now()) / 1000))
         : 0,
-      takenBoards: Array.from(singleRoomState.boardStatus.keys())
+      takenBoards: Array.from(singleRoomState.boardStatus.keys()),
+      pool: singleRoomState.globalPool * 0.6,
+      players: singleRoomState.boardStatus.size
     });
   });
 

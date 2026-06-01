@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power, Check } from 'lucide-react';
+import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power, Check, Users, Trash2 } from 'lucide-react';
 import { socket, socketEvents } from './socket';
 
 interface Props {
@@ -10,14 +10,16 @@ interface Props {
 
 export default function AdminDashboard({ onBack }: Props) {
   const [secret, setSecret] = useState('');
-  const [wallets, setWallets] = useState<Record<string, number>>({});
+  const [wallets, setWallets] = useState<Record<string, { balance: number; username?: string }>>({});
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [stats, setStats] = useState({ totalVolume: 0, totalProfit: 0, activeBets: 0, isMaintenanceMode: false, isGameRunning: false, stopRequested: false, isEngineActive: false });
+  const [stats, setStats] = useState({ totalVolume: 0, totalProfit: 0, activeBets: 0, totalUsers: 0, isMaintenanceMode: false, isGameRunning: false, stopRequested: false, isEngineActive: false });
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [adjustmentValues, setAdjustmentValues] = useState<Record<string, string>>({});
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [modalData, setModalData] = useState<{ userId: string; amount: number; type: 'add' | 'subtract' | 'set' } | null>(null);
   // Backend URL from environment variables, with a fallback for local development
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
@@ -107,6 +109,31 @@ export default function AdminDashboard({ onBack }: Props) {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`${backendUrl}/admin/delete-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userToDelete, secret })
+      });
+
+      if (response.ok) {
+        toast.success(`User ${userToDelete} deleted`);
+        setShowDeleteConfirm(false);
+        setUserToDelete(null);
+        await fetchWallets();
+      } else {
+        toast.error('Failed to delete user');
+      }
+    } catch (err) {
+      toast.error('Connection error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleToggleMaintenance = async () => {
     const nextState = !stats.isMaintenanceMode;
     if (!confirm(`Are you sure you want to ${nextState ? 'ENABLE' : 'DISABLE'} maintenance mode?`)) return;
@@ -173,8 +200,9 @@ export default function AdminDashboard({ onBack }: Props) {
     }
   };
 
-  const filteredWallets = Object.entries(wallets).filter(([id]) => 
-    id.toLowerCase().includes(search.toLowerCase())
+  const filteredWallets = Object.entries(wallets).filter(([id, data]) => 
+    id.toLowerCase().includes(search.toLowerCase()) ||
+    (data.username && data.username.toLowerCase().includes(search.toLowerCase()))
   );
 
   if (!isAuthenticated) {
@@ -302,7 +330,7 @@ export default function AdminDashboard({ onBack }: Props) {
       </div>
 
       {/* Summary Cards */}
-      <div className="px-4 pt-4 grid grid-cols-3 gap-2"> {/* Summary statistics cards */}
+      <div className="px-4 pt-4 grid grid-cols-2 lg:grid-cols-4 gap-2"> {/* Summary statistics cards */}
         <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-3">
           <div className="flex items-center gap-2 mb-1">
             <Activity size={14} className="text-indigo-400" />
@@ -324,6 +352,13 @@ export default function AdminDashboard({ onBack }: Props) {
           </div>
           <div className="text-xl font-black text-white italic">{stats.activeBets.toFixed(0)} <span className="text-xs not-italic text-orange-400 ml-1">ETB</span></div>
         </div>
+        <div className="bg-purple-600/20 border border-purple-500/30 rounded-2xl p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Users size={14} className="text-purple-400" />
+            <span className="text-[10px] font-black text-purple-300 uppercase tracking-widest">Total Users</span>
+          </div>
+          <div className="text-xl font-black text-white italic">{stats.totalUsers}</div>
+        </div>
       </div>
 
       <div className="p-4">
@@ -332,24 +367,33 @@ export default function AdminDashboard({ onBack }: Props) {
           <input 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search User ID..."
+            placeholder="Search User ID or Username..."
             className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {filteredWallets.map(([id, balance]) => ( // Map through filtered wallets to display each user's data
+        {filteredWallets.map(([id, data]) => ( // Map through filtered wallets to display each user's data
           <div key={id} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="text-[10px] font-black text-indigo-300 uppercase leading-none mb-1">Username</span>
-                <span className="text-xs font-bold text-white font-mono leading-none">{id}</span>
-                <span className="text-[8px] text-gray-500 italic mt-1 font-medium">ID: {id}</span>
+                <span className="text-[10px] font-black text-indigo-300 uppercase leading-none mb-1">User</span>
+                <span className="text-xs font-bold text-white font-mono leading-none">{data.username || 'Anonymous'}</span>
+                <span className="text-[10px] text-gray-500 italic mt-1 font-medium italic underline">ID: {id}</span>
               </div>
-              <div className="text-right">
-                <span className="text-[10px] font-black text-gray-500 uppercase leading-none block mb-1">Balance</span>
-                <span className="text-lg font-black text-green-400 italic">{balance.toFixed(0)} ETB</span>
+              <div className="flex items-start gap-4">
+                <div className="text-right">
+                  <span className="text-[10px] font-black text-gray-500 uppercase leading-none block mb-1">Balance</span>
+                  <span className="text-lg font-black text-green-400 italic">{data.balance.toFixed(0)} ETB</span>
+                </div>
+                <button 
+                  onClick={() => { setUserToDelete(id); setShowDeleteConfirm(true); }}
+                  className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
+                  aria-label="Delete User"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             </div>
 
@@ -437,6 +481,39 @@ export default function AdminDashboard({ onBack }: Props) {
         </motion.div>
       )}
     </AnimatePresence>
+
+    {/* Delete Confirmation Modal */}
+    <AnimatePresence>
+      {showDeleteConfirm && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        >
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, y: 20 }}
+            className="bg-[#2d2e4d] rounded-2xl p-6 shadow-2xl border border-white/10 w-full max-w-sm text-center"
+          >
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="text-red-500" size={32} />
+            </div>
+            <h3 className="text-xl font-black text-white uppercase italic mb-2">Delete User?</h3>
+            <p className="text-gray-300 mb-6 text-sm">
+              This will permanently remove user <span className="font-bold text-red-400">{userToDelete}</span>. 
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold uppercase text-xs">Cancel</button>
+              <button onClick={handleDeleteUser} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black uppercase text-xs">Delete User</button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
     </>
   );
 }

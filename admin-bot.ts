@@ -16,6 +16,8 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET?.trim();
 const adminState = new Map<string, { mode: 'search' | null }>();
 const getAdminState = (id: string) => adminState.get(id) || { mode: null };
 const setAdminState = (id: string, state: { mode: 'search' | null }) => adminState.set(id, state);
+const API_HEADERS = { 'Content-Type': 'application/json' };
+
 
 function requireAdminSecret(ctx: Context): boolean { // Explicitly typed ctx
   if (ADMIN_SECRET) return true;
@@ -157,7 +159,8 @@ adminBot.action('view_pending', async (ctx: Context) => { // Explicitly typed ct
 
     let msg = '📋 <b>PENDING DEPOSIT REQUESTS</b>\n\n';
     pending.forEach((req: any, index: number) => {
-      msg += `${index + 1}. User: <code>${req.userId}</code> - <b>${req.amount} ETB</b>\n`;
+      const display = req.username ? `${req.username} (<i>ID: ${req.userId}</i>)` : `<code>${req.userId}</code>`;
+      msg += `${index + 1}. ${display} - <b>${req.amount} ETB</b>\n`;
     });
 
     await ctx.reply(msg, { parse_mode: 'HTML' });
@@ -180,7 +183,8 @@ adminBot.action('view_withdrawals', async (ctx: Context) => {
 
     let msg = '💸 <b>PENDING WITHDRAWAL REQUESTS</b>\n\n';
     pending.forEach((req: any, index: number) => {
-      msg += `${index + 1}. User: <code>${req.userId}</code> - <b>${req.amount} ETB</b>\n`;
+      const display = req.username ? `${req.username} (<i>ID: ${req.userId}</i>)` : `<code>${req.userId}</code>`;
+      msg += `${index + 1}. ${display} - <b>${req.amount} ETB</b>\n`;
     });
 
     await ctx.reply(msg, { parse_mode: 'HTML' });
@@ -220,7 +224,7 @@ adminBot.action('search_user', async (ctx: Context) => {
   if (!adminId || adminId !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   
   setAdminState(adminId, { mode: 'search' });
-  return ctx.reply('🔍 Please enter the <b>User ID</b> you want to search for:', { 
+  return ctx.reply('🔍 Please enter the <b>User ID</b> or <b>Username</b> you want to search for:', { 
     parse_mode: 'HTML',
     reply_markup: { force_reply: true } 
   });
@@ -239,17 +243,24 @@ adminBot.on('text', async (ctx) => {
     const targetId = ctx.message.text.trim();
 
     try {
-      const response = await fetch(`${API_URL}/admin/user-info?userId=${targetId}&secret=${ADMIN_SECRET}`);
-      if (!response.ok) throw new Error('Server error');
+      const response = await fetch(`${API_URL}/admin/user-info?userId=${encodeURIComponent(targetId)}&secret=${ADMIN_SECRET}`);
+      if (!response.ok) {
+        if (response.status === 404) return ctx.reply('❌ User not found.');
+        throw new Error('Server error');
+      }
       
       const data = await response.json();
+      const actualId = data.userId;
       
       const msg = `👤 <b>USER INFO</b>\n\n` +
-                  `🆔 <b>ID:</b> <code>${targetId}</code>\n` +
-                  `💰 <b>Balance:</b> ${data.balance.toFixed(2)} ETB\n` +
-                  `✅ <b>Verified:</b> ${data.isVerified ? 'Yes' : 'No'}`;
-      
-      await ctx.reply(msg, { parse_mode: 'HTML' });
+                  `👤 <b>User:</b> ${data.username || 'Anonymous'}\n` +
+                  `<i>ID: ${actualId}</i>\n\n` +
+                  `💰 <b>Balance:</b> ${data.balance.toFixed(2)} ETB`;
+
+      await ctx.reply(msg, { 
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([[Markup.button.callback('🗑️ Delete User', `del_conf_${actualId}`)]])
+      });
     } catch (err) {
       logger.error('Search error', { error: err });
       await ctx.reply('❌ Error: Could not fetch user data. Make sure the ID is correct.');
@@ -330,6 +341,42 @@ adminBot.action(/w_ref_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArr
     await ctx.reply('❌ Error contacting server.');
   }
 });
+
+// Delete Confirmation
+adminBot.action(/del_conf_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  const userId = ctx.match[1];
+  await ctx.editMessageReplyMarkup(
+    Markup.inlineKeyboard([
+      [Markup.button.callback('⚠️ Confirm Delete', `del_exec_${userId}`)],
+      [Markup.button.callback('🔙 Cancel', 'manage_menu')]
+    ]).reply_markup
+  );
+});
+
+// Delete Execution
+adminBot.action(/del_exec_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!requireAdminSecret(ctx)) return;
+  const userId = ctx.match[1];
+
+  try {
+    const response = await fetch(`${API_URL}/admin/delete-user`, {
+      method: 'POST',
+      headers: API_HEADERS,
+      body: JSON.stringify({ userId, secret: ADMIN_SECRET }),
+    });
+
+    if (response.ok) {
+      await ctx.editMessageText(`✅ User <code>${userId}</code> has been deleted.`, { parse_mode: 'HTML' });
+    } else {
+      await ctx.reply('❌ Failed to delete user.');
+    }
+  } catch (err) {
+    await ctx.reply('❌ Error: Server unreachable.');
+  }
+});
+
 adminBot.catch((err) => {
   // The .catch handler expects a function that returns MaybePromise<void>.
   // logger.error returns the logger instance, so we wrap the call in an arrow function.

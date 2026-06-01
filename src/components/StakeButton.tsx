@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Users, Trophy } from 'lucide-react';
+import { Users } from 'lucide-react';
 
 interface StakeButtonProps {
   amount: number;
@@ -60,10 +60,6 @@ export function StakeButton({ amount, players, isLive, isEngineActive, onPlay, i
         <div className="flex items-center gap-1.5">
           <Users size={14} className="text-indigo-900/40" />
           <span className="text-xs font-bold">{players}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Trophy size={14} className="text-yellow-600" />
-          <span className="text-xs font-black italic">60% PRIZE</span>
         </div>
       </div>
 

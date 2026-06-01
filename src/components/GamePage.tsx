@@ -195,7 +195,7 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
       }
     };
 
-    const handleInit = (data: { balls: number[]; gameId: string }) => {
+    const handleInit = (data: { balls: number[]; gameId: string; pool?: number; players?: number }) => {
       // Sort the incoming balls to ensure chronological order, especially for setCurrentBall
       // and for consistent state if the server sends them unsorted.
       const initialBalls = new Set(data.balls); // Preserve chronological order from server
@@ -203,7 +203,12 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
       if (autoMarkModeRef.current) {
         setManualMarks(new Set(initialBalls)); // Auto-mark all initial balls
       }
-      setGameMetadata((prev: typeof gameMetadata) => ({ ...prev, gameId: data.gameId }));
+      setGameMetadata((prev) => ({ 
+        ...prev, 
+        gameId: data.gameId,
+        pool: data.pool ?? prev.pool,
+        players: data.players ?? prev.players
+      }));
       if (data.balls.length > 0) setCurrentBall(data.balls[data.balls.length - 1]); // Set current ball to the last chronologically drawn
     };
 

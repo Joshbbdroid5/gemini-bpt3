@@ -9,11 +9,12 @@ interface Props {
   wallet: number;
   onComplete: (selectedIds: number[]) => void;
   onBack: () => void;
+  serverTimeLeft?: number;
 }
 
-export default function SelectionPage({ wallet, onComplete, onBack }: Props) {
+export default function SelectionPage({ wallet, onComplete, onBack, serverTimeLeft }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [timeLeft, setTimeLeft] = useState(40); // Initial countdown for selection (fixed)
+  const [timeLeft, setTimeLeft] = useState(serverTimeLeft ?? 40); // Initial countdown for selection (fixed)
 
   const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
 
@@ -36,6 +37,13 @@ export default function SelectionPage({ wallet, onComplete, onBack }: Props) {
     };
   }, []);
   
+  // Sync timer with server updates to ensure game starts correctly for all players
+  useEffect(() => {
+    if (serverTimeLeft !== undefined) {
+      setTimeLeft(serverTimeLeft);
+    }
+  }, [serverTimeLeft]);
+
   // Local countdown (server finalizes at 40s). We keep UI responsive.
   useEffect(() => {
     const timer = setInterval(() => {

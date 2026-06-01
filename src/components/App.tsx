@@ -80,7 +80,7 @@ export default function App() {
   
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
 
-  const [roomStats, setRoomStats] = useState<RoomStats>({ // Single room stats
+  const [roomStats, setRoomStats] = useState<RoomStats & { selectionTimeLeft?: number }>({ // Single room stats
     pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false, state: GameState.SELECTION
   });
   const [totalActivePlayers, setTotalActivePlayers] = useState(0); // State to track total active players across all rooms
@@ -111,6 +111,14 @@ export default function App() {
       if (engineIsIdle) setShowEngineIdleModal(true);
     }
   }, [roomStats, phase, isMaintenanceMode]);
+
+  // Auto-transition from selection to game when server state changes to GAME
+  useEffect(() => {
+    if (phase === 'selection' && roomStats.state === GameState.GAME) {
+      console.log("Server game phase started. Moving to Game Page.");
+      completeSelection(selectedBoardIds);
+    }
+  }, [roomStats.state, phase, selectedBoardIds]);
 
   // Homepage Play uses only stake=10 and decides between selection vs watching.
   const handleHomePlay = () => { // No amount argument needed
@@ -146,15 +154,21 @@ export default function App() {
 
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: PoolUpdateData) => { // PoolUpdateData now contains single room
-      if (data.room) setRoomStats(data.room); // Update single room stats
+      if (data.room) setRoomStats(data.room as any); // Update single room stats
       if (data.totalActive !== void 0) setTotalActivePlayers(data.totalActive);
       if (data.isMaintenance !== void 0) setIsMaintenanceMode(data.isMaintenance);
     };
     const handleWinHistory = (history: HistoryEntry[]) => setWinningHistory(history);
 
-    const handleInit = (data: { gameId: string; balls: number[] }) => {
+    const handleInit = (data: { gameId: string; balls: number[]; selectionTimeLeft?: number; pool?: number; players?: number }) => {
       setRoomStats(prev => {
-        return { ...prev, gameId: data.gameId };
+        return { 
+          ...prev, 
+          gameId: data.gameId, 
+          selectionTimeLeft: data.selectionTimeLeft,
+          pool: data.pool ?? prev.pool,
+          players: data.players ?? prev.players
+        };
       });
     };
 
@@ -416,6 +430,7 @@ export default function App() {
                   wallet={wallet} 
                   onComplete={completeSelection} 
                   onBack={handleBackToHome} 
+                  serverTimeLeft={roomStats.selectionTimeLeft}
                 />
               </motion.div>
             )}

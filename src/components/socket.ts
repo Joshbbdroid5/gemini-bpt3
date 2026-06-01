@@ -30,7 +30,7 @@ export const socketEvents = {
 
 export interface ServerToClientEvents {
   [socketEvents.USER_STATUS]: (status: { isVerified: boolean; phone?: string }) => void;
-  [socketEvents.GAME_INIT]: (data: { gameId: string; balls: number[] }) => void;
+  [socketEvents.GAME_INIT]: (data: { gameId: string; balls: number[]; selectionTimeLeft?: number; pool?: number; players?: number }) => void;
   [socketEvents.GAME_STATUS]: (status: { isGameRunning: boolean; gameId: string }) => void;
   [socketEvents.GAME_STOPPED]: (msg?: string) => void;
   [socketEvents.GAME_RESET]: () => void;
