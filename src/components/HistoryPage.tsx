@@ -35,6 +35,7 @@ export default function HistoryPage({ history, onBack }: Props) {
           onClick={onBack}
           className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors"
           aria-label={t.back}
+            title={t.back}
         >
           <ArrowLeft size={20} className="text-gray-400" /> {/* Back button icon */}
           </button>
@@ -44,6 +45,7 @@ export default function HistoryPage({ history, onBack }: Props) {
             onClick={() => window.location.reload()}
             className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 active:scale-90 transition-all"
             aria-label="Refresh"
+            title="Refresh"
           > {/* Refresh button */}
             <RefreshCw size={20} className="text-lime-400" />
           </button>
@@ -56,7 +58,7 @@ export default function HistoryPage({ history, onBack }: Props) {
 
       <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' }}>
         {history.length === 0 ? ( // Conditional rendering for empty history
-          <div className="flex flex-col items-center justify-center h-full text-center p-10 opacity-30">
+          <div className="flex flex-col items-center justify-center h-full text-center p-10 opacity-30" aria-hidden="true">
             <History size={48} className="text-gray-300 mb-4" />
             <p className="font-bold text-gray-400 uppercase tracking-widest text-xs">{t.noGames}</p>
           </div>
@@ -97,27 +99,27 @@ export default function HistoryPage({ history, onBack }: Props) {
 
               <div className="grid grid-cols-2 gap-y-4 gap-x-2">
                 <StatItem 
-                  icon={<ShoppingCart size={12} />} 
+                  icon={<ShoppingCart size={12} aria-hidden="true" />} 
                   label={t.staked} 
                   value={`${(entry.myBoardsCount * 10).toFixed(0)} ETB`} 
                 />
                 <StatItem 
-                  icon={<RotateCcw size={12} />} 
+                  icon={<RotateCcw size={12} aria-hidden="true" />} 
                   label={t.boardNum} 
                   value={`#${entry.myBoardsCount}`} 
                 />
                 <StatItem 
-                  icon={<Users size={12} />} 
+                  icon={<Users size={12} aria-hidden="true" />} 
                   label={t.winners} 
                   value={`${entry.totalWinners}`} 
                 />
                 <StatItem 
-                  icon={<Wallet size={12} />} 
+                  icon={<Wallet size={12} aria-hidden="true" />} 
                   label={t.totalPool} 
                   value={`${entry.totalStaked} ETB`} 
                 />
                 <StatItem 
-                  icon={<Trophy size={12} />} 
+                  icon={<Trophy size={12} aria-hidden="true" />} 
                   label={t.payout} 
                   value={`${entry.payoutPerWinner.toFixed(0)} ETB`} 
                   highlight={entry.isMyWin}

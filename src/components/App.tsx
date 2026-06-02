@@ -535,7 +535,7 @@ export default function App() {
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-100 flex items-center justify-center p-6 bg-indigo-900/90 backdrop-blur-xl text-center">
                 <motion.div initial={{ scale: 0.8, y: 20 }} animate={{ scale: 1, y: 0 }} className="flex flex-col items-center">
                   <div className="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center mb-6 shadow-2xl">
-                    <Trophy size={40} className="text-white" />
+                    <Trophy size={40} className="text-white" aria-hidden="true" />
                   </div>
                   <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-2">Good Luck!</h2>
                   <p className="text-indigo-200 font-bold uppercase tracking-widest text-xs">{selectedBoardIds.length} Boards Registered <br /> Redirecting to Game</p>
@@ -551,7 +551,7 @@ export default function App() {
             {showEngineIdleModal && ( // Game engine idle modal
               <div className="fixed inset-0 z-201 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
                 <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-xs rounded-4xl p-6 shadow-2xl flex flex-col text-center">
-                  <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4" aria-hidden="true">
                     <Clock className="text-indigo-600" size={32} />
                   </div>
                   <h3 className="text-xl font-black text-indigo-950 uppercase italic tracking-tighter mb-2">Game Starts Soon!</h3>

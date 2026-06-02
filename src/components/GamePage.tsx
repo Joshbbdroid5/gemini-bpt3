@@ -394,6 +394,7 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
                 onClick={() => setIsMuted(!isMuted)} 
                 className="text-gray-400"
                 aria-label={isMuted ? "Unmute" : "Mute"}
+                title={isMuted ? "Unmute" : "Mute"}
               >
                 {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
               </button>
@@ -474,11 +475,21 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
 
       {/* Footer Area */}
       <div className="p-2 grid grid-cols-4 gap-2 bg-[#2d2e4d] border-t border-white/10">
-        <button onClick={onLeaveToHome} className="col-span-1 h-14 rounded-xl bg-linear-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center">
+        <button 
+          onClick={onLeaveToHome} 
+          className="col-span-1 h-14 rounded-xl bg-linear-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center"
+          aria-label={t.leave}
+          title={t.leave}
+        >
           <LogOut size={16} />
           <span className="text-[8px] font-black uppercase">{t.leave}</span>
         </button>
-        <button onClick={() => window.location.reload()} className="col-span-1 h-14 rounded-xl bg-[#4a4b6e] flex flex-col items-center justify-center">
+        <button 
+          onClick={() => window.location.reload()} 
+          className="col-span-1 h-14 rounded-xl bg-[#4a4b6e] flex flex-col items-center justify-center"
+          aria-label={t.refresh}
+          title={t.refresh}
+        >
           <RefreshCw size={16} className="text-lime-400" />
           <span className="text-[8px] font-black text-white uppercase">{t.refresh}</span>
         </button>
@@ -493,7 +504,7 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
       {/* Winner Popup */}
       <AnimatePresence>
         {showWinnerPopup && (
-          <div className="fixed inset-0 z-200 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-200 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="winner-popup-title">
             <AnimatePresence>
               <motion.div
                 initial={window.Telegram?.WebApp ? false : { opacity: 0 }}
@@ -505,10 +516,10 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
                 initial={window.Telegram?.WebApp ? false : { scale: 0.9, y: 20, opacity: 0 }}
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="relative bg-[#23243d] w-full max-w-sm rounded-4xl border border-white/10 shadow-2xl overflow-hidden flex flex-col"
+                className="relative bg-[#23243d] w-full max-w-sm rounded-4xl border border-white/10 shadow-2xl overflow-hidden flex flex-col" role="document"
               >
                 <div className="bg-indigo-600 p-4 text-center">
-                  <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" />
+                  <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" aria-hidden="true" />
                   <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
                 </div>
                 <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">

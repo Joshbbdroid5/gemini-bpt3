@@ -98,6 +98,7 @@ export default function SelectionPage({ wallet, onComplete, onBack, serverTimeLe
           onClick={onBack}
           className="p-2.5 bg-white/10 rounded-xl text-white hover:bg-white/20 transition-colors shadow-lg shrink-0"
           aria-label={t.back}
+          title={t.back}
         >
           <ArrowLeft size={20} />
         </button>

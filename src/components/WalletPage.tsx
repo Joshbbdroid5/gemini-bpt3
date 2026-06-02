@@ -42,6 +42,7 @@ export default function WalletPage({
                 onClick={onBack} 
                 className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"
                 aria-label={t.back}
+                title={t.back}
               > {/* Back button */}
                 <ArrowLeft size={20} className="text-gray-400" />
               </button>
@@ -52,6 +53,7 @@ export default function WalletPage({
             onClick={onRefresh}
             className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 active:scale-90 transition-all"
             aria-label="Refresh"
+            title="Refresh"
           > {/* Refresh button */}
             <RefreshCw size={20} className="text-lime-400" />
           </button>
@@ -117,11 +119,8 @@ export default function WalletPage({
                     </span>
                     <span className="text-xl font-black text-lime-400 italic">ETB</span> {/* Currency unit */}
                   </div>
-                </div>
-                <Wallet 
-                  size={120} 
-                  className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700" 
-                />
+                </div> {/* Currency unit */}
+                <Wallet size={120} className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700" aria-hidden="true" />
               </div>
 
               <div className="p-6 bg-white/5 border border-white/5 rounded-[32px]">

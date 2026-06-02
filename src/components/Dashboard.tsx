@@ -40,7 +40,7 @@ export default function Dashboard({ onPlay, roomStats, isMaintenanceMode }: Prop
                 animate={{ rotate: [0, 15, 0, -15, 0] }}
                 transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
               >
-                <Wrench size={48} className="text-yellow-400" />
+                <Wrench size={48} className="text-yellow-400" aria-hidden="true" />
               </motion.div>
               <div className="absolute -top-2 -right-2 bg-[#0f170a] p-1 rounded-full">
                 <Hammer size={20} className="text-lime-400" />

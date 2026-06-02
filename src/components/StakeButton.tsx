@@ -59,7 +59,7 @@ export function StakeButton({ amount, players, isLive, isEngineActive, onPlay, i
       <div className="flex gap-4">
         <div className="flex items-center gap-1.5">
           <Users size={14} className="text-indigo-900/40" />
-          <span className="text-xs font-bold">{players}</span>
+          <span className="text-xs font-bold" aria-hidden="true">{players}</span>
         </div>
       </div>
 

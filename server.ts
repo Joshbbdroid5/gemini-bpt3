@@ -157,6 +157,23 @@ const pendingWithdrawalSchema = new mongoose.Schema<IPendingWithdrawal>({
 });
 const PendingWithdrawal = mongoose.model<IPendingWithdrawal>('PendingWithdrawal', pendingWithdrawalSchema);
 
+// ActivityLog Schema for tracking every movement
+interface IActivityLog {
+  userId: string;
+  type: 'deposit' | 'withdrawal' | 'stake' | 'win' | 'adjustment';
+  amount: number;
+  gameId?: string;
+  timestamp: Date;
+}
+const activityLogSchema = new mongoose.Schema<IActivityLog>({
+  userId: { type: String, required: true, index: true },
+  type: { type: String, required: true },
+  amount: { type: Number, required: true },
+  gameId: { type: String },
+  timestamp: { type: Date, default: Date.now }
+});
+const ActivityLog = mongoose.model<IActivityLog>('ActivityLog', activityLogSchema);
+
 // User Schema
 interface IUser {
   userId: string;
@@ -449,6 +466,13 @@ app.post('/admin/update-wallet', async (req, res) => {
       timestamp: new Date()
     });
 
+    // Log to Activity System
+    await ActivityLog.create({
+      userId,
+      type: mode === 'set' ? 'adjustment' : (amount > 0 ? 'deposit' : 'adjustment'),
+      amount: Math.abs(amount)
+    });
+
     // Notify User and Admin
     let notificationMessage = '';
     if (mode === 'set') {
@@ -496,6 +520,12 @@ app.post('/admin/withdraw-request', async (req, res) => {
 
     // Persist withdrawal request
     await PendingWithdrawal.create({ userId, amount });
+
+    await ActivityLog.create({
+      userId,
+      type: 'withdrawal',
+      amount
+    });
 
     if (ADMIN_CHAT_ID) {
       const displayId = user.username ? `${user.username}\n<i>ID: ${userId}</i>` : `<code>${userId}</code>`;
@@ -685,6 +715,19 @@ app.get('/admin/check-user', async (req, res) => {
   });
 });
 
+// ADMIN ENDPOINT: Fetch user activity log
+app.get('/admin/user-activity', async (req, res) => {
+  const { userId, secret } = req.query;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    const logs = await ActivityLog.find({ userId: userId as string }).sort({ timestamp: -1 }).limit(50).lean();
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch activity' });
+  }
+});
+
 // ADMIN ENDPOINT: Fetch all wallets
 app.post('/admin/wallets', async (req, res) => {
   const { secret } = req.body;
@@ -693,14 +736,52 @@ app.post('/admin/wallets', async (req, res) => {
   }
 
   const allUsers = await User.find({}).lean();
-  const verifiedCount = allUsers.filter(u => u.isVerified).length;
   const walletData: Record<string, { balance: number; username?: string }> = {};
   allUsers.forEach(u => {
     walletData[u.userId] = { balance: u.balance, username: u.username };
   });
 
+  const now = new Date();
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  // 24h Summary: Stakes vs Payouts
+  const summary24h = await ActivityLog.aggregate([
+    { $match: { timestamp: { $gte: twentyFourHoursAgo }, type: { $in: ['stake', 'win'] } } },
+    { $group: { _id: '$type', total: { $sum: '$amount' } } }
+  ]);
+
+  const stakes24h = summary24h.find(s => s._id === 'stake')?.total || 0;
+  const payouts24h = summary24h.find(s => s._id === 'win')?.total || 0;
+
+  // Global Deposits and Withdrawals (Recent 50)
+  const recentActivity = await ActivityLog.find({ 
+    type: { $in: ['deposit', 'withdrawal'] } 
+  })
+  .sort({ timestamp: -1 })
+  .limit(50)
+  .lean();
+
+  // Group winners by Game ID to show distinct rounds
+  const rounds = await GameArchive.aggregate([
+    { $group: {
+        _id: "$gameId",
+        gameId: { $first: "$gameId" },
+        date: { $first: "$timestamp" },
+        pool: { $first: "$prizePool" },
+        ballsDrawn: { $first: "$ballsDrawn" },
+        players: { $sum: 1 }, // Note: This is winners count, real player count should be tracked in archive if needed
+        winners: { $push: { boardId: "$winnerBoardId", payout: "$prizePool" } } 
+    }},
+    { $sort: { date: -1 } },
+    { $limit: 30 }
+  ]);
+  // Fix payout display for aggregated winners
+  rounds.forEach(r => r.winners.forEach((w: any) => w.payout = r.pool / r.winners.length));
+
   res.json({
     wallets: walletData,
+    rounds,
+    recentActivity,
     stats: { 
       totalVolume: globalGameState.totalVolume, 
       totalProfit: globalGameState.totalProfit, 
@@ -709,7 +790,9 @@ app.post('/admin/wallets', async (req, res) => {
       isMaintenanceMode: globalGameState.isMaintenanceMode, 
       isGameRunning: globalGameState.isGameRunning, 
       stopRequested: globalGameState.stopRequested, 
-      isEngineActive: globalGameState.isGameRunning && !globalGameState.stopRequested 
+      isEngineActive: globalGameState.isGameRunning && !globalGameState.stopRequested,
+      stakes24h,
+      payouts24h
     }
   });
 });
@@ -935,6 +1018,13 @@ async function runGameLoop() {
             const sId = socketMapping.get(w.userId);
             if (sId && user) io.to(sId).emit(socketEvents.WALLET_UPDATE, user.balance); // Emit to specific user
             io.emit(socketEvents.NEW_WINNER, winnerInfo); // Emit to all in the room
+
+            await ActivityLog.create({
+              userId: w.userId,
+              type: 'win',
+              amount: splitPayout,
+              gameId: singleRoomState.currentGameId
+            });
 
             return GameArchive.create({
               gameId: singleRoomState.currentGameId,
@@ -1185,6 +1275,12 @@ function registerSocketHandlers(io: SocketIOServer) {
       singleRoomState.playerBoards.set(userId, [boardId]);
       singleRoomState.globalPool += stakeAmount;
       globalGameState.totalVolume += stakeAmount;
+      await ActivityLog.create({
+        userId,
+        type: 'stake',
+        amount: stakeAmount,
+        gameId: singleRoomState.currentGameId
+      });
       await GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: stakeAmount } }, { upsert: true }).catch(e => logger.error('Global stats volume update error', { error: e }));
     }
     await userRecord.save().catch(e => logger.error('User record save error on board pick', { error: e, userId })); // Save user balance once
