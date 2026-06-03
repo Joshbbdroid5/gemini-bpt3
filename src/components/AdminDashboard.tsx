@@ -253,18 +253,16 @@ export default function AdminDashboard({ onBack }: Props) {
     }
 
     if (dateRange.start) {
-      // Parse YYYY-MM-DD to local midnight
+      // Parse YYYY-MM-DD to UTC midnight to ensure consistent filtering across all timezones
       const [y, m, d] = dateRange.start.split('-').map(Number);
-      const startTime = new Date(y, m - 1, d).getTime();
+      const startTime = Date.UTC(y, m - 1, d);
       result = result.filter(r => new Date(r.date || r.timestamp || 0).getTime() >= startTime);
     }
 
     if (dateRange.end) {
-      // Parse YYYY-MM-DD to local end-of-day
+      // Parse YYYY-MM-DD to UTC end-of-day (23:59:59.999) to ensure consistent filtering
       const [y, m, d] = dateRange.end.split('-').map(Number);
-      const endDate = new Date(y, m - 1, d);
-      endDate.setHours(23, 59, 59, 999);
-      const endTime = endDate.getTime();
+      const endTime = Date.UTC(y, m - 1, d, 23, 59, 59, 999);
       result = result.filter(r => new Date(r.date || r.timestamp || 0).getTime() <= endTime);
     }
 
@@ -386,334 +384,323 @@ export default function AdminDashboard({ onBack }: Props) {
         </button>
       </div>
 
-      {/* System Quick Controls */}
-      <div className="px-4 pt-4">
-        <div className="bg-black/20 rounded-[32px] p-2 border border-white/5 shadow-inner">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {/* Maintenance Toggle */}
-            <div className={`p-4 rounded-[24px] border flex items-center justify-between transition-all ${
-              stats.isMaintenanceMode ? 'bg-red-500/10 border-red-500/20' : 'bg-green-500/10 border-green-500/20'
-            }`}>
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-2xl ${stats.isMaintenanceMode ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                  <Power size={20} />
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-primary">
+        {/* LEFT SIDEBAR: System Controls and Global Stats */}
+        <div className="w-full lg:w-[400px] border-r border-white/5 flex flex-col overflow-y-auto custom-scrollbar bg-black/10">
+          <div className="p-4 space-y-6">
+            {/* System Quick Controls */}
+            <div className="space-y-2">
+              <h3 className="px-2 text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em]">System Controls</h3>
+              <div className="bg-black/20 rounded-[32px] p-2 border border-white/5 shadow-inner space-y-2">
+                {/* Maintenance Toggle */}
+                <div className={`p-4 rounded-[24px] border flex items-center justify-between transition-all ${
+                  stats.isMaintenanceMode ? 'bg-red-500/10 border-red-500/20' : 'bg-green-500/10 border-green-500/20'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-2xl ${stats.isMaintenanceMode ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+                      <Power size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-black uppercase text-xs tracking-widest leading-none mb-1">Maintenance</h3>
+                      <p className="text-[9px] text-gray-400 uppercase font-bold">{stats.isMaintenanceMode ? 'Paused' : 'Active'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleToggleMaintenance}
+                    className={`px-4 py-2 rounded-xl font-black uppercase text-[9px] tracking-tighter transition-all ${
+                      stats.isMaintenanceMode ? 'bg-green-600 text-white shadow-lg shadow-green-900/20' : 'bg-red-600 text-white shadow-lg shadow-red-900/20'
+                    }`}
+                  >
+                    {stats.isMaintenanceMode ? 'Go Live' : 'Shut Down'}
+                  </button>
                 </div>
-                <div>
-                  <h3 className="text-white font-black uppercase text-xs tracking-widest leading-none mb-1">Maintenance</h3>
-                  <p className="text-[9px] text-gray-400 uppercase font-bold">{stats.isMaintenanceMode ? 'Paused' : 'Active'}</p>
+
+                {/* Engine Controls */}
+                <div className="p-4 rounded-[24px] border border-white/5 bg-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-2xl ${stats.isEngineActive ? 'bg-indigo-500/20 text-indigo-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                      <Activity size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-black uppercase text-xs tracking-widest leading-none mb-1">Game Engine</h3>
+                      <p className="text-[9px] text-gray-400 uppercase font-bold">{stats.isEngineActive ? 'Running' : 'Stopped'}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {!stats.isGameRunning ? (
+                      <button 
+                        onClick={handleStartEngine}
+                        className="px-4 py-2 rounded-xl font-black uppercase text-[9px] bg-indigo-600 text-white shadow-lg shadow-indigo-900/20"
+                      >
+                        Start
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={handleStopEngine}
+                        disabled={stats.stopRequested}
+                        className={`px-4 py-2 rounded-xl font-black uppercase text-[9px] ${stats.stopRequested ? 'bg-orange-600 text-white' : 'bg-red-600 text-white shadow-lg shadow-red-900/20'}`}
+                      >
+                        {stats.stopRequested ? 'Stopping...' : 'Stop'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
-                onClick={handleToggleMaintenance}
-                className={`px-4 py-2 rounded-xl font-black uppercase text-[9px] tracking-tighter transition-all ${
-                  stats.isMaintenanceMode ? 'bg-green-600 text-white shadow-lg shadow-green-900/20' : 'bg-red-600 text-white shadow-lg shadow-red-900/20'
-                }`}
+                onClick={() => {
+                  if (!socket.connected) socket.connect();
+                  socket.emit(socketEvents.FORCE_START);
+                  toast.success('Force start signal sent');
+                }}
+                className="w-full py-3 rounded-2xl bg-yellow-500 text-indigo-950 font-black uppercase text-[10px] tracking-widest hover:bg-yellow-400 shadow-lg transition-all"
               >
-                {stats.isMaintenanceMode ? 'Go Live' : 'Shut Down'}
+                Force New Round Start
               </button>
             </div>
 
-            {/* Engine Controls */}
-            <div className="p-4 rounded-[24px] border border-white/5 bg-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-2xl ${stats.isEngineActive ? 'bg-indigo-500/20 text-indigo-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                  <Activity size={20} />
-                </div>
-                <div>
-                  <h3 className="text-white font-black uppercase text-xs tracking-widest leading-none mb-1">Game Engine</h3>
-                  <p className="text-[9px] text-gray-400 uppercase font-bold">{stats.isEngineActive ? 'Running' : 'Stopped'}</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {!stats.isGameRunning ? (
-                  <button 
-                    onClick={handleStartEngine}
-                    className="px-4 py-2 rounded-xl font-black uppercase text-[9px] bg-indigo-600 text-white shadow-lg shadow-indigo-900/20"
-                  >
-                    Start
-                  </button>
-                ) : (
-                  <button 
-                    onClick={handleStopEngine}
-                    disabled={stats.stopRequested}
-                    className={`px-4 py-2 rounded-xl font-black uppercase text-[9px] ${stats.stopRequested ? 'bg-orange-600 text-white' : 'bg-red-600 text-white shadow-lg shadow-red-900/20'}`}
-                  >
-                    {stats.stopRequested ? 'Stopping...' : 'Stop'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={() => {
-            if (!socket.connected) socket.connect();
-            socket.emit(socketEvents.FORCE_START);
-            toast.success('Force start signal sent');
-          }}
-          className="w-full mt-2 py-3 rounded-2xl bg-yellow-500 text-indigo-950 font-black uppercase text-[10px] tracking-widest hover:bg-yellow-400 shadow-lg transition-all"
-        >
-          Force New Round Start
-        </button>
-      </div>
-
-      {/* Main Navigation Tabs - Prominent Placement */}
-      <div className="px-4 pt-6">
-        <div className="flex gap-2 p-1.5 bg-black/40 rounded-[28px] border border-white/10 shadow-2xl backdrop-blur-xl">
-          <button
-            onClick={() => setActiveTab('wallets')}
-            className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
-              activeTab === 'wallets' 
-                ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Wallet size={16} aria-hidden="true" />
-            Wallets
-          </button>
-          <button
-            onClick={() => setActiveTab('rounds')}
-            className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
-              activeTab === 'rounds' 
-                ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <History size={16} aria-hidden="true" />
-            Rounds
-          </button>
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
-              activeTab === 'transactions' 
-                ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <FileText size={16} aria-hidden="true" />
-            Transactions
-          </button>
-        </div>
-      </div>
-
-      {/* Global Summary Cards */}
-      <div className="px-4 pt-4 grid grid-cols-2 lg:grid-cols-4 gap-3"> {/* Summary statistics cards */}
-        <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 shadow-md">
-          <div className="flex items-center gap-2 mb-1">
-            <Activity size={16} className="text-indigo-400" aria-hidden="true" />
-            <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Total Volume</span>
-          </div>
-          <div className="text-xl font-black text-white italic">{stats.totalVolume.toFixed(0)} <span className="text-xs not-italic text-indigo-400 ml-1">ETB</span></div>
-        </div>
-        <div className="bg-green-600/20 border border-green-500/30 rounded-2xl p-4 shadow-md">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp size={16} className="text-green-400" aria-hidden="true" />
-            <span className="text-[10px] font-black text-green-300 uppercase tracking-widest">Total Profit</span>
-          </div>
-          <div className="text-xl font-black text-white italic">{stats.totalProfit.toFixed(0)} <span className="text-xs not-italic text-green-400 ml-1">ETB</span></div>
-        </div>
-        <div className="bg-orange-600/20 border border-orange-500/30 rounded-2xl p-4 shadow-md">
-          <div className="flex items-center gap-2 mb-1">
-            <Wallet size={16} className="text-orange-400" aria-hidden="true" />
-            <span className="text-[10px] font-black text-orange-300 uppercase tracking-widest">Current Pool</span>
-          </div>
-          <div className="text-xl font-black text-white italic">{stats.activeBets.toFixed(0)} <span className="text-xs not-italic text-orange-400 ml-1">ETB</span></div>
-        </div>
-        <div className="bg-purple-600/20 border border-purple-500/30 rounded-2xl p-4 shadow-md">
-          <div className="flex items-center gap-2 mb-1">
-            <Users size={16} className="text-purple-400" aria-hidden="true" />
-            <span className="text-[10px] font-black text-purple-300 uppercase tracking-widest">Registered Users</span>
-          </div>
-          <div className="text-xl font-black text-white italic">{stats.totalUsers}</div>
-        </div>
-      </div>
-
-      {/* 24h Performance Summary */}
-      <div className="px-4 pt-3 grid grid-cols-2 gap-3">
-        <div className="bg-indigo-500/5 border border-white/5 rounded-2xl p-3 shadow-sm">
-          <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block mb-1">24h Total Stakes</span>
-          <div className="text-lg font-black text-white italic">{stats.stakes24h.toFixed(0)} <span className="text-[10px] not-italic text-gray-500">ETB</span></div>
-        </div>
-        <div className="bg-green-500/5 border border-white/5 rounded-2xl p-3 shadow-sm">
-          <span className="text-[9px] font-black text-green-400 uppercase tracking-widest block mb-1">24h Total Payouts</span>
-          <div className="text-lg font-black text-white italic">{stats.payouts24h.toFixed(0)} <span className="text-[10px] not-italic text-gray-500">ETB</span></div>
-        </div>
-      </div>
-
-      <AnimatePresence mode="wait">
-        {activeTab === 'wallets' ? (
-          <motion.div 
-            key="wallets"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="flex-1 flex flex-col min-h-0"
-          >
-            <div className="p-4">
-              <div className="relative"> {/* Search input for user IDs */}
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} aria-hidden="true" />
-                <input 
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search User ID or Username..."
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-              {filteredWallets.map(([id, data]) => (
-                <WalletCard
-                  key={id}
-                  id={id}
-                  data={data}
-                  adjustmentValues={adjustmentValues}
-                  isUpdating={isUpdating}
-                  onViewActivity={fetchUserActivity}
-                  onDeleteUser={setUserToDelete}
-                  onShowDeleteConfirm={setShowDeleteConfirm}
-                  onSetAdjustmentValue={handleSetAdjustmentValue}
-                  onTriggerUpdateBalance={triggerUpdateBalance}
-                />
-              ))}
-            </div>
-          </motion.div>
-        ) : activeTab === 'rounds' ? (
-          <motion.div 
-            key="rounds"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="flex-1 overflow-y-auto p-4 space-y-4"
-          >
-            {/* Summary Row for Filtered Rounds */}
-            {processedRounds.length > 0 && roundsSummary.totalVolume > 0 && (
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 shadow-md">
-                  <div className="flex items-center gap-2 mb-1">
-                    <DollarSign size={16} className="text-indigo-400" aria-hidden="true" />
-                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Filtered Volume</span>
-                  </div>
-                  <div className="text-xl font-black text-white italic">{roundsSummary.totalVolume.toFixed(0)} <span className="text-xs not-italic text-indigo-400 ml-1">ETB</span></div>
-                </div>
-                <div className="bg-green-600/20 border border-green-500/30 rounded-2xl p-4 shadow-md">
-                  <div className="flex items-center gap-2 mb-1">
-                    <TrendingUp size={16} className="text-green-400" aria-hidden="true" />
-                    <span className="text-[10px] font-black text-green-300 uppercase tracking-widest">Filtered Profit</span>
-                  </div>
-                  <div className="text-xl font-black text-white italic">{roundsSummary.totalProfit.toFixed(0)} <span className="text-xs not-italic text-green-400 ml-1">ETB</span></div>
-                </div>
-              </div>
-            )}
-
-            {/* Search and Filter Controls */}
-            <div className="space-y-3 mb-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} aria-hidden="true" />
-                <input 
-                  value={roundSearch}
-                  onChange={(e) => setRoundSearch(e.target.value)}
-                  placeholder="Search Round ID..."
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                />
+            {/* Summary Data */}
+            <div className="space-y-4">
+              <h3 className="px-2 text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em]">Global Summary</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <SidebarStatCard label="Total Volume" value={stats.totalVolume} unit="ETB" icon={<Activity size={16} />} color="indigo" />
+                <SidebarStatCard label="Total Profit" value={stats.totalProfit} unit="ETB" icon={<TrendingUp size={16} />} color="green" />
+                <SidebarStatCard label="Current Pool" value={stats.activeBets} unit="ETB" icon={<Wallet size={16} />} color="orange" />
+                <SidebarStatCard label="Users" value={stats.totalUsers} icon={<Users size={16} />} color="purple" />
               </div>
               
-              <div className="grid grid-cols-2 gap-2">
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} aria-hidden="true" />
-                  <input 
-                    type="date"
-                    value={dateRange.start}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                    title="Start Date"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-2 text-[10px] font-bold text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
-                  />
-                  {!dateRange.start && <span className="absolute left-9 top-1/2 -translate-y-1/2 text-gray-500 text-[9px] font-black uppercase tracking-widest pointer-events-none">From</span>}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-indigo-500/5 border border-white/5 rounded-2xl p-3 shadow-sm">
+                  <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block mb-1">24h Total Stakes</span>
+                  <div className="text-lg font-black text-white italic">{stats.stakes24h.toFixed(0)} <span className="text-[10px] not-italic text-gray-500">ETB</span></div>
                 </div>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} aria-hidden="true" />
-                  <input 
-                    type="date"
-                    value={dateRange.end}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                    title="End Date"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-2 text-[10px] font-bold text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
-                  />
-                  {!dateRange.end && <span className="absolute left-9 top-1/2 -translate-y-1/2 text-gray-500 text-[9px] font-black uppercase tracking-widest pointer-events-none">To</span>}
+                <div className="bg-green-500/5 border border-white/5 rounded-2xl p-3 shadow-sm">
+                  <span className="text-[9px] font-black text-green-400 uppercase tracking-widest block mb-1">24h Total Payouts</span>
+                  <div className="text-lg font-black text-white italic">{stats.payouts24h.toFixed(0)} <span className="text-[10px] not-italic text-gray-500">ETB</span></div>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                 <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap mr-1">Sort:</span>
-                 <RoundSortBtn label="Date" activeKey="date" currentSort={roundSort} onSort={setRoundSort} />
-                 <RoundSortBtn label="Players" activeKey="players" currentSort={roundSort} onSort={setRoundSort} />
-                 <RoundSortBtn label="Pool" activeKey="pool" currentSort={roundSort} onSort={setRoundSort} />
-                 {(roundSearch || dateRange.start || dateRange.end) && (
-                   <button 
-                     onClick={clearAllRoundFilters}
-                     className="px-2 py-1 text-[8px] font-black text-red-400 uppercase tracking-widest hover:text-red-300 transition-colors shrink-0"
-                   >
-                     Clear Filters
-                   </button>
-                 )}
-                 <div className="flex-1" />
-                 <button
-                   onClick={exportRoundsToCSV}
-                   className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors whitespace-nowrap border bg-green-600 text-white border-green-500 shadow-lg shadow-green-900/20 hover:bg-green-500"
-                   aria-label="Export Rounds to CSV"
-                   title="Export CSV"
-                 >
-                   <Download size={10} aria-hidden="true" />
-                   Export CSV
-                 </button>
-              </div>
             </div>
+          </div>
+        </div>
 
-            {processedRounds.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 opacity-20 border-2 border-dashed border-white/10 rounded-[32px]" aria-hidden="true">
-                <History size={48} className="text-white mb-4" />
-                <p className="font-black text-white uppercase text-xs tracking-widest">No round history found</p>
-              </div>
-            ) : (
-              processedRounds.map((round, idx) => ( // Use processedRounds here
-                <RoundCard 
-                  key={round.gameId || idx} 
-                  round={round} 
-                  onSelectBoard={setSelectedBoard} 
-                />
-              ))
-            )}
-          </motion.div>
-        ) : (
-          <motion.div 
-            key="transactions"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex-1 overflow-y-auto p-4 space-y-3"
-          >
-            <div className="flex items-center justify-between px-2 mb-2">
-              <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">Global Transaction Log</h3>
-              <span className="text-[9px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full italic">Approved & Requested</span>
+        {/* RIGHT MAIN AREA: Navigation and Details */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Main Navigation Tabs */}
+          <div className="px-4 pt-6 pb-2">
+            <div className="flex gap-2 p-1.5 bg-black/40 rounded-[28px] border border-white/10 shadow-2xl backdrop-blur-xl">
+              <button
+                onClick={() => setActiveTab('wallets')}
+                className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
+                  activeTab === 'wallets' 
+                    ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Wallet size={16} aria-hidden="true" />
+                Wallets
+              </button>
+              <button
+                onClick={() => setActiveTab('rounds')}
+                className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
+                  activeTab === 'rounds' 
+                    ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <History size={16} aria-hidden="true" />
+                Rounds
+              </button>
+              <button
+                onClick={() => setActiveTab('transactions')}
+                className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
+                  activeTab === 'transactions' 
+                    ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <FileText size={16} aria-hidden="true" />
+                Transactions
+              </button>
             </div>
+          </div>
 
-            {recentActivity.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 opacity-20 border-2 border-dashed border-white/10 rounded-[32px]">
-                <FileText size={48} className="text-white mb-4" />
-                <p className="font-black text-white uppercase text-xs tracking-widest">No recent transactions</p>
-              </div>
-            ) : (
-              recentActivity.map((log, i) => (
-                <TransactionCard 
-                  key={i} 
-                  log={log} 
-                  wallets={wallets} 
-                />
-              ))
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <AnimatePresence mode="wait">
+              {activeTab === 'wallets' ? (
+                <motion.div 
+                  key="wallets"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="flex-1 flex flex-col min-h-0"
+                >
+                  <div className="p-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} aria-hidden="true" />
+                      <input 
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search User ID or Username..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 pt-0 space-y-3 custom-scrollbar">
+                    {filteredWallets.map(([id, data]) => (
+                      <WalletCard
+                        key={id}
+                        id={id}
+                        data={data}
+                        adjustmentValues={adjustmentValues}
+                        isUpdating={isUpdating}
+                        onViewActivity={fetchUserActivity}
+                        onDeleteUser={setUserToDelete}
+                        onShowDeleteConfirm={setShowDeleteConfirm}
+                        onSetAdjustmentValue={handleSetAdjustmentValue}
+                        onTriggerUpdateBalance={triggerUpdateBalance}
+                      />
+                    ))}
+                  </div>
+                </motion.div>
+              ) : activeTab === 'rounds' ? (
+                <motion.div 
+                  key="rounds"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="flex-1 overflow-y-auto p-4 pt-0 space-y-4 custom-scrollbar"
+                >
+                  {/* Summary Row for Filtered Rounds */}
+                  {processedRounds.length > 0 && roundsSummary.totalVolume > 0 && (
+                    <div className="grid grid-cols-2 gap-3 mb-2 sticky top-0 z-10 bg-primary/80 backdrop-blur-md py-2">
+                      <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 shadow-md">
+                        <div className="flex items-center gap-2 mb-1">
+                          <DollarSign size={16} className="text-indigo-400" aria-hidden="true" />
+                          <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Filtered Volume</span>
+                        </div>
+                        <div className="text-xl font-black text-white italic">{roundsSummary.totalVolume.toFixed(0)} <span className="text-xs not-italic text-indigo-400 ml-1">ETB</span></div>
+                      </div>
+                      <div className="bg-green-600/20 border border-green-500/30 rounded-2xl p-4 shadow-md">
+                        <div className="flex items-center gap-2 mb-1">
+                          <TrendingUp size={16} className="text-green-400" aria-hidden="true" />
+                          <span className="text-[10px] font-black text-green-300 uppercase tracking-widest">Filtered Profit</span>
+                        </div>
+                        <div className="text-xl font-black text-white italic">{roundsSummary.totalProfit.toFixed(0)} <span className="text-xs not-italic text-green-400 ml-1">ETB</span></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Search and Filter Controls */}
+                  <div className="space-y-3 mb-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} aria-hidden="true" />
+                      <input 
+                        value={roundSearch}
+                        onChange={(e) => setRoundSearch(e.target.value)}
+                        placeholder="Search Round ID..."
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} aria-hidden="true" />
+                        <input 
+                          type="date"
+                          value={dateRange.start}
+                          onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                          title="Start Date"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-2 text-[10px] font-bold text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+                        />
+                        {!dateRange.start && <span className="absolute left-9 top-1/2 -translate-y-1/2 text-gray-500 text-[9px] font-black uppercase tracking-widest pointer-events-none">From</span>}
+                      </div>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} aria-hidden="true" />
+                        <input 
+                          type="date"
+                          value={dateRange.end}
+                          onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                          title="End Date"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-2 text-[10px] font-bold text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+                        />
+                        {!dateRange.end && <span className="absolute left-9 top-1/2 -translate-y-1/2 text-gray-500 text-[9px] font-black uppercase tracking-widest pointer-events-none">To</span>}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                       <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap mr-1">Sort:</span>
+                       <RoundSortBtn label="Date" activeKey="date" currentSort={roundSort} onSort={setRoundSort} />
+                       <RoundSortBtn label="Players" activeKey="players" currentSort={roundSort} onSort={setRoundSort} />
+                       <RoundSortBtn label="Pool" activeKey="pool" currentSort={roundSort} onSort={setRoundSort} />
+                       {(roundSearch || dateRange.start || dateRange.end) && (
+                         <button 
+                           onClick={clearAllRoundFilters}
+                           className="px-2 py-1 text-[8px] font-black text-red-400 uppercase tracking-widest hover:text-red-300 transition-colors shrink-0"
+                         >
+                           Clear Filters
+                         </button>
+                       )}
+                       <div className="flex-1" />
+                       <button
+                         onClick={exportRoundsToCSV}
+                         className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors whitespace-nowrap border bg-green-600 text-white border-green-500 shadow-lg shadow-green-900/20 hover:bg-green-500"
+                         aria-label="Export Rounds to CSV"
+                         title="Export CSV"
+                       >
+                         <Download size={10} aria-hidden="true" />
+                         Export CSV
+                       </button>
+                    </div>
+                  </div>
+
+                  {processedRounds.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 opacity-20 border-2 border-dashed border-white/10 rounded-[32px]" aria-hidden="true">
+                      <History size={48} className="text-white mb-4" />
+                      <p className="font-black text-white uppercase text-xs tracking-widest">No round history found</p>
+                    </div>
+                  ) : (
+                    processedRounds.map((round, idx) => (
+                      <RoundCard 
+                        key={round.gameId || idx} 
+                        round={round} 
+                        onSelectBoard={setSelectedBoard} 
+                      />
+                    ))
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div 
+                  key="transactions"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="flex-1 overflow-y-auto p-4 pt-0 space-y-3 custom-scrollbar"
+                >
+                  <div className="flex items-center justify-between px-2 mb-2 sticky top-0 z-10 bg-primary/80 backdrop-blur-md py-4">
+                    <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">Global Transaction Log</h3>
+                    <span className="text-[9px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full italic">Approved & Requested</span>
+                  </div>
+
+                  {recentActivity.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 opacity-20 border-2 border-dashed border-white/10 rounded-[32px]">
+                      <FileText size={48} className="text-white mb-4" />
+                      <p className="font-black text-white uppercase text-xs tracking-widest">No recent transactions</p>
+                    </div>
+                  ) : (
+                    recentActivity.map((log, i) => (
+                      <TransactionCard 
+                        key={i} 
+                        log={log} 
+                        wallets={wallets} 
+                      />
+                    ))
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
     </div>
     <Toaster position="bottom-center" />
 
@@ -911,6 +898,30 @@ export default function AdminDashboard({ onBack }: Props) {
     </AnimatePresence>
 
     </>
+  );
+}
+
+function SidebarStatCard({ label, value, unit, icon, color }: { label: string, value: number, unit?: string, icon: React.ReactNode, color: string }) {
+  const styles: Record<string, { bg: string, border: string, text: string, icon: string }> = {
+    indigo: { bg: 'bg-indigo-600/20', border: 'border-indigo-500/30', text: 'text-indigo-300', icon: 'text-indigo-400' },
+    green: { bg: 'bg-green-600/20', border: 'border-green-500/30', text: 'text-green-300', icon: 'text-green-400' },
+    orange: { bg: 'bg-orange-600/20', border: 'border-orange-500/30', text: 'text-orange-300', icon: 'text-orange-400' },
+    purple: { bg: 'bg-purple-600/20', border: 'border-purple-500/30', text: 'text-purple-300', icon: 'text-purple-400' },
+  };
+  
+  const s = styles[color] || styles.indigo;
+
+  return (
+    <div className={`${s.bg} ${s.border} border rounded-2xl p-4 shadow-md`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className={s.icon}>{icon}</span>
+        <span className={`text-[10px] font-black ${s.text} uppercase tracking-widest`}>{label}</span>
+      </div>
+      <div className="text-xl font-black text-white italic">
+        {value.toLocaleString()} 
+        {unit && <span className={`text-xs not-italic ${s.icon} ml-1`}>{unit}</span>}
+      </div>
+    </div>
   );
 }
 
