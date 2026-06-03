@@ -1,5 +1,8 @@
 import { BingoBoardData, BINGO_COLUMNS } from './types';
 
+const BINGO_LABELS = ['B', 'I', 'N', 'G', 'O'] as const;
+const GRID_RANGE = [0, 1, 2, 3, 4];
+
 // Deterministic random number generator based on a seed
 function mulberry32(a: number) {
   return function () {
@@ -15,8 +18,7 @@ export function generateBoard(boardId: number): BingoBoardData {
   const rng = mulberry32(boardId + 777); // Seed based on board ID
   const board: BingoBoardData = Array(5).fill(null).map(() => Array(5).fill(null));
 
-  const columns = ['B', 'I', 'N', 'G', 'O'] as const;
-  columns.forEach((col, colIndex) => {
+  BINGO_LABELS.forEach((col, colIndex) => {
     const { min, max } = BINGO_COLUMNS[col];
     const available = Array.from({ length: max - min + 1 }, (_, i) => min + i);
     const picked: number[] = [];
@@ -44,38 +46,38 @@ export interface WinningPattern {
 }
 export function checkWin(board: BingoBoardData, called: Set<number | 'FREE'>): { isWinner: boolean; patterns: WinningPattern[] } {
   const patterns: WinningPattern[] = [];
-  const isMarked = (cell: { value: number | 'FREE' }) => cell.value === 'FREE' || called.has(cell.value);
-  // 1. Rows
-  for (let r = 0; r < 5; r++) {
-    if (board[r].every(isMarked)) {
-      patterns.push({
-        name: `Row ${r + 1}`,
-        indices: [0, 1, 2, 3, 4].map(c => ({ r, c }))
+  const isMarked = (cell: { value: number | 'FREE' }) => 
+    cell.value === 'FREE' || (typeof cell.value === 'number' && called.has(cell.value));
+
+  // 1 & 2. Rows and Columns
+  for (let i = 0; i < 5; i++) {
+    // Check Row
+    if (board[i].every(isMarked)) {
+      patterns.push({ 
+        name: `Row ${i + 1}`, 
+        indices: GRID_RANGE.map(c => ({ r: i, c })) 
       });
     }
-  }
-
-  // 2. Columns
-  for (let c = 0; c < 5; c++) {
-    if (board.every(row => isMarked(row[c]))) {
-      patterns.push({
-        name: `Column ${['B', 'I', 'N', 'G', 'O'][c]}`,
-        indices: [0, 1, 2, 3, 4].map(r => ({ r, c }))
+    // Check Column
+    if (board.every(row => isMarked(row[i]))) {
+      patterns.push({ 
+        name: `Column ${BINGO_LABELS[i]}`, 
+        indices: GRID_RANGE.map(r => ({ r, c: i })) 
       });
     }
   }
 
   // 3. Diagonals
-  if ([0, 1, 2, 3, 4].every(i => isMarked(board[i][i]))) {
+  if (GRID_RANGE.every(i => isMarked(board[i][i]))) {
     patterns.push({
       name: 'Main Diagonal',
-      indices: [0, 1, 2, 3, 4].map(i => ({ r: i, c: i }))
+      indices: GRID_RANGE.map(i => ({ r: i, c: i }))
     });
   }
-  if ([0, 1, 2, 3, 4].every(i => isMarked(board[i][4 - i]))) {
+  if (GRID_RANGE.every(i => isMarked(board[i][4 - i]))) {
     patterns.push({
       name: 'Anti-Diagonal',
-      indices: [0, 1, 2, 3, 4].map(i => ({ r: i, c: 4 - i }))
+      indices: GRID_RANGE.map(i => ({ r: i, c: 4 - i }))
     });
   }
   // 4. Corners

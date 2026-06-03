@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power, Check, Users, Trash2, History, Trophy, Clock, ArrowUpDown, X, Download, Calendar, DollarSign, Settings, FileText, ArrowUpRight, ArrowDownLeft, ShoppingCart } from 'lucide-react';
+import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power, Check, Users, Trash2, History, Trophy, Clock, ArrowUpDown, X, Download, Calendar, DollarSign, Settings, FileText, ArrowUpRight, ArrowDownLeft, ShoppingCart, Settings2 } from 'lucide-react';
 import { socket, socketEvents } from './socket';
 import { generateBoard } from '../logic';
+import WalletCard from './WalletCard';
+import RoundCard from './RoundCard';
+import TransactionCard from './TransactionCard';
 
 interface Props {
   onBack: () => void;
@@ -233,6 +236,10 @@ export default function AdminDashboard({ onBack }: Props) {
     }
   };
 
+  const handleSetAdjustmentValue = (userId: string, value: string) => {
+    setAdjustmentValues(prev => ({ ...prev, [userId]: value }));
+  };
+
   const filteredWallets = Object.entries(wallets).filter(([id, data]) => 
     id.toLowerCase().includes(search.toLowerCase()) ||
     (data.username && data.username.toLowerCase().includes(search.toLowerCase()))
@@ -450,6 +457,45 @@ export default function AdminDashboard({ onBack }: Props) {
         </button>
       </div>
 
+      {/* Main Navigation Tabs - Prominent Placement */}
+      <div className="px-4 pt-6">
+        <div className="flex gap-2 p-1.5 bg-black/40 rounded-[28px] border border-white/10 shadow-2xl backdrop-blur-xl">
+          <button
+            onClick={() => setActiveTab('wallets')}
+            className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
+              activeTab === 'wallets' 
+                ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Wallet size={16} aria-hidden="true" />
+            Wallets
+          </button>
+          <button
+            onClick={() => setActiveTab('rounds')}
+            className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
+              activeTab === 'rounds' 
+                ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <History size={16} aria-hidden="true" />
+            Rounds
+          </button>
+          <button
+            onClick={() => setActiveTab('transactions')}
+            className={`flex-1 py-4 rounded-[22px] font-black uppercase text-[11px] tracking-[0.15em] transition-all flex items-center justify-center gap-2.5 ${
+              activeTab === 'transactions' 
+                ? 'bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-[0_10px_20px_rgba(79,70,229,0.3)] ring-1 ring-white/20' 
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <FileText size={16} aria-hidden="true" />
+            Transactions
+          </button>
+        </div>
+      </div>
+
       {/* Global Summary Cards */}
       <div className="px-4 pt-4 grid grid-cols-2 lg:grid-cols-4 gap-3"> {/* Summary statistics cards */}
         <div className="bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 shadow-md">
@@ -494,44 +540,6 @@ export default function AdminDashboard({ onBack }: Props) {
         </div>
       </div>
 
-      <div className="px-4 mt-6">
-        <div className="flex gap-2 p-1 bg-black/20 rounded-2xl border border-white/5">
-          <button
-            onClick={() => setActiveTab('wallets')}
-            className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'wallets' 
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' 
-                : 'text-gray-500 hover:text-white'
-            }`}
-          >
-            <Wallet size={14} aria-hidden="true" />
-            Wallets
-          </button>
-          <button
-            onClick={() => setActiveTab('rounds')}
-            className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'rounds' 
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' 
-                : 'text-gray-500 hover:text-white'
-            }`}
-          >
-            <History size={14} aria-hidden="true" />
-            Rounds
-          </button>
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'transactions' 
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' 
-                : 'text-gray-500 hover:text-white'
-            }`}
-          >
-            <FileText size={14} aria-hidden="true" />
-            Transactions
-          </button>
-        </div>
-      </div>
-
       <AnimatePresence mode="wait">
         {activeTab === 'wallets' ? (
           <motion.div 
@@ -553,75 +561,20 @@ export default function AdminDashboard({ onBack }: Props) {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {filteredWallets.map(([id, data]) => ( // Map through filtered wallets to display each user's data
-                <div key={id} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-4 shadow-md">
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-indigo-300 uppercase leading-none mb-1">User</span>
-                      <span className="text-xs font-bold text-white font-mono leading-none">{data.username || 'Anonymous'}</span>
-                      <span className="text-[10px] text-gray-500 italic mt-1 font-medium italic underline">ID: {id}</span>
-                    </div>
-                    <div className="flex items-start gap-4">
-                        <button 
-                          onClick={() => fetchUserActivity(id)}
-                          className="p-2 text-indigo-400 hover:bg-indigo-500/10 rounded-xl transition-colors"
-                          aria-label="View Activity"
-                          title="View Activity"
-                        >
-                          <History size={16} aria-hidden="true" />
-                        </button>
-                      <div className="text-right">
-                        <span className="text-[10px] font-black text-gray-500 uppercase leading-none block mb-1">Balance</span>
-                        <span className="text-lg font-black text-green-400 italic">{data.balance.toFixed(0)} ETB</span>
-                      </div>
-                      <button 
-                        onClick={() => { setUserToDelete(id); setShowDeleteConfirm(true); }}
-                        className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
-                        aria-label="Delete User"
-                        title="Delete User"
-                      >
-                        <Trash2 size={16} aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Quick Adjustment Controls */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-white/5"> {/* Balance adjustment controls */}
-                    <div className="relative flex-1">
-                      <input 
-                        type="number"
-                        placeholder="Adjustment amount..."
-                        value={adjustmentValues[id] || ''}
-                        onChange={(e) => setAdjustmentValues(prev => ({ ...prev, [id]: e.target.value }))}
-                        className="w-full bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-indigo-500" // Input for adjustment amount
-                      />
-                    </div>
-                    <div className="flex gap-1">
-                      <button 
-                        onClick={() => triggerUpdateBalance(id, Math.abs(Number(adjustmentValues[id])), 'subtract')}
-                        disabled={isUpdating === id || !adjustmentValues[id]}
-                        className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 disabled:opacity-30"
-                        aria-label="Decrease Balance" // Button to decrease balance
-                        title="Decrease Balance"
-                      ><Minus size={14} aria-hidden="true" /></button>
-                      <button 
-                        onClick={() => triggerUpdateBalance(id, Math.abs(Number(adjustmentValues[id])), 'add')}
-                        disabled={isUpdating === id || !adjustmentValues[id]}
-                        className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 disabled:opacity-30"
-                        aria-label="Increase Balance" // Button to increase balance
-                        title="Increase Balance"
-                      ><Plus size={14} aria-hidden="true" /></button>
-                      <button 
-                        onClick={() => triggerUpdateBalance(id, Math.abs(Number(adjustmentValues[id])), 'set')}
-                        disabled={isUpdating === id || !adjustmentValues[id]}
-                        className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 disabled:opacity-30"
-                        title="Set Balance Exactly"
-                        aria-label="Set Exact Balance"
-                      ><Check size={14} aria-hidden="true" /></button>
-                    </div>
-                  </div>
-                </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+              {filteredWallets.map(([id, data]) => (
+                <WalletCard
+                  key={id}
+                  id={id}
+                  data={data}
+                  adjustmentValues={adjustmentValues}
+                  isUpdating={isUpdating}
+                  onViewActivity={fetchUserActivity}
+                  onDeleteUser={setUserToDelete}
+                  onShowDeleteConfirm={setShowDeleteConfirm}
+                  onSetAdjustmentValue={handleSetAdjustmentValue}
+                  onTriggerUpdateBalance={triggerUpdateBalance}
+                />
               ))}
             </div>
           </motion.div>
@@ -672,7 +625,6 @@ export default function AdminDashboard({ onBack }: Props) {
                     type="date"
                     value={dateRange.start}
                     onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                    aria-label="Filter from date"
                     title="Start Date"
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-2 text-[10px] font-bold text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
                   />
@@ -684,7 +636,6 @@ export default function AdminDashboard({ onBack }: Props) {
                     type="date"
                     value={dateRange.end}
                     onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                    aria-label="Filter to date"
                     title="End Date"
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-2 text-[10px] font-bold text-white focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
                   />
@@ -724,49 +675,12 @@ export default function AdminDashboard({ onBack }: Props) {
                 <p className="font-black text-white uppercase text-xs tracking-widest">No round history found</p>
               </div>
             ) : (
-              processedRounds.map((round, idx) => (
-                <div key={round.gameId || idx} className="bg-white/5 p-5 rounded-[32px] border border-white/5 shadow-2xl relative overflow-hidden">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-black text-yellow-300 tracking-widest uppercase">Round ID</span>
-                      <span className="text-xl font-black text-white tracking-tight italic">{round.gameId}</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500 justify-end mb-1">
-                        <Clock size={12} aria-hidden="true" />
-                        {round.date || new Date().toLocaleDateString()}
-                      </div>
-                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${round.status === 'active' ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
-                        {round.status || 'Finished'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    <RoundStat label="Players" value={round.players} icon={<Users size={12} aria-hidden="true" />} />
-                    <RoundStat label="Staked" value={`${round.totalStaked || (round.players * 10)} ETB`} icon={<TrendingUp size={12} aria-hidden="true" />} />
-                    <RoundStat label="Pool" value={`${round.pool} ETB`} icon={<Wallet size={12} aria-hidden="true" />} />
-                  </div>
-
-                  {round.winners && round.winners.length > 0 && (
-                    <div className="pt-3 border-t border-white/5">
-                      <span className="text-[8px] font-black text-indigo-300 uppercase tracking-widest block mb-2">Winners ({round.winners.length})</span>
-                      <div className="flex flex-wrap gap-2">
-                        {round.winners.map((w: any, wIdx: number) => (
-                          <button 
-                            key={wIdx} 
-                            onClick={() => setSelectedBoard({ id: w.boardId, balls: round.ballsDrawn || [] })}
-                            className="bg-green-500/10 border border-green-500/20 rounded-lg px-2 py-1 flex items-center gap-2 hover:bg-green-500/20 transition-colors"
-                          >
-                            <Trophy size={10} className="text-yellow-400" aria-hidden="true" />
-                            <span className="text-[10px] font-bold text-white">#{w.boardId}</span>
-                            <span className="text-[10px] font-black text-green-400">{w.payout.toFixed(0)} ETB</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+              processedRounds.map((round, idx) => ( // Use processedRounds here
+                <RoundCard 
+                  key={round.gameId || idx} 
+                  round={round} 
+                  onSelectBoard={setSelectedBoard} 
+                />
               ))
             )}
           </motion.div>
@@ -789,41 +703,13 @@ export default function AdminDashboard({ onBack }: Props) {
                 <p className="font-black text-white uppercase text-xs tracking-widest">No recent transactions</p>
               </div>
             ) : (
-              recentActivity.map((log, i) => {
-                const user = wallets[log.userId];
-                return (
-                  <div key={i} className="bg-white/5 rounded-2xl p-4 border border-white/5 flex items-center justify-between gap-4 shadow-md">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-2xl ${
-                        log.type === 'deposit' ? 'bg-green-500/20 text-green-400' : 
-                        log.type === 'withdrawal' ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'
-                      }`}>
-                        {log.type === 'deposit' ? <ArrowUpRight size={18} /> : 
-                         log.type === 'withdrawal' ? <ArrowDownLeft size={18} /> : <Settings size={18} />}
-                      </div>
-                      <div className="flex flex-col overflow-hidden">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-xs font-black text-white uppercase tracking-wider">
-                            {log.type === 'deposit' ? 'DEPOSIT' : 'WITHDRAWAL'}
-                          </span>
-                          <span className="text-[10px] font-bold text-indigo-300 truncate max-w-[100px]">
-                            {user?.username || 'Anonymous'}
-                          </span>
-                        </div>
-                        <span className="text-[9px] text-gray-500 font-bold mt-0.5">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </span>
-                        <span className="text-[8px] text-gray-600 font-mono">ID: {log.userId}</span>
-                      </div>
-                    </div>
-                    <div className={`text-base font-black italic whitespace-nowrap ${
-                      log.type === 'deposit' ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {log.type === 'deposit' ? '+' : '-'}{log.amount.toFixed(0)} <span className="text-[10px] not-italic opacity-60 ml-0.5">ETB</span>
-                    </div>
-                  </div>
-                );
-              })
+              recentActivity.map((log, i) => (
+                <TransactionCard 
+                  key={i} 
+                  log={log} 
+                  wallets={wallets} 
+                />
+              ))
             )}
           </motion.div>
         )}
@@ -927,7 +813,7 @@ export default function AdminDashboard({ onBack }: Props) {
             <div className="flex items-center justify-between mb-6">
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest leading-none mb-1">User Activity</span>
-                <h3 className="text-xl font-black text-white italic truncate">ID: {selectedUserActivity}</h3>
+                <h3 className="text-xl font-black text-white italic truncate">User: {wallets[selectedUserActivity!]?.username || selectedUserActivity}</h3>
               </div>
               <button 
                 onClick={() => setSelectedUserActivity(null)}
@@ -943,36 +829,11 @@ export default function AdminDashboard({ onBack }: Props) {
                 <div className="text-center py-10 text-gray-500 font-bold uppercase text-xs">No activity recorded</div>
               ) : (
                 activityLogs.map((log, i) => (
-                  <div key={i} className="bg-black/20 rounded-2xl p-3 border border-white/5 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-xl ${
-                        log.type === 'deposit' || log.type === 'win' ? 'bg-green-500/20 text-green-400' : 
-                        log.type === 'stake' || log.type === 'withdrawal' ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'
-                      }`}>
-                        {log.type === 'win' ? <Trophy size={14} /> : 
-                         log.type === 'stake' ? <ShoppingCart size={14} /> : 
-                         log.type === 'deposit' ? <Plus size={14} /> : 
-                         log.type === 'withdrawal' ? <Minus size={14} /> : <Settings size={14} />}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-white uppercase tracking-wider">
-                          {log.type.replace('_', ' ')}
-                        </span>
-                        <span className="text-[9px] text-gray-500 font-bold">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </span>
-                        {log.gameId && (
-                          <span className="text-[8px] text-indigo-300 font-mono mt-0.5">GAME: {log.gameId.slice(0,12)}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className={`text-sm font-black italic ${
-                      log.type === 'deposit' || log.type === 'win' ? 'text-green-400' : 
-                      log.type === 'stake' || log.type === 'withdrawal' ? 'text-red-400' : 'text-indigo-400'
-                    }`}>
-                      {log.type === 'deposit' || log.type === 'win' ? '+' : '-'}{log.amount} <span className="text-[9px] not-italic opacity-60">ETB</span>
-                    </div>
-                  </div>
+                  <TransactionCard 
+                    key={i} 
+                    log={log} 
+                    wallets={wallets} 
+                  />
                 ))
               )}
             </div>
@@ -1074,17 +935,5 @@ function RoundSortBtn({ label, activeKey, currentSort, onSort }: {
       {label}
       {isActive ? (currentSort.order === 'desc' ? '↓' : '↑') : <ArrowUpDown size={10} aria-hidden="true" />}
     </button>
-  );
-}
-
-function RoundStat({ label, value, icon }: { label: string, value: string | number, icon: React.ReactNode }) {
-  return (
-    <div className="bg-black/20 p-2 rounded-xl border border-white/5">
-      <div className="flex items-center gap-1.5 text-[8px] font-black text-gray-500 uppercase tracking-[0.1em] mb-0.5">
-        {icon}
-        {label}
-      </div>
-      <div className="text-xs font-black text-white italic">{value}</div>
-    </div>
   );
 }

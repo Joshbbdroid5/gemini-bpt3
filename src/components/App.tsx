@@ -549,8 +549,13 @@ export default function App() {
             )}
 
             {showEngineIdleModal && ( // Game engine idle modal
-              <div className="fixed inset-0 z-201 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-xs rounded-4xl p-6 shadow-2xl flex flex-col text-center">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-201 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+              >
+                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-xs rounded-[32px] p-6 shadow-2xl flex flex-col text-center">
                   <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4" aria-hidden="true">
                     <Clock className="text-indigo-600" size={32} />
                   </div>
@@ -558,14 +563,18 @@ export default function App() {
                   <p className="text-gray-500 text-sm font-medium leading-relaxed mb-6">The admin is getting things ready. Please wait a moment for the round to begin.</p>
                   <button onClick={() => setShowEngineIdleModal(false)} className="px-6 py-3 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-colors">Got it</button>
                 </motion.div>
-              </div>
+              </motion.div>
             )}
 
             {showRules && ( // Game rules modal
-              
-              <div className="fixed inset-0 z-101 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-101 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+              >
                 <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl flex flex-col">
-                  <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center justify-between mb-6">
                     <h3 className="text-2xl font-black text-indigo-950 uppercase italic tracking-tighter flex items-center gap-2"><Info className="text-indigo-600" /> Game Rules</h3>
                     <button 
                       onClick={() => setShowRules(false)} 
@@ -582,7 +591,7 @@ export default function App() {
                   </div>
                   <button onClick={() => setShowRules(false)} className="mt-10 px-6 py-4 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-colors">Got it</button>
                 </motion.div>
-              </div>
+              </motion.div>
             )}
           </AnimatePresence>
         </main>

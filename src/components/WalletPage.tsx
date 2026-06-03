@@ -119,7 +119,7 @@ export default function WalletPage({
                     </span>
                     <span className="text-xl font-black text-lime-400 italic">ETB</span> {/* Currency unit */}
                   </div>
-                </div> {/* Currency unit */}
+                </div>
                 <Wallet size={120} className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700" aria-hidden="true" />
               </div>
 

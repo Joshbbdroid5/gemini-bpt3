@@ -189,7 +189,7 @@ const userSchema = new mongoose.Schema<IUser>({
   balance: { type: Number, default: 0 }, // Default to 0, awarded only upon verification
   isVerified: { type: Boolean, default: false },
   referredBy: { type: String },
-  phone: { type: String }
+  phone: { type: String, unique: true, sparse: true } // Added unique: true and sparse: true
 });
 const User = mongoose.model<IUser>('User', userSchema);
 
@@ -270,6 +270,7 @@ async function syncCache() {
         ...roomDoc.toObject(),
         playerBoards: new Map(roomDoc.playerBoards),
         boardStatus: new Map(roomDoc.boardStatus),
+        winCache: new Map(), // Initialize winCache as an empty Map
       };
     }
   } catch (err) {
@@ -901,6 +902,7 @@ interface RoomState {
   selectionDuration?: number; // Total duration of selection phase in ms
   playerBoards: Map<string, number[]>;
   boardStatus: Map<string, string>;
+  winCache: Map<number, { isWinner: boolean; patterns: any[] }>;
   gameLoopTimeout?: NodeJS.Timeout;
   save?: () => Promise<any>;
   markModified?: (path: string) => void;
@@ -918,14 +920,47 @@ let singleRoomState: RoomState = {
   currentGameId: generateGameId(),
   playerBoards: new Map(),
   boardStatus: new Map(),
+  winCache: new Map(),
 };
 
 const socketMapping = new Map<string, string>(); // userId -> socketId
 
+// Debounce logic for high-concurrency state synchronization
+let syncTimer: NodeJS.Timeout | null = null;
+const scheduleStateSync = () => {
+  if (syncTimer) return;
+  syncTimer = setTimeout(async () => {
+    syncTimer = null;
+    try {
+      broadcastPoolUpdate();
+      io.emit(socketEvents.BOARD_SYNC, {
+        takenBoards: Array.from(singleRoomState.boardStatus.keys())
+      });
+      if (singleRoomState.save) await singleRoomState.save();
+    } catch (err) {
+      logger.error('Debounced state sync error', { error: err });
+    }
+  }, 300); // Batch updates every 300ms
+};
+
 // Pre-generate and cache all 600 boards to ensure they are static and highly performant
+// Also build a reverse lookup map: number -> Set<boardIds>
 const boardsCache = new Map<number, any>();
+const numberToBoardIdsMap = new Map<number, Set<number>>();
+
 for (let i = 1; i <= 600; i++) {
   boardsCache.set(i, generateBoard(i));
+  const boardGrid = boardsCache.get(i);
+  boardGrid.forEach((row: any) => {
+    row.forEach((cell: any) => {
+      if (typeof cell.value === 'number') {
+        if (!numberToBoardIdsMap.has(cell.value)) {
+          numberToBoardIdsMap.set(cell.value, new Set());
+        }
+        numberToBoardIdsMap.get(cell.value)?.add(i);
+      }
+    });
+  });
 }
 
 // We use a slower interval (3s) which is already good for free tier CPU limits
@@ -978,12 +1013,23 @@ async function runGameLoop() {
 
       // AUTO-CLAIM CHECK: Collect all winners for this specific ball
       const winnersThisRound: any[] = [];
+      const currentBallsSet = new Set(singleRoomState.currentBalls);
 
-      singleRoomState.playerBoards.forEach((boardIds, userId) => {
-        for (const boardId of boardIds) {
+      // Get all board IDs that contain the newly drawn ball
+      const boardsWithDrawnBall = numberToBoardIdsMap.get(ball) || new Set<number>();
+
+      singleRoomState.playerBoards.forEach((playerBoardIds, userId) => {
+        // PERFORMANCE: Only check boards that actually contain the newly drawn ball.
+        // Boards without this ball cannot have changed their win status this round.
+        const relevantBoardIds = playerBoardIds.filter(boardId => boardsWithDrawnBall.has(boardId));
+        
+        for (const boardId of relevantBoardIds) {
           const grid = boardsCache.get(boardId);
-          const win = checkWin(grid, new Set(singleRoomState.currentBalls));
+          const win = checkWin(grid, currentBallsSet);
           
+          // Update the cache for this board
+          singleRoomState.winCache.set(boardId, win);
+
           if (win.isWinner && !singleRoomState.boardStatus.get(boardId.toString())) { 
             winnersThisRound.push({
               userId,
@@ -1076,6 +1122,7 @@ function resetGame() {
   singleRoomState.shuffledBalls = [];
   singleRoomState.globalPool = 0;
   singleRoomState.playerBoards.clear();
+  singleRoomState.winCache.clear();
   singleRoomState.boardStatus.clear(); // Clear board status for new game
   singleRoomState.currentGameId = generateGameId();
   io.emit(socketEvents.GAME_RESET); // Emit to all connected clients
@@ -1127,7 +1174,12 @@ dbPromise.then(async (conn) => {
       { upsert: true, new: true }
     );
     if (roomDoc) {
-      singleRoomState = { ...roomDoc.toObject(), playerBoards: new Map(roomDoc.playerBoards), boardStatus: new Map(roomDoc.boardStatus) };
+      singleRoomState = {
+        ...roomDoc.toObject(),
+        playerBoards: new Map(roomDoc.playerBoards),
+        boardStatus: new Map(roomDoc.boardStatus),
+        winCache: new Map(), // Initialize winCache as an empty Map
+      };
     }
   }
   resetGame();
@@ -1287,14 +1339,11 @@ function registerSocketHandlers(io: SocketIOServer) {
 
     if (singleRoomState.markModified) singleRoomState.markModified('playerBoards');
     if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
-    if (singleRoomState.save) await singleRoomState.save().catch(e => logger.error('Room save error on board pick', { error: e }));
 
-    socket.emit(socketEvents.WALLET_UPDATE, userRecord.balance); // Ensure wallet update is sent after save
-    
-    io.emit(socketEvents.BOARD_SYNC, { // Emit to all in the single room
-      takenBoards: Array.from(singleRoomState.boardStatus.keys())
-    });
-    broadcastPoolUpdate();
+    // Wallet update is critical for UX, send immediately to the individual player
+    socket.emit(socketEvents.WALLET_UPDATE, userRecord.balance); 
+    // Global updates and DB persistence are batched
+    scheduleStateSync();
   });
 
     socket.on('disconnect', () => {
