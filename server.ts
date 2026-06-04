@@ -1128,8 +1128,8 @@ async function runGameLoop() {
   }
 
   if (singleRoomState.state === GameState.FINISHED || singleRoomState.currentBalls.length >= 75) {
-    // 3-second winner declaration window as requested for the rapid-fire loop
-    singleRoomState.gameLoopTimeout = setTimeout(() => resetGame(), 3000);
+    // 10-second winner declaration window
+    singleRoomState.gameLoopTimeout = setTimeout(() => resetGame(), 10000);
     return; // Exit the loop
   }
 

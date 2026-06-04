@@ -65,7 +65,7 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, t }:
           <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
             {t.boardNum}{winner.id}
           </span>
-          <div className="flex flex-wrap gap-1 mt-1">
+          <div className="flex flex-wrap gap-1 mt-1"> {/* Display winning patterns */}
             {winner.patterns.map((p: WinningPattern, pIdx: number) => (
               <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">
                 {p.name}
@@ -73,7 +73,7 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, t }:
             ))}
           </div>
         </div>
-        <span className="text-green-400 font-black italic">
+        <span className="text-green-400 text-lg font-black italic"> {/* Increased font size for payout */}
           {(totalPrize / winnersCount).toFixed(0)} ETB
         </span>
       </div>
@@ -133,7 +133,7 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[]; payout: number }[]>([]);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
-  const [popupTimeLeft, setPopupTimeLeft] = useState(3);
+  const [popupTimeLeft, setPopupTimeLeft] = useState(10);
   const [isMuted, setIsMuted] = useState(false);
   const [autoMarkMode, setAutoMarkMode] = useState(true);
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
@@ -223,7 +223,7 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
       setCurrentBall(null);
       setShowWinnerPopup(false);
       setWinners([]);
-      setPopupTimeLeft(3);
+      setPopupTimeLeft(10);
       setManualMarks(new Set());
     };
 

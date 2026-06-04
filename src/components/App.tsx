@@ -79,7 +79,6 @@ export default function App() {
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   
   const [referredCount, setReferredCount] = useState<number>(0);
-  const [winningHistory, setWinningHistory] = useState<any[]>([]);
 
   const [roomStats, setRoomStats] = useState<RoomStats & { selectionTimeLeft?: number }>({ // Single room stats
     pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false, state: GameState.SELECTION
@@ -160,7 +159,6 @@ export default function App() {
       if (data.totalActive !== void 0) setTotalActivePlayers(data.totalActive);
       if (data.isMaintenance !== void 0) setIsMaintenanceMode(data.isMaintenance);
     };
-    const handleWinHistory = (history: HistoryEntry[]) => setWinningHistory(history);
 
     const handleInit = (data: { gameId: string; balls: number[]; selectionTimeLeft?: number; pool?: number; players?: number }) => {
       setRoomStats(prev => {
@@ -202,7 +200,6 @@ export default function App() {
     socket.on(socketEvents.WALLET_UPDATE, handleWallet); // Listen for wallet updates
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.GAME_INIT, handleInit);
-    socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on(socketEvents.GAME_RESET, () => { 
       // Only auto-redirect if the user was actually in a game or selection
       // This prevents users browsing their Profile/History from being yanked away
@@ -234,7 +231,6 @@ export default function App() {
       socket.off(socketEvents.WALLET_UPDATE, handleWallet); // Remove wallet update listener
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
       socket.off(socketEvents.GAME_INIT, handleInit);
-      socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
       socket.off(socketEvents.BALL_DRAWN);
       socket.off(socketEvents.GAME_RESET);
       socket.off(socketEvents.GAME_STATUS, handleGameStatus);
