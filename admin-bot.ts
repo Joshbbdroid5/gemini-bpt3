@@ -36,6 +36,7 @@ const manageKeyboard = Markup.inlineKeyboard([
   [Markup.button.callback('📤 Pending Withdrawals', 'view_withdrawals')],
   [Markup.button.callback('📊 View Server Stats', 'view_stats')],
   [Markup.button.callback('🔍 Search User', 'search_user')],
+  [Markup.button.callback('🏆 Referral Leaderboard', 'view_referrals')],
 ]);
 
 adminBot.start((ctx: Context) => ctx.reply('🚀 Welcome, Admin. Use /manage to control the server.')); // Explicitly typed ctx
@@ -230,6 +231,32 @@ adminBot.action('search_user', async (ctx: Context) => {
   });
 });
 
+adminBot.action('view_referrals', async (ctx: Context) => {
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
+  if (!requireAdminSecret(ctx)) return;
+
+  try {
+    const response = await fetch(`${API_URL}/admin/referral-leaderboard?secret=${ADMIN_SECRET}`);
+    if (!response.ok) throw new Error('Server error');
+    const data = await response.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      return ctx.reply('📭 No referrals found yet.');
+    }
+
+    let msg = '🏆 <b>TOP REFERRERS</b>\n\n';
+    data.forEach((entry: any, index: number) => {
+      const displayName = entry.username.startsWith('@') ? entry.username : `<code>${entry.username}</code>`;
+      msg += `${index + 1}. ${displayName} (<i>ID: ${entry.userId}</i>)\n   └─ <b>${entry.count}</b> referrals\n\n`;
+    });
+
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+  } catch (err) {
+    logger.error('Leaderboard error', { error: err });
+    await ctx.reply('❌ Error: Could not fetch referral leaderboard.');
+  }
+});
+
 adminBot.on('text', async (ctx) => {
   if (!ctx.from) {
     logger.warn('Received text message without sender information in admin bot.');
@@ -270,6 +297,7 @@ adminBot.on('text', async (ctx) => {
 
 // Admin Approval
 adminBot.action(/approve_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => { // Correctly typed ctx for regex match
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   if (!requireAdminSecret(ctx)) return;
   const amount = parseInt(ctx.match[1], 10);
   const userId = ctx.match[2];
@@ -292,14 +320,16 @@ adminBot.action(/approve_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecA
 });
 
 // Admin Rejection
-adminBot.action(/reject_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => { // Correctly typed ctx for regex match
+adminBot.action(/reject_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => { // Updated to match approve pattern
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   if (!requireAdminSecret(ctx)) return;
-  const userId = ctx.match[1];
+  const amount = parseInt(ctx.match[1], 10);
+  const userId = ctx.match[2];
    try {
     await fetch(`${API_URL}/admin/reject-deposit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, secret: ADMIN_SECRET }),
+      body: JSON.stringify({ userId, amount, secret: ADMIN_SECRET }),
     });
     await ctx.editMessageText(`❌ <b>Rejected</b> top-up for <code>${userId}</code>.`, { parse_mode: 'HTML' }); //
   } catch (err) {
@@ -309,6 +339,7 @@ adminBot.action(/reject_(.+)/, async (ctx: Context & { match: RegExpExecArray })
 
 // Admin Withdrawal Paid
 adminBot.action(/w_paid_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   if (!requireAdminSecret(ctx)) return;
   const amount = parseInt(ctx.match[1], 10);
   const userId = ctx.match[2];
@@ -327,6 +358,7 @@ adminBot.action(/w_paid_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecAr
 
 // Admin Withdrawal Reject/Refund
 adminBot.action(/w_ref_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
+  if (!ctx.from || ctx.from.id.toString() !== ADMIN_CHAT_ID) return ctx.answerCbQuery('Unauthorized');
   if (!requireAdminSecret(ctx)) return;
   const amount = parseInt(ctx.match[1], 10);
   const userId = ctx.match[2];

@@ -1,52 +1,118 @@
-import React from 'react';
-import { User, Wallet, Award, TrendingUp } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { User, Award, DollarSign, Users, ArrowLeft } from 'lucide-react';
 
-interface ProfilePageProps {
+interface Props {
   telegramName: string;
   walletBalance: number;
   gamesWon: number;
   totalEarnings: number;
   telegramDisplayName: string;
+  referredCount: number;
   onViewHistory: () => void;
+  onBack?: () => void;
 }
 
-export default function ProfilePage({ telegramName, walletBalance, gamesWon, totalEarnings, telegramDisplayName, onViewHistory }: ProfilePageProps) {
+export default function ProfilePage({
+  telegramName,
+  walletBalance,
+  gamesWon,
+  totalEarnings,
+  telegramDisplayName, 
+  referredCount,
+  onViewHistory,
+  onBack,
+}: Props) {
+  const t = {
+    back: 'Back',
+    myProfile: 'My Profile',
+    yourStats: 'Your Stats',
+    walletBalance: 'Wallet Balance',
+    gamesWon: 'Games Won',
+    totalEarnings: 'Total Earnings',
+    totalReferred: 'Total Referred',
+    viewHistory: 'View Full History',
+    topUpWallet: 'Top Up Wallet',
+  };
+
   return (
-    <div className="flex-1 flex flex-col items-center p-6 text-white overflow-y-auto">
-      <div className="w-24 h-24 rounded-full bg-indigo-600 border-4 border-white/10 flex items-center justify-center shadow-2xl mb-4 shrink-0">
-        <User size={48} className="text-white" />
-      </div>
-      <div className="flex flex-col items-center mb-8">
-        <h2 className="text-3xl font-black italic uppercase tracking-tighter text-center leading-tight">
-          {telegramDisplayName || `User ${telegramName}`}
-        </h2>
-        <p className="text-[10px] text-gray-400 italic font-medium mt-1 uppercase tracking-widest opacity-70">ID: {telegramName}</p>
+    <div className="flex-1 flex flex-col bg-transparent overflow-hidden">
+      {/* Header Section */}
+      <div className="p-6 bg-black/20 border-b border-white/10">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"
+                aria-label={t.back}
+                title={t.back}
+              >
+                <ArrowLeft size={20} className="text-gray-400" />
+              </button>
+            )}
+            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">{t.myProfile}</h2>
+          </div>
+        </div>
+
+        {/* User Profile Info */}
+        <div className="ml-12 flex flex-col gap-1">
+          <div className="text-lg font-black text-white italic tracking-tight">
+            {telegramDisplayName || `@${telegramName}`}
+          </div>
+          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-lime-400">
+            <User size={12} />
+            User ID: {telegramName}
+          </div>
+        </div>
       </div>
 
-      <div className="w-full max-w-sm space-y-4 mb-8">
-        <StatRow icon={<Wallet className="text-lime-400" size={20} />} label="Balance" value={`${walletBalance.toLocaleString()} ETB`} />
-        <StatRow icon={<Award className="text-blue-400" size={20} />} label="Games Won" value={gamesWon.toString()} />
-        <StatRow icon={<TrendingUp className="text-yellow-400" size={20} />} label="Earnings" value={`${totalEarnings.toLocaleString()} ETB`} />
-      </div>
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          <div className="p-6 bg-white/5 border border-white/5 rounded-[32px]">
+            <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4">{t.yourStats}</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-white">
+                <span className="flex items-center gap-2 text-gray-300"><DollarSign size={16} /> {t.walletBalance}:</span>
+                <span className="font-black italic">{walletBalance.toLocaleString()} ETB</span>
+              </div>
+              <div className="flex items-center justify-between text-white">
+                <span className="flex items-center gap-2 text-gray-300"><Award size={16} /> {t.gamesWon}:</span>
+                <span className="font-black italic">{gamesWon}</span>
+              </div>
+              <div className="flex items-center justify-between text-white">
+                <span className="flex items-center gap-2 text-gray-300"><DollarSign size={16} /> {t.totalEarnings}:</span>
+                <span className="font-black italic">{totalEarnings.toLocaleString()} ETB</span>
+              </div>
+              <div className="flex items-center justify-between text-white">
+                <span className="flex items-center gap-2 text-gray-300"><Users size={16} /> {t.totalReferred}:</span>
+                <span className="font-black italic">{referredCount}</span>
+              </div>
+            </div>
+          </div>
 
-      <button 
-        onClick={onViewHistory} 
-        className="w-full max-w-sm bg-white text-indigo-950 font-black py-4 rounded-2xl shadow-xl hover:bg-yellow-400 active:scale-95 transition-all uppercase text-sm tracking-widest"
-      >
-        View Full History
-      </button>
-    </div>
-  );
-}
-
-function StatRow({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
-  return (
-    <div className="w-full bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between shadow-inner backdrop-blur-sm">
-      <div className="flex items-center gap-3">
-        {icon}
-        <span className="text-xs font-black uppercase tracking-widest text-gray-400">{label}</span>
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={onViewHistory}
+              className="w-full bg-lime-500 text-black py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-lime-600 transition-colors"
+            >
+              {t.viewHistory}
+            </button>
+            {/* Example: Top Up button, can be linked to wallet page or a specific action */}
+            <button
+              // onClick={() => /* navigate to deposit or wallet page */}
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors"
+            >
+              {t.topUpWallet}
+            </button>
+          </div>
+        </motion.div>
       </div>
-      <span className="text-lg font-black italic">{value}</span>
     </div>
   );
 }

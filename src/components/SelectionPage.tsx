@@ -131,30 +131,26 @@ export default function SelectionPage({ wallet, onComplete, onBack, serverTimeLe
         <div className="grid grid-cols-10 gap-1.5 pb-32">
           {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
             const isSelected = selectedIds.has(id);
+            const isTaken = takenBoards.has(id);
             
             return (
-              <motion.button
+              <button
                 id={`board-${id}`}
                 key={id}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
                 onClick={() => handleSelect(id)}
                 className={`
-                  aspect-[2/3] flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-all duration-200 relative overflow-hidden
+                  aspect-[2/3] flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-transform active:scale-95 relative overflow-hidden
                   ${isSelected
                     ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
-                    : takenBoards.has(id)
+                    : isTaken
                       ? 'bg-red-900/20 text-white/10 border-red-500/40 border-dashed cursor-not-allowed'
                       : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
                   }
                 `}
-                disabled={!isSelected && takenBoards.has(id)}
+                disabled={!isSelected && isTaken}
               >
-                {!isSelected && !takenBoards.has(id) && (
-                  <div className="absolute top-0 right-0 w-3 h-3 bg-white/5 blur-sm rounded-full -translate-x-1 translate-y-1"></div>
-                )}
                 <span className="relative z-10">{id}</span>
-              </motion.button>
+              </button>
             );
           })}
         </div>

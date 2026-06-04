@@ -91,17 +91,23 @@ mainBot.start(async (ctx) => {
   );
 });
 
-mainBot.action('my_profile', async (ctx) => {
-  const userId = ctx.from.id.toString();
+const handleProfile = async (ctx: Context) => {
+  const userId = ctx.from?.id.toString();
+  if (!userId) return;
   try {
     const response = await fetch(`${API_URL}/admin/user-info?userId=${userId}&secret=${ADMIN_SECRET}`);
     const data = await response.json();
-    const inviteLink = `https://t.me/${ctx.botInfo.username}?start=ref_${userId}`;
-    const message = `👤 <b>MY PROFILE</b>\n\n🆔 <b>ID:</b> <code>${userId}</code>\n💰 <b>Balance:</b> ${data.balance.toFixed(2)} ETB\n✅ <b>Status:</b> ${data.isVerified ? 'Verified' : 'Unverified'}\n\n🔗 <b>Referral Link:</b>\n${inviteLink}`;
+    const inviteLink = `https://t.me/${ctx.botInfo.username}?start=ref_${userId}`; // Keep referral link functionality
+    const message = `👤 <b>MY PROFILE</b>\n\n🆔 <b>ID:</b> <code>${userId}</code>\n💰 <b>Balance:</b> ${data.balance.toFixed(2)} ETB\n✅ <b>Status:</b> ${data.isVerified ? 'Verified' : 'Unverified'}\n🤝 <b>Total Referred:</b> ${data.referredCount}\n\n🔗 <b>Referral Link:</b>\n${inviteLink}`;
     await ctx.reply(message, { parse_mode: 'HTML' });
-    return ctx.answerCbQuery();
-  } catch (err) { return ctx.answerCbQuery('❌ Error'); }
-});
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
+  } catch (err) { 
+    if (ctx.callbackQuery) await ctx.answerCbQuery('❌ Error');
+  }
+};
+
+mainBot.command(['profile', 'my_profile'], handleProfile);
+mainBot.action('my_profile', handleProfile);
 
 mainBot.action('register', (ctx) => {
   return ctx.reply('Confirm your phone number to register:', Markup.keyboard([[Markup.button.contactRequest('📲 Confirm Phone Number')]]).resize().oneTime());
@@ -131,13 +137,34 @@ mainBot.action('play', async (ctx) => {
 
 mainBot.action('deposit', (ctx) => ctx.reply('💰 Choose method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'deposit_method_telebirr')]])));
 
+mainBot.action('withdraw', async (ctx) => {
+  const userId = ctx.from.id.toString();
+  try {
+    const response = await fetch(`${API_URL}/admin/user-info?userId=${userId}&secret=${ADMIN_SECRET}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch user balance');
+    }
+    const userData = await response.json();
+    const balance = userData.balance;
+
+    if (balance < 50) {
+      await ctx.answerCbQuery('❌ Insufficient balance for withdrawal. Minimum is 50 ETB.');
+      return ctx.reply('❌ You need at least 50 ETB to withdraw. Your current balance is ' + balance.toFixed(2) + ' ETB.');
+    }
+
+    // Original logic if balance is sufficient
+    return ctx.reply('💸 Choose method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'withdraw_method_telebirr')]]));
+  } catch (error) {
+    logger.error('Error checking balance for withdrawal', { error, userId });
+    return ctx.reply('❌ An error occurred while checking your balance. Please try again later.');
+  }
+});
+
 mainBot.action('deposit_method_telebirr', async (ctx) => {
   await ctx.answerCbQuery();
   setState(ctx.from.id.toString(), { mode: 'deposit' });
   return ctx.reply(`🏦 <b>Deposit via Telebirr</b>\n\nPay to: <code>${TELEBIRR_ACCOUNT_NUMBER}</code>\nEnter deposit amount:`, { parse_mode: 'HTML', reply_markup: { force_reply: true } });
 });
-
-mainBot.action('withdraw', (ctx) => ctx.reply('💸 Choose method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'withdraw_method_telebirr')]])));
 
 mainBot.action('withdraw_method_telebirr', async (ctx) => {
   await ctx.answerCbQuery();
@@ -220,7 +247,7 @@ mainBot.action('show_rules', (ctx) => ctx.reply(
 ));
 mainBot.action('invite', (ctx) => {
   const link = `https://t.me/${ctx.botInfo.username}?start=ref_${ctx.from.id}`;
-  return ctx.reply('Earn 5% bonuses!', Markup.inlineKeyboard([[Markup.button.url('📤 Share Link', `https://t.me/share/url?url=${link}`)]]));
+  return ctx.reply('🤝 <b>Invite your friends!</b>\nShare Lomi Bingo with your friends and play together.', { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.url('📤 Share Link', `https://t.me/share/url?url=${link}`)]]) });
 });
 
 mainBot.catch((err) => {

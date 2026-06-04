@@ -78,6 +78,7 @@ export default function App() {
   const [telegramDisplayName, setTelegramDisplayName] = useState<string>('');
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   
+  const [referredCount, setReferredCount] = useState<number>(0);
   const [winningHistory, setWinningHistory] = useState<any[]>([]);
 
   const [roomStats, setRoomStats] = useState<RoomStats & { selectionTimeLeft?: number }>({ // Single room stats
@@ -147,9 +148,10 @@ export default function App() {
     const backendUrl = import.meta.env.VITE_BACKEND_URL || window.location.origin;
     fetch(`${backendUrl}/health`).catch((e) => console.error("Backend health check failed:", e)); // Simple poke to wake up backend, with error logging
 
-    const handleStatus = (status: { isVerified: boolean; phone?: string }) => {
+    const handleStatus = (status: { isVerified: boolean; phone?: string; referredCount?: number }) => {
       setIsVerified(status.isVerified);
       if (status.phone) setPhoneNumber(status.phone);
+      if (status.referredCount !== undefined) setReferredCount(status.referredCount);
     };
 
     const handleWallet = (balance: number) => setWallet(balance);
@@ -495,6 +497,7 @@ export default function App() {
                   gamesWon={history.filter(h => h.isMyWin).length}
                   totalEarnings={history.reduce((sum, h) => h.isMyWin ? sum + h.payoutPerWinner : sum, 0)}
                   telegramDisplayName={telegramDisplayName}
+                  referredCount={referredCount}
                   onViewHistory={handleViewHistory}
                 />
               </motion.div>
