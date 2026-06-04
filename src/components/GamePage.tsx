@@ -540,9 +540,6 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
                   <span className="text-[10px] font-black text-gray-400">
                     {t.nextGameIn} {popupTimeLeft}s
                   </span>
-                  <button onClick={onRestart} className="w-full bg-white text-black py-3 rounded-xl font-black uppercase text-xs">
-                    {t.playAgain}
-                  </button>
                 </div>
               </motion.div>
             </AnimatePresence>
