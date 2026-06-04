@@ -1148,7 +1148,14 @@ function startSelectionPhase() {
   broadcastPoolUpdate();
   
   // Start 40s "Quick Pick" window to finalize Total Players for this round
+  if (singleRoomState.selectionTimer) clearTimeout(singleRoomState.selectionTimer);
   singleRoomState.selectionTimer = setTimeout(() => { // Store the timer reference
+    if (singleRoomState.boardStatus.size === 0) {
+      logger.info("ENGINE_STATE_CHANGE: No players joined. Restarting selection phase.");
+      startSelectionPhase();
+      return;
+    }
+
     singleRoomState.state = GameState.GAME;
     singleRoomState.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
     broadcastPoolUpdate();

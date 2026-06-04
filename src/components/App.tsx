@@ -430,7 +430,7 @@ export default function App() {
               >
                 <SelectionPage 
                   wallet={wallet} 
-                  onComplete={completeSelection} 
+                  onSelectionChange={(ids) => setSelectedBoardIds(ids)} 
                   onBack={handleBackToHome} 
                   serverTimeLeft={roomStats.selectionTimeLeft}
                 />

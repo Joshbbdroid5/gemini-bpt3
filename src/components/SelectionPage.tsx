@@ -7,12 +7,12 @@ import { socket, socketEvents } from './socket';
 
 interface Props {
   wallet: number;
-  onComplete: (selectedIds: number[]) => void;
+  onSelectionChange: (selectedIds: number[]) => void;
   onBack: () => void;
   serverTimeLeft?: number;
 }
 
-export default function SelectionPage({ wallet, onComplete, onBack, serverTimeLeft }: Props) {
+export default function SelectionPage({ wallet, onSelectionChange, onBack, serverTimeLeft }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [timeLeft, setTimeLeft] = useState(serverTimeLeft ?? 40); // Initial countdown for selection (fixed)
 
@@ -59,11 +59,8 @@ export default function SelectionPage({ wallet, onComplete, onBack, serverTimeLe
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (timeLeft === 0) {
-      onComplete(Array.from(selectedIds));
-    }
-  }, [timeLeft, onComplete, selectedIds]);
+  // Removed automatic onComplete on timeLeft === 0. 
+  // Transition is now controlled by App.tsx observing server state.
 
   const handleSelect = (id: number) => {
     const isCurrentlySelected = selectedIds.has(id);
@@ -86,6 +83,7 @@ export default function SelectionPage({ wallet, onComplete, onBack, serverTimeLe
         next.clear(); // Enforce 1 board limit
         next.add(id);
       }
+      onSelectionChange(Array.from(next));
       return next;
     });
   };
