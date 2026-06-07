@@ -39,6 +39,24 @@ export interface HistoryEntry {
   isMyWin: boolean;
 }
 
+export interface PickBoardResult {
+  success: boolean;
+  boardId: number;
+  selectedBoardIds: number[];
+  message?: string;
+  takenBoards?: number[];
+}
+
+export interface GameInitData {
+  gameId: string;
+  balls: number[];
+  selectionTimeLeft?: number;
+  pool?: number;
+  players?: number;
+  takenBoards?: number[];
+  myBoardIds?: number[];
+}
+
 export const BINGO_COLUMNS = {
   B: { min: 1, max: 15 },
   I: { min: 16, max: 30 },

@@ -252,11 +252,6 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
     socket.on(socketEvents.GAME_RESET, handleReset);
     socket.on(socketEvents.NEW_WINNER, handleServerWinner);
 
-    // Pre-warm Data: Request latest game state immediately upon mounting
-    // This ensures we have the correct ball history and game metadata
-    // if the game was already in progress or if we joined late.
-    socket.emit(socketEvents.JOIN_ROOM); // No stake argument needed
-
     return () => {
       socket.off(socketEvents.BALL_DRAWN, handleNewBall);
       socket.off(socketEvents.GAME_INIT, handleInit);

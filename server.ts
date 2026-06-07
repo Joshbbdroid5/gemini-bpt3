@@ -16,7 +16,7 @@ import mongoose, { Error as MongooseError } from 'mongoose';
 import logger from './src/logger';
 import client from 'prom-client';
 import { metrics, Counter, ObservableGauge } from '@opentelemetry/api';
-import { GameState, RoomStats, PoolUpdateData } from './src/types';
+import { GameState, RoomStats, PoolUpdateData, HistoryEntry, PickBoardResult } from './src/types';
 
 dotenv.config();
 
@@ -882,6 +882,23 @@ app.post('/admin/start-game', (req, res) => {
   res.json({ success: true, isGameRunning: globalGameState.isGameRunning });
 });
 
+// ADMIN ENDPOINT: Force-start the current selection round (skip countdown)
+app.post('/admin/force-start-round', (req, res) => {
+  const { secret } = req.body;
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+
+  if (!globalGameState.isGameRunning || globalGameState.stopRequested) {
+    return res.status(400).json({ error: 'Game engine is not running' });
+  }
+
+  const started = forceStartSelectionRound();
+  if (!started) {
+    return res.status(400).json({ error: 'Round is not in selection phase' });
+  }
+
+  res.json({ success: true, message: 'Selection round force-started' });
+});
+
 // ADMIN ENDPOINT: Gracefully stop the game engine
 app.post('/admin/stop-game', (req, res) => {
   const { secret } = req.body;
@@ -968,6 +985,204 @@ let singleRoomState: RoomState = {
 
 const socketMapping = new Map<string, string>(); // userId -> socketId
 
+// Serialize board picks to prevent concurrent race conditions on the same board
+let pickQueue: Promise<void> = Promise.resolve();
+function enqueueBoardPick<T>(fn: () => Promise<T>): Promise<T> {
+  const run = pickQueue.then(fn);
+  pickQueue = run.then(() => undefined).catch(() => undefined);
+  return run;
+}
+
+function getTakenBoardIds(): number[] {
+  return Array.from(singleRoomState.boardStatus.keys()).map((id) => Number(id));
+}
+
+function getUserSelectedBoardIds(userId: string): number[] {
+  return (singleRoomState.playerBoards.get(userId) || []).map(Number);
+}
+
+function buildPickFailure(
+  userId: string,
+  boardId: number,
+  message: string
+): PickBoardResult {
+  return {
+    success: false,
+    boardId,
+    message,
+    selectedBoardIds: getUserSelectedBoardIds(userId),
+    takenBoards: getTakenBoardIds(),
+  };
+}
+
+async function getUserHistory(userId: string): Promise<HistoryEntry[]> {
+  const logs = await ActivityLog.find({
+    userId,
+    type: { $in: ['stake', 'win'] },
+    gameId: { $exists: true, $ne: null },
+  })
+    .sort({ timestamp: -1 })
+    .limit(200)
+    .lean();
+
+  const byGame = new Map<string, { stakes: number; winAmount: number; latestAt: Date }>();
+  for (const log of logs) {
+    if (!log.gameId) continue;
+    const existing = byGame.get(log.gameId) || { stakes: 0, winAmount: 0, latestAt: log.timestamp };
+    if (log.type === 'stake') existing.stakes += 1;
+    if (log.type === 'win') existing.winAmount = log.amount;
+    if (log.timestamp > existing.latestAt) existing.latestAt = log.timestamp;
+    byGame.set(log.gameId, existing);
+  }
+
+  const entries: HistoryEntry[] = [];
+  for (const [gameId, data] of byGame.entries()) {
+    const winnerCount = await GameArchive.countDocuments({ gameId });
+    const archive = await GameArchive.findOne({ gameId }).lean();
+    const totalWinners = Math.max(winnerCount, 1);
+    const totalStaked = archive
+      ? Math.round(archive.prizePool / 0.6)
+      : data.stakes * SINGLE_STAKE;
+
+    entries.push({
+      gameId,
+      date: new Date(data.latestAt).toLocaleDateString(),
+      myBoardsCount: data.stakes,
+      totalWinners,
+      totalStaked,
+      payoutPerWinner: data.winAmount > 0
+        ? data.winAmount
+        : archive
+          ? archive.prizePool / totalWinners
+          : 0,
+      isMyWin: data.winAmount > 0,
+    });
+  }
+
+  return entries.sort((a, b) => b.gameId.localeCompare(a.gameId));
+}
+
+async function refreshAllUserHistories() {
+  await Promise.all(
+    Array.from(socketMapping.entries()).map(async ([userId, socketId]) => {
+      const history = await getUserHistory(userId);
+      io.to(socketId).emit(socketEvents.WIN_HISTORY, history);
+    })
+  );
+}
+
+function getSelectionTimeLeftSeconds(): number {
+  if (!singleRoomState.selectionStartTime || !singleRoomState.selectionDuration) return 0;
+  return Math.max(
+    0,
+    Math.ceil(
+      (singleRoomState.selectionStartTime + singleRoomState.selectionDuration - Date.now()) / 1000
+    )
+  );
+}
+
+async function emitJoinState(socket: import('socket.io').Socket, userId: string) {
+  socket.emit(socketEvents.GAME_INIT, {
+    balls: singleRoomState.currentBalls,
+    gameId: singleRoomState.currentGameId,
+    selectionTimeLeft: getSelectionTimeLeftSeconds(),
+    takenBoards: getTakenBoardIds(),
+    myBoardIds: getUserSelectedBoardIds(userId),
+    pool: singleRoomState.globalPool * 0.6,
+    players: singleRoomState.boardStatus.size,
+  });
+
+  const history = await getUserHistory(userId);
+  socket.emit(socketEvents.WIN_HISTORY, history);
+}
+
+function forceStartSelectionRound(): boolean {
+  if (singleRoomState.state !== GameState.SELECTION) return false;
+  if (singleRoomState.selectionTimer) clearTimeout(singleRoomState.selectionTimer);
+  singleRoomState.state = GameState.GAME;
+  singleRoomState.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
+  broadcastPoolUpdate();
+  setTimeout(() => runGameLoop(), 2000);
+  return true;
+}
+
+async function processBoardPick(userId: string, boardId: number): Promise<PickBoardResult> {
+  if (singleRoomState.state !== GameState.SELECTION) {
+    return buildPickFailure(userId, boardId, 'Selection phase has ended.');
+  }
+
+  const userRecord = await User.findOne({ userId });
+  if (!userRecord) {
+    return buildPickFailure(userId, boardId, 'User account not found.');
+  }
+
+  if (typeof singleRoomState.playerBoards.get !== 'function') {
+    singleRoomState.playerBoards = new Map(Object.entries(singleRoomState.playerBoards));
+  }
+
+  const boardKey = String(boardId);
+  const currentSelected = getUserSelectedBoardIds(userId).map(String);
+  const isDeselecting = currentSelected.includes(boardKey);
+  const isSwapping = currentSelected.length > 0 && !currentSelected.includes(boardKey);
+  const isFirstSelection = currentSelected.length === 0;
+
+  const existingOwner = singleRoomState.boardStatus.get(boardKey);
+  if (existingOwner && existingOwner !== userId) {
+    return buildPickFailure(userId, boardId, 'Board already taken, please choose another.');
+  }
+
+  if (isDeselecting) {
+    userRecord.balance += SINGLE_STAKE;
+    singleRoomState.boardStatus.delete(boardKey);
+    singleRoomState.playerBoards.set(userId, []);
+    singleRoomState.globalPool -= SINGLE_STAKE;
+  } else if (isSwapping) {
+    const oldId = currentSelected[0];
+    singleRoomState.boardStatus.delete(oldId);
+    singleRoomState.boardStatus.set(boardKey, userId);
+    singleRoomState.playerBoards.set(userId, [boardId]);
+  } else if (isFirstSelection) {
+    if (userRecord.balance < SINGLE_STAKE) {
+      return buildPickFailure(userId, boardId, 'Insufficient balance.');
+    }
+    userRecord.balance -= SINGLE_STAKE;
+    singleRoomState.boardStatus.set(boardKey, userId);
+    singleRoomState.playerBoards.set(userId, [boardId]);
+    singleRoomState.globalPool += SINGLE_STAKE;
+    globalGameState.totalVolume += SINGLE_STAKE;
+    await ActivityLog.create({
+      userId,
+      type: 'stake',
+      amount: SINGLE_STAKE,
+      gameId: singleRoomState.currentGameId,
+    });
+    await GlobalStats.updateOne(
+      { key: 'main_stats' },
+      { $inc: { totalVolume: SINGLE_STAKE } },
+      { upsert: true }
+    ).catch((e) => logger.error('Global stats volume update error', { error: e }));
+  }
+
+  await userRecord.save().catch((e) =>
+    logger.error('User record save error on board pick', { error: e, userId })
+  );
+
+  if (singleRoomState.markModified) singleRoomState.markModified('playerBoards');
+  if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
+
+  const socketId = socketMapping.get(userId);
+  if (socketId) {
+    io.to(socketId).emit(socketEvents.WALLET_UPDATE, userRecord.balance);
+  }
+
+  return {
+    success: true,
+    boardId,
+    selectedBoardIds: getUserSelectedBoardIds(userId),
+    takenBoards: getTakenBoardIds(),
+  };
+}
+
 // Debounce logic for high-concurrency state synchronization
 let syncTimer: NodeJS.Timeout | null = null;
 const scheduleStateSync = () => {
@@ -977,7 +1192,7 @@ const scheduleStateSync = () => {
     try {
       broadcastPoolUpdate();
       io.emit(socketEvents.BOARD_SYNC, {
-        takenBoards: Array.from(singleRoomState.boardStatus.keys())
+        takenBoards: getTakenBoardIds(),
       });
       if (singleRoomState.save) await singleRoomState.save();
     } catch (err) {
@@ -1011,9 +1226,7 @@ for (let i = 1; i <= 600; i++) {
 const broadcastPoolUpdate = (ioInstance: SocketIOServer = io) => { // Accept io instance as argument
   const engineActive = globalGameState.isGameRunning && !globalGameState.stopRequested;
 
-  const selectionTimeLeft = singleRoomState.selectionStartTime && singleRoomState.selectionDuration
-    ? Math.max(0, Math.ceil((singleRoomState.selectionStartTime + singleRoomState.selectionDuration - Date.now()) / 1000))
-    : 0;
+  const selectionTimeLeft = getSelectionTimeLeftSeconds();
 
   const roomStats: RoomStats & { selectionTimeLeft: number } = {
     pool: singleRoomState.globalPool * 0.6, // Dynamic prize calculation: 60% of current pool
@@ -1202,6 +1415,7 @@ function resetGame() {
   if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
   if (singleRoomState.save) singleRoomState.save().catch(e => logger.error('Room reset save error', { error: e, stake: SINGLE_STAKE }));
   broadcastPoolUpdate();
+  refreshAllUserHistories().catch((e) => logger.error('History refresh error after reset', { error: e }));
 }
 
 // Game starts only when admin explicitly starts it.
@@ -1251,16 +1465,13 @@ function registerSocketHandlers(io: SocketIOServer) {
   logger.debug(`Authenticated as: ${userId}`);
   socketMapping.set(userId, socket.id);
 
-  // Force Start Round (Admin Only)
-  socket.on(socketEvents.FORCE_START, () => {
-    if (singleRoomState.state === GameState.SELECTION) {
-      if (singleRoomState.selectionTimer) clearTimeout(singleRoomState.selectionTimer);
-      singleRoomState.state = GameState.GAME;
-      singleRoomState.shuffledBalls = shuffle(Array.from({ length: 75 }, (_, i) => i + 1));
-      broadcastPoolUpdate();
-      // Buffer for clients to switch pages
-      setTimeout(() => runGameLoop(), 2000);
+  // Force Start Round (Admin Only — requires secret)
+  socket.on(socketEvents.FORCE_START, (data?: { secret?: string }) => {
+    if (data?.secret !== ADMIN_SECRET) {
+      logger.warn('Unauthorized FORCE_START attempt', { socketId: socket.id, userId });
+      return;
     }
+    forceStartSelectionRound();
   });
 
   // Fetch or Create User in DB
@@ -1293,88 +1504,33 @@ function registerSocketHandlers(io: SocketIOServer) {
   globalGameState.activePlayers++;
   broadcastPoolUpdate(io); // Pass io instance to broadcastPoolUpdate
 
-  // Joining a specific room
+  // Joining a specific room — full state resync (also runs on reconnect)
   socket.on(socketEvents.JOIN_ROOM, async () => {
     socket.rooms.forEach(room => {
       if (room !== socket.id) socket.leave(room as string);
     });
     socket.join(`room_${SINGLE_STAKE}`);
-
-    socket.emit(socketEvents.GAME_INIT, {
-      balls: singleRoomState.currentBalls,
-      gameId: singleRoomState.currentGameId,
-      selectionTimeLeft: singleRoomState.selectionStartTime && singleRoomState.selectionDuration
-        ? Math.max(0, Math.ceil((singleRoomState.selectionStartTime + singleRoomState.selectionDuration - Date.now()) / 1000))
-        : 0,
-      takenBoards: Array.from(singleRoomState.boardStatus.keys()),
-      pool: singleRoomState.globalPool * 0.6,
-      players: singleRoomState.boardStatus.size
-    });
+    await emitJoinState(socket, userId);
   });
 
 
-  // Concurrency-Controlled Board Selection
-  socket.on(socketEvents.PICK_BOARD, async (data: { boardId: number }) => { // No stake argument needed
-    if (singleRoomState.state !== GameState.SELECTION) return;
-
-    const boardId = data.boardId;
-    const stakeAmount = SINGLE_STAKE; // Fixed stake
-
-    const userRecord = await User.findOne({ userId });
-    if (!userRecord) return;
-
-    // Ensure playerBoards is initialized as a Map if it's a plain object from DB
-    if (typeof singleRoomState.playerBoards.get !== 'function') singleRoomState.playerBoards = new Map(Object.entries(singleRoomState.playerBoards));
-    const currentSelected = (singleRoomState.playerBoards.get(userId) || []).map(String);
-    const isSwapping = currentSelected.length > 0 && !currentSelected.includes(String(boardId));
-    const isDeselecting = currentSelected.includes(String(boardId));
-    const isFirstSelection = currentSelected.length === 0;
-
-    // Check if taken by someone else
-    const existingOwner = singleRoomState.boardStatus.get(String(boardId));
-    if (existingOwner && existingOwner !== userId) {
-      return socket.emit('message', 'Board already taken, please choose another.');
-    }
-
-    if (isDeselecting) {
-      // Refund logic
-      userRecord.balance += stakeAmount;
-      singleRoomState.boardStatus.delete(String(boardId));
-      singleRoomState.playerBoards.set(userId, []);
-      singleRoomState.globalPool -= stakeAmount;
-    } else if (isSwapping) {
-      // Swap logic: Make previous available, take new one
-      const oldId = currentSelected[0];
-      singleRoomState.boardStatus.delete(oldId);
-      singleRoomState.boardStatus.set(String(boardId), userId);
-      singleRoomState.playerBoards.set(userId, [boardId]);
-    } else if (isFirstSelection) {
-      // New Selection logic: Check balance and deduct
-      if (userRecord.balance < stakeAmount) {
-        return socket.emit('message', 'Insufficient balance.');
+  // Concurrency-controlled board selection with server ack/nack
+  socket.on(socketEvents.PICK_BOARD, (data: { boardId: number }) => {
+    enqueueBoardPick(async () => {
+      try {
+        const result = await processBoardPick(userId, data.boardId);
+        socket.emit(socketEvents.PICK_BOARD_RESULT, result);
+        if (result.success) {
+          scheduleStateSync();
+        }
+      } catch (err) {
+        logger.error('Board pick processing error', { error: err, userId, boardId: data.boardId });
+        socket.emit(
+          socketEvents.PICK_BOARD_RESULT,
+          buildPickFailure(userId, data.boardId, 'Selection failed. Please try again.')
+        );
       }
-      userRecord.balance -= stakeAmount;
-      singleRoomState.boardStatus.set(String(boardId), userId);
-      singleRoomState.playerBoards.set(userId, [boardId]);
-      singleRoomState.globalPool += stakeAmount;
-      globalGameState.totalVolume += stakeAmount;
-      await ActivityLog.create({
-        userId,
-        type: 'stake',
-        amount: stakeAmount,
-        gameId: singleRoomState.currentGameId
-      });
-      await GlobalStats.updateOne({ key: 'main_stats' }, { $inc: { totalVolume: stakeAmount } }, { upsert: true }).catch(e => logger.error('Global stats volume update error', { error: e }));
-    }
-    await userRecord.save().catch(e => logger.error('User record save error on board pick', { error: e, userId })); // Save user balance once
-
-    if (singleRoomState.markModified) singleRoomState.markModified('playerBoards');
-    if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
-
-    // Wallet update is critical for UX, send immediately to the individual player
-    socket.emit(socketEvents.WALLET_UPDATE, userRecord.balance); 
-    // Global updates and DB persistence are batched
-    scheduleStateSync();
+    });
   });
 
     socket.on('disconnect', () => {

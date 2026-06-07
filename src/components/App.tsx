@@ -14,7 +14,7 @@ import ProfilePage from './ProfilePage';
 import WalletPage from './WalletPage';
 import BottomTabs, { BottomTabKey } from './BottomTabs';
 import RuleItem from './RuleItem';
-import { HistoryEntry, AppPhase, RoomStats, PoolUpdateData, GameState } from '../types'; // Import new types
+import { HistoryEntry, AppPhase, RoomStats, PoolUpdateData, GameState, GameInitData } from '../types'; // Import new types
 import { connectToGame, disconnectFromGame, socket, socketEvents } from './socket';
 
 const t = {
@@ -60,14 +60,7 @@ export default function App() {
       return [];
     }
   });
-  const [history, setHistory] = useState<HistoryEntry[]>(() => {
-    try {
-      const saved = localStorage.getItem('bingo_history');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showRules, setShowRules] = useState(false);
   const [showGoodLuck, setShowGoodLuck] = useState(false);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
@@ -90,8 +83,7 @@ export default function App() {
     localStorage.setItem('bingo_phase', phase);
     localStorage.setItem('bingo_tab', bottomTab);
     localStorage.setItem('bingo_selected_ids', JSON.stringify(selectedBoardIds));
-    localStorage.setItem('bingo_history', JSON.stringify(history));
-  }, [phase, bottomTab, selectedBoardIds, history]);
+  }, [phase, bottomTab, selectedBoardIds]);
 
   const currentRoomStats: RoomStats = roomStats || { // Get stats for the current stake room, or default values
     pool: 0,
@@ -160,7 +152,7 @@ export default function App() {
       if (data.isMaintenance !== void 0) setIsMaintenanceMode(data.isMaintenance);
     };
 
-    const handleInit = (data: { gameId: string; balls: number[]; selectionTimeLeft?: number; pool?: number; players?: number }) => {
+    const handleInit = (data: GameInitData) => {
       setRoomStats(prev => {
         return { 
           ...prev, 
@@ -170,8 +162,14 @@ export default function App() {
           players: data.players ?? prev.players
         };
       });
+      if (data.myBoardIds) {
+        setSelectedBoardIds(data.myBoardIds);
+      }
     };
 
+    const handleWinHistory = (entries: HistoryEntry[]) => {
+      setHistory(entries);
+    };
 
     const handleConnectError = (err: Error) => {
       console.error("Socket connection error:", err);
@@ -200,7 +198,12 @@ export default function App() {
     socket.on(socketEvents.WALLET_UPDATE, handleWallet); // Listen for wallet updates
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.GAME_INIT, handleInit);
+    socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on(socketEvents.GAME_RESET, () => { 
+      // Reset the room state locally to prevent the auto-transition logic 
+      // from thinking the previous game is still running.
+      setRoomStats(prev => ({ ...prev, state: GameState.SELECTION, isLive: false }));
+
       // Only auto-redirect if the user was actually in a game or selection
       // This prevents users browsing their Profile/History from being yanked away
       setPhase(prev => { // Reset phase and selected boards on game reset
@@ -231,6 +234,7 @@ export default function App() {
       socket.off(socketEvents.WALLET_UPDATE, handleWallet); // Remove wallet update listener
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
       socket.off(socketEvents.GAME_INIT, handleInit);
+      socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
       socket.off(socketEvents.BALL_DRAWN);
       socket.off(socketEvents.GAME_RESET);
       socket.off(socketEvents.GAME_STATUS, handleGameStatus);
@@ -256,7 +260,6 @@ export default function App() {
         initData: tg.initData,
         user: user // Pass Telegram user data to connectToGame
       });
-      socket.emit('room:join'); // Join the single fixed room
     } else {
 
       // Fallback for browser testing
@@ -267,7 +270,6 @@ export default function App() {
         localStorage.setItem('bingoGuestId', guestId);
       }
       connectToGame({ userId: guestId });
-      socket.emit('room:join'); // Join the single fixed stake room
       setMyId(guestId); // Set myId for guest users
     }
     return () => {
@@ -299,8 +301,8 @@ export default function App() {
     }, 3000);
   };
 
-  const addHistoryEntry = (entry: HistoryEntry) => {
-    setHistory(prev => [...prev, entry]);
+  const addHistoryEntry = (_entry: HistoryEntry) => {
+    // Game history is synced from the server via WIN_HISTORY
   };
 
   const handleBackToHome = useCallback(() => {
@@ -426,6 +428,7 @@ export default function App() {
               >
                 <SelectionPage 
                   wallet={wallet} 
+                  selectedBoardIds={selectedBoardIds}
                   onSelectionChange={(ids) => setSelectedBoardIds(ids)} 
                   onBack={handleBackToHome} 
                   serverTimeLeft={roomStats.selectionTimeLeft}
@@ -442,7 +445,11 @@ export default function App() {
               >
                 <GamePage 
                   selectedBoardIds={selectedBoardIds} 
-                  onRestart={() => setPhase('selection')} 
+              onRestart={() => {
+                setRoomStats(prev => ({ ...prev, state: GameState.SELECTION, isLive: false }));
+                setSelectedBoardIds([]);
+                setPhase('selection');
+              }}
                   onLeaveToHome={handleBackToHome}
                   onGameEnd={addHistoryEntry}
                 />
@@ -584,7 +591,7 @@ export default function App() {
                   </div>
                   <div className="space-y-6">
                     <RuleItem number="1" text="Stake 10 ETB to enter the round." />
-                    <RuleItem number="2" text="Pick your board from the 600 available options within 60 seconds." />
+                    <RuleItem number="2" text="Pick your board from the 600 available options within 40 seconds." />
                     <RuleItem number="3" text="Wait for the system to call a ball every 3 seconds." />
                     <RuleItem number="4" text="Numbers are marked automatically. Complete a row, column, diagonal, or four corners to win." />
                   </div>

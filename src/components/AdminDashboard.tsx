@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, ArrowLeft, RefreshCw, Search, Wallet, Plus, Minus, TrendingUp, Activity, Power, Check, Users, Trash2, History, Trophy, Clock, ArrowUpDown, X, Download, Calendar, DollarSign, Settings, FileText, ArrowUpRight, ArrowDownLeft, ShoppingCart, Settings2 } from 'lucide-react';
-import { socket, socketEvents } from './socket';
 import { generateBoard } from '../logic';
 import WalletCard from './WalletCard';
 import RoundCard from './RoundCard';
@@ -447,10 +446,25 @@ export default function AdminDashboard({ onBack }: Props) {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  if (!socket.connected) socket.connect();
-                  socket.emit(socketEvents.FORCE_START);
-                  toast.success('Force start signal sent');
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const response = await fetch(`${backendUrl}/admin/force-start-round`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ secret }),
+                    });
+                    if (response.ok) {
+                      toast.success('Selection round force-started');
+                    } else {
+                      const data = await response.json().catch(() => ({}));
+                      toast.error(data.error || 'Failed to force-start round');
+                    }
+                  } catch {
+                    toast.error('Connection error');
+                  } finally {
+                    setLoading(false);
+                  }
                 }}
                 className="w-full py-3 rounded-2xl bg-yellow-500 text-indigo-950 font-black uppercase text-[10px] tracking-widest hover:bg-yellow-400 shadow-lg transition-all"
               >
