@@ -8,6 +8,7 @@ interface Props {
   totalEarnings: number;
   telegramDisplayName: string;
   referredCount: number;
+  botUsername?: string;
   onViewHistory: () => void;
   onBack?: () => void;
 }
@@ -19,6 +20,7 @@ export default function ProfilePage({
   totalEarnings,
   telegramDisplayName, 
   referredCount,
+  botUsername,
   onViewHistory,
   onBack,
 }: Props) {
@@ -105,7 +107,13 @@ export default function ProfilePage({
             </button>
             {/* Example: Top Up button, can be linked to wallet page or a specific action */}
             <button
-              // onClick={() => /* navigate to deposit or wallet page */}
+              onClick={() => {
+                if (botUsername) {
+                  window.open(`https://t.me/${botUsername.replace('@', '')}`, '_blank');
+                } else {
+                  window.Telegram?.WebApp?.close?.();
+                }
+              }}
               className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors"
             >
               {t.topUpWallet}

@@ -1341,9 +1341,21 @@ async function runGameLoop() {
   }
 
   if (singleRoomState.state === GameState.FINISHED || singleRoomState.currentBalls.length >= 75) {
-    // 10-second winner declaration window
-    singleRoomState.gameLoopTimeout = setTimeout(() => resetGame(), 10000);
-    return; // Exit the loop
+    // 10-second winner declaration window — broadcast synced countdown to all clients
+    if (!singleRoomState.gameLoopTimeout) {
+      let secondsLeft = 10;
+      io.emit(socketEvents.COUNTDOWN, secondsLeft);
+      const countdownInterval = setInterval(() => {
+        secondsLeft -= 1;
+        if (secondsLeft >= 0) io.emit(socketEvents.COUNTDOWN, secondsLeft);
+      }, 1000);
+      singleRoomState.gameLoopTimeout = setTimeout(() => {
+        clearInterval(countdownInterval);
+        singleRoomState.gameLoopTimeout = undefined;
+        resetGame();
+      }, 10000);
+    }
+    return;
   }
 
   singleRoomState.gameLoopTimeout = setTimeout(() => runGameLoop(), 3000);
@@ -1379,6 +1391,10 @@ function startSelectionPhase() {
 }
 
 function resetGame() {
+  if (singleRoomState.gameLoopTimeout) {
+    clearTimeout(singleRoomState.gameLoopTimeout);
+    singleRoomState.gameLoopTimeout = undefined;
+  }
   singleRoomState.currentBalls = [];
   singleRoomState.shuffledBalls = [];
   singleRoomState.globalPool = 0;

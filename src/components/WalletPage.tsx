@@ -134,16 +134,19 @@ export default function WalletPage({
             <motion.div
               key="history"
               initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }} // Animation for history tab content
+              animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               className="flex flex-col gap-3"
             >
               <h3 className="px-2 text-[11px] font-black text-gray-500 uppercase tracking-[0.3em] mb-2">
                 {t.transactions}
               </h3>
-              <div className="flex flex-col items-center justify-center py-20 opacity-20 border-2 border-dashed border-white/10 rounded-[32px]">
-                <Clock size={48} className="text-white mb-4" />
-                <p className="font-black text-white uppercase text-xs tracking-widest">{t.noHistory}</p>
+              <div className="flex flex-col items-center justify-center py-16 opacity-40 border-2 border-dashed border-white/10 rounded-[32px] px-6 text-center">
+                <Clock size={40} className="text-white mb-3" />
+                <p className="font-black text-white uppercase text-xs tracking-widest mb-2">{t.noHistory}</p>
+                <p className="text-[10px] text-gray-400 leading-relaxed">
+                  Deposits and withdrawals appear here once processed via the bot.
+                </p>
               </div>
             </motion.div>
           )}

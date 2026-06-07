@@ -3,7 +3,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { Info, X, Trophy, RefreshCw, Clock, AlertTriangle } from 'lucide-react';
+import { Info, X, RefreshCw, Clock, AlertTriangle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Dashboard from './Dashboard';
 import Header from './Header';
 import ErrorBoundary from '../ErrorBoundary';
@@ -15,11 +16,11 @@ import WalletPage from './WalletPage';
 import BottomTabs, { BottomTabKey } from './BottomTabs';
 import RuleItem from './RuleItem';
 import { HistoryEntry, AppPhase, RoomStats, PoolUpdateData, GameState, GameInitData } from '../types'; // Import new types
-import { connectToGame, disconnectFromGame, socket, socketEvents } from './socket';
+import { connectToGame, disconnectFromGame, resyncGameState, socket, socketEvents } from './socket';
 
 const t = {
-  boardsRegistered: 'Boards Registered',
-  redirecting: 'Redirecting to Game',
+  connecting: 'Connecting...',
+  connectingSlow: 'Server waking up, please wait…',
 };
 
 declare global {
@@ -61,13 +62,16 @@ export default function App() {
     }
   });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showRules, setShowRules] = useState(false);
-  const [showGoodLuck, setShowGoodLuck] = useState(false);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string | undefined>(undefined);
   const [connectionError, setConnectionError] = useState(false);
+  const [isConnectingSlow, setIsConnectingSlow] = useState(false);
   const [myId, setMyId] = useState<string>('');
   const [showEngineIdleModal, setShowEngineIdleModal] = useState(false);
+  const [showGameStoppedModal, setShowGameStoppedModal] = useState<string | null>(null);
+  const [showNextRoundHint, setShowNextRoundHint] = useState(false);
   const [telegramDisplayName, setTelegramDisplayName] = useState<string>('');
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   
@@ -113,9 +117,9 @@ export default function App() {
   }, [roomStats.state, phase, selectedBoardIds]);
 
   // Homepage Play uses only stake=10 and decides between selection vs watching.
-  const handleHomePlay = () => { // No amount argument needed
+  const handleHomePlay = () => {
     if (isMaintenanceMode) {
-      alert("The system is currently under maintenance. New games cannot be started.");
+      toast.error('The system is under maintenance. New games cannot be started.');
       return;
     }
 
@@ -162,13 +166,14 @@ export default function App() {
           players: data.players ?? prev.players
         };
       });
-      if (data.myBoardIds) {
+      if (data.myBoardIds !== undefined) {
         setSelectedBoardIds(data.myBoardIds);
       }
     };
 
     const handleWinHistory = (entries: HistoryEntry[]) => {
       setHistory(entries);
+      setHistoryLoaded(true);
     };
 
     const handleConnectError = (err: Error) => {
@@ -186,12 +191,15 @@ export default function App() {
     };
 
     const handleGameStopped = (msg?: string) => {
-      if (msg) alert(msg); // Show message if provided
+      setShowGameStoppedModal(msg || 'Games are over for today. Please come back tomorrow.');
       setPhase('home');
-      setRoomStats(prev => {
-        // Reset single room stats
-        return { ...prev, isLive: false, isEngineActive: false, state: GameState.FINISHED };
-      });
+      setRoomStats(prev => ({
+        ...prev, isLive: false, isEngineActive: false, state: GameState.FINISHED
+      }));
+    };
+
+    const handleConnect = () => {
+      setConnectionError(false);
     };
 
     socket.on(socketEvents.USER_STATUS, handleStatus);
@@ -199,15 +207,15 @@ export default function App() {
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.GAME_INIT, handleInit);
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
-    socket.on(socketEvents.GAME_RESET, () => { 
-      // Reset the room state locally to prevent the auto-transition logic 
-      // from thinking the previous game is still running.
+    socket.on(socketEvents.GAME_RESET, () => {
       setRoomStats(prev => ({ ...prev, state: GameState.SELECTION, isLive: false }));
-
-      // Only auto-redirect if the user was actually in a game or selection
-      // This prevents users browsing their Profile/History from being yanked away
-      setPhase(prev => { // Reset phase and selected boards on game reset
-        if (prev === 'game' || prev === 'selection') {
+      setPhase(prev => {
+        if (prev === 'game') {
+          setSelectedBoardIds([]);
+          setShowNextRoundHint(true);
+          return 'selection';
+        }
+        if (prev === 'selection') {
           setSelectedBoardIds([]);
           return 'selection';
         }
@@ -216,7 +224,9 @@ export default function App() {
     });
     socket.on(socketEvents.GAME_STATUS, handleGameStatus);
     socket.on(socketEvents.GAME_STOPPED, (msg?: string) => handleGameStopped(msg));
-    socket.on('connect_error', handleConnectError); // Set a timeout to catch connection failures
+    socket.on('connect', handleConnect);
+    socket.on('connect_error', handleConnectError);
+    const slowConnectId = setTimeout(() => setIsConnectingSlow(true), 5000);
     const timeoutId = setTimeout(() => {
       // Hard fallback: prevent permanent overlay when socket events never arrive.
       if (!socket.connected) {
@@ -239,7 +249,9 @@ export default function App() {
       socket.off(socketEvents.GAME_RESET);
       socket.off(socketEvents.GAME_STATUS, handleGameStatus);
       socket.off(socketEvents.GAME_STOPPED, handleGameStopped);
+      socket.off('connect', handleConnect);
       socket.off('connect_error', handleConnectError);
+      clearTimeout(slowConnectId);
       clearTimeout(timeoutId);
     };
 
@@ -281,29 +293,25 @@ export default function App() {
   const completeSelection = (ids: number[]) => {
     setSelectedBoardIds(ids);
 
-    // Guard: Prevent proceeding to game if engine stopped during selection
     if (!currentRoomStats.isEngineActive) {
       setShowEngineIdleModal(true);
       setPhase('home');
       return;
     }
 
-    // Prevent playing if not verified
-    if (isVerified === false) { // Check if the user is verified
-      alert("Please verify your phone number in the bot first!");
+    if (isVerified === false) {
+      toast.error('Please verify your phone number in the bot first.');
       return;
     }
 
-    setShowGoodLuck(true);
-    setTimeout(() => {
-      setShowGoodLuck(false);
-      setPhase('game');
-    }, 3000);
+    setPhase('game');
   };
 
-  const addHistoryEntry = (_entry: HistoryEntry) => {
-    // Game history is synced from the server via WIN_HISTORY
-  };
+  const handleResync = useCallback(() => {
+    setConnectionError(false);
+    resyncGameState();
+    toast.success('Syncing…');
+  }, []);
 
   const handleBackToHome = useCallback(() => {
     setPhase('home'); // Set phase to home
@@ -376,7 +384,7 @@ export default function App() {
               >
                 <RefreshCw size={32} className="text-yellow-500/50 animate-spin mb-4" />
                 <p className="text-yellow-500/40 text-[10px] font-black uppercase tracking-[0.3em]">
-                  Connecting...
+                  {isConnectingSlow ? t.connectingSlow : t.connecting}
                 </p>
               </motion.div>
             )}
@@ -431,6 +439,8 @@ export default function App() {
                   selectedBoardIds={selectedBoardIds}
                   onSelectionChange={(ids) => setSelectedBoardIds(ids)} 
                   onBack={handleBackToHome} 
+                  onDismissHint={() => setShowNextRoundHint(false)}
+                  showNextRoundHint={showNextRoundHint}
                   serverTimeLeft={roomStats.selectionTimeLeft}
                 />
               </motion.div>
@@ -445,13 +455,7 @@ export default function App() {
               >
                 <GamePage 
                   selectedBoardIds={selectedBoardIds} 
-              onRestart={() => {
-                setRoomStats(prev => ({ ...prev, state: GameState.SELECTION, isLive: false }));
-                setSelectedBoardIds([]);
-                setPhase('selection');
-              }}
                   onLeaveToHome={handleBackToHome}
-                  onGameEnd={addHistoryEntry}
                 />
               </motion.div>
             )}
@@ -464,7 +468,7 @@ export default function App() {
                 exit={{ opacity: 0 }}
                 className="flex-1 flex flex-col min-h-0"
               >
-                <HistoryPage history={history} onBack={handleBackToHome} />
+                <HistoryPage history={history} isLoading={!historyLoaded} onBack={handleBackToHome} onRefresh={handleResync} />
               </motion.div>
             )}
 
@@ -480,7 +484,7 @@ export default function App() {
                   walletBalance={wallet} 
                   phoneNumber={phoneNumber} 
                   isVerified={isVerified === true}
-                  onRefresh={() => window.location.reload()}
+                  onRefresh={handleResync}
                   onBack={handleBackToHome} 
                 />
               </motion.div>
@@ -501,6 +505,7 @@ export default function App() {
                   totalEarnings={history.reduce((sum, h) => h.isMyWin ? sum + h.payoutPerWinner : sum, 0)}
                   telegramDisplayName={telegramDisplayName}
                   referredCount={referredCount}
+                  botUsername={IS_BOT_CONFIGURED ? BOT_USERNAME : undefined}
                   onViewHistory={handleViewHistory}
                 />
               </motion.div>
@@ -532,29 +537,30 @@ export default function App() {
                 <p className="text-red-200 text-sm mb-8">
                   Could not connect to the game server. Please check your internet connection or try again later.
                 </p>
-                <button onClick={() => window.location.reload()} className="w-full bg-white text-red-800 py-4 rounded-2xl font-black uppercase">Reload Page</button>
+                <button onClick={handleResync} className="w-full bg-white text-red-800 py-4 rounded-2xl font-black uppercase">Retry Connection</button>
               </motion.div>
             )}
           </AnimatePresence>
-          <AnimatePresence> {/* Animate presence for modals */}
-            {showGoodLuck && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-100 flex items-center justify-center p-6 bg-indigo-900/90 backdrop-blur-xl text-center">
-                <motion.div initial={{ scale: 0.8, y: 20 }} animate={{ scale: 1, y: 0 }} className="flex flex-col items-center">
-                  <div className="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center mb-6 shadow-2xl">
-                    <Trophy size={40} className="text-white" aria-hidden="true" />
+          <AnimatePresence>
+            {showGameStoppedModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-201 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+              >
+                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-xs rounded-[32px] p-6 shadow-2xl flex flex-col text-center">
+                  <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Clock className="text-orange-600" size={32} />
                   </div>
-                  <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-2">Good Luck!</h2>
-                  <p className="text-indigo-200 font-bold uppercase tracking-widest text-xs">{selectedBoardIds.length} Boards Registered <br /> Redirecting to Game</p>
-                  <div className="mt-8 flex gap-2">
-                    {[1, 2, 3].map(i => (
-                      <motion.div key={i} animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }} className="w-2 h-2 rounded-full bg-white" />
-                    ))}
-                  </div>
+                  <h3 className="text-xl font-black text-indigo-950 uppercase italic tracking-tighter mb-2">Session Ended</h3>
+                  <p className="text-gray-500 text-sm font-medium leading-relaxed mb-6">{showGameStoppedModal}</p>
+                  <button onClick={() => setShowGameStoppedModal(null)} className="px-6 py-3 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest">Got it</button>
                 </motion.div>
               </motion.div>
             )}
 
-            {showEngineIdleModal && ( // Game engine idle modal
+            {showEngineIdleModal && (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -594,6 +600,7 @@ export default function App() {
                     <RuleItem number="2" text="Pick your board from the 600 available options within 40 seconds." />
                     <RuleItem number="3" text="Wait for the system to call a ball every 3 seconds." />
                     <RuleItem number="4" text="Numbers are marked automatically. Complete a row, column, diagonal, or four corners to win." />
+                    <RuleItem number="5" text="After a win, you have 10 seconds to view results, then pick a board for the next round." />
                   </div>
                   <button onClick={() => setShowRules(false)} className="mt-10 px-6 py-4 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-colors">Got it</button>
                 </motion.div>

@@ -5,16 +5,19 @@ import { HistoryEntry } from '../types';
 
 interface Props {
   history: HistoryEntry[];
+  isLoading?: boolean;
   onBack: () => void;
+  onRefresh?: () => void;
 }
 
-export default function HistoryPage({ history, onBack }: Props) {
+export default function HistoryPage({ history, isLoading, onBack, onRefresh }: Props) {
   const t = {
     back: 'Back',
     gameHistory: 'Game History',
     totalPlayed: 'Total Games Played',
     recentGames: 'Recent Games',
     noGames: 'No games recorded yet',
+    loading: 'Loading history…',
     myWin: 'MY WIN',
     myLoss: 'LOSS',
     gameId: 'Game ID',
@@ -42,11 +45,11 @@ export default function HistoryPage({ history, onBack }: Props) {
           <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">{t.gameHistory}</h2>
           </div>
           <button 
-            onClick={() => window.location.reload()}
+            onClick={onRefresh}
             className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 active:scale-90 transition-all"
             aria-label="Refresh"
             title="Refresh"
-          > {/* Refresh button */}
+          >
             <RefreshCw size={20} className="text-lime-400" />
           </button>
         </div>
@@ -57,7 +60,12 @@ export default function HistoryPage({ history, onBack }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' }}>
-        {history.length === 0 ? ( // Conditional rendering for empty history
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full text-center p-10 opacity-50">
+            <RefreshCw size={32} className="text-lime-400 animate-spin mb-4" />
+            <p className="font-bold text-gray-400 uppercase tracking-widest text-xs">{t.loading}</p>
+          </div>
+        ) : history.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-10 opacity-30" aria-hidden="true">
             <History size={48} className="text-gray-300 mb-4" />
             <p className="font-bold text-gray-400 uppercase tracking-widest text-xs">{t.noGames}</p>

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Wallet, Timer, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Wallet, Timer, ShoppingCart, ArrowLeft, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
@@ -9,7 +9,9 @@ interface Props {
   selectedBoardIds: number[];
   onSelectionChange: (selectedIds: number[]) => void;
   onBack: () => void;
+  onDismissHint?: () => void;
   serverTimeLeft?: number;
+  showNextRoundHint?: boolean;
 }
 
 export default function SelectionPage({
@@ -17,18 +19,18 @@ export default function SelectionPage({
   selectedBoardIds,
   onSelectionChange,
   onBack,
+  onDismissHint,
   serverTimeLeft,
+  showNextRoundHint,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set(selectedBoardIds));
   const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
   const [pendingBoardId, setPendingBoardId] = useState<number | null>(null);
+  const [jumpInput, setJumpInput] = useState('');
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const timeLeft = serverTimeLeft ?? 0;
-
-  const t = {
-    back: 'Back',
-    wallet: 'Wallet',
-  };
+  const timerDisplay = timeLeft > 0 ? `${timeLeft}s` : 'Starting soon…';
 
   useEffect(() => {
     setSelectedIds(new Set(selectedBoardIds));
@@ -46,16 +48,16 @@ export default function SelectionPage({
       if (result.takenBoards) {
         setTakenBoards(new Set(result.takenBoards));
       }
-      if (!result.success && result.message) {
+      if (result.success) {
+        toast.success(`Board #${result.boardId} confirmed`);
+      } else if (result.message) {
         toast.error(result.message);
       }
     };
 
     const handleGameInit = (data: { takenBoards?: number[]; myBoardIds?: number[] }) => {
-      if (data.takenBoards) {
-        setTakenBoards(new Set(data.takenBoards));
-      }
-      if (data.myBoardIds) {
+      if (data.takenBoards) setTakenBoards(new Set(data.takenBoards));
+      if (data.myBoardIds !== undefined) {
         setSelectedIds(new Set(data.myBoardIds));
         onSelectionChange(data.myBoardIds);
       }
@@ -72,6 +74,21 @@ export default function SelectionPage({
     };
   }, [onSelectionChange]);
 
+  const scrollToBoard = (id: number) => {
+    if (id < 1 || id > TOTAL_BOARDS) {
+      toast.error(`Enter a board number between 1 and ${TOTAL_BOARDS}`);
+      return;
+    }
+    document.getElementById(`board-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const handleJump = () => {
+    const id = parseInt(jumpInput, 10);
+    if (Number.isNaN(id)) return;
+    scrollToBoard(id);
+    setJumpInput('');
+  };
+
   const handleSelect = (id: number) => {
     if (pendingBoardId !== null) return;
 
@@ -87,14 +104,26 @@ export default function SelectionPage({
     socket.emit(socketEvents.PICK_BOARD, { boardId: id });
   };
 
+  const selectedBoard = selectedIds.size > 0 ? Array.from(selectedIds)[0] : null;
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gradient-to-br from-yellow-600 via-yellow-700 to-lime-900">
-      <div className="relative p-4 bg-black/30 border-b border-white/10 backdrop-blur-md flex items-center gap-4">
+      {showNextRoundHint && (
+        <div className="bg-lime-500/90 text-indigo-950 px-4 py-2 flex items-center justify-between gap-2 shrink-0">
+          <span className="text-[10px] font-black uppercase tracking-wide">
+            New round — pick a board to play (10 ETB)
+          </span>
+          <button onClick={onDismissHint} className="text-[10px] font-black uppercase underline shrink-0">
+            Got it
+          </button>
+        </div>
+      )}
+
+      <div className="relative p-4 bg-black/30 border-b border-white/10 backdrop-blur-md flex items-center gap-4 shrink-0">
         <button
           onClick={onBack}
           className="p-2.5 bg-white/10 rounded-xl text-white hover:bg-white/20 transition-colors shadow-lg shrink-0"
-          aria-label={t.back}
-          title={t.back}
+          aria-label="Back"
         >
           <ArrowLeft size={20} />
         </button>
@@ -104,23 +133,63 @@ export default function SelectionPage({
             <Wallet size={14} className="text-lime-400 mb-1" />
             <span className="text-[10px] font-black text-white">{wallet}</span>
           </div>
-
           <div className="flex flex-col items-center justify-center bg-black/20 p-2 rounded-xl border border-white/5">
             <ShoppingCart size={14} className="text-orange-400 mb-1" />
             <span className="text-[10px] font-black text-white uppercase italic">10</span>
           </div>
-
           <div className="flex flex-col items-center justify-center bg-black/20 p-2 rounded-xl border border-white/5">
             <Timer size={14} className="text-yellow-400 mb-1" />
-            <span className={`text-[12px] font-mono font-black ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-              {timeLeft}s
+            <span
+              className={`text-[11px] font-mono font-black ${
+                timeLeft > 0 && timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'
+              }`}
+            >
+              {timerDisplay}
             </span>
           </div>
         </div>
       </div>
 
+      <div className="px-2 py-2 flex gap-2 items-center shrink-0">
+        <div className="flex-1 flex items-center gap-2 bg-black/30 rounded-xl px-3 py-2 border border-white/10">
+          <Search size={14} className="text-white/50 shrink-0" />
+          <input
+            type="number"
+            min={1}
+            max={TOTAL_BOARDS}
+            placeholder="Jump to board #"
+            value={jumpInput}
+            onChange={(e) => setJumpInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleJump()}
+            className="flex-1 bg-transparent text-white text-xs font-bold outline-none placeholder:text-white/30"
+          />
+          <button
+            onClick={handleJump}
+            className="text-[10px] font-black uppercase text-lime-400 px-2 py-1 rounded-lg bg-white/10"
+          >
+            Go
+          </button>
+        </div>
+      </div>
+
+      {selectedBoard && (
+        <div className="mx-2 mb-1 px-3 py-2 bg-green-500/20 border border-green-400/40 rounded-xl flex items-center justify-between shrink-0">
+          <span className="text-[11px] font-black text-green-200 uppercase">Your board: #{selectedBoard}</span>
+          <span className="text-[9px] font-bold text-green-300/80">Tap again to deselect</span>
+        </div>
+      )}
+
+      {pendingBoardId !== null && (
+        <div className="mx-2 mb-1 px-3 py-1.5 bg-yellow-500/20 border border-yellow-400/30 rounded-xl text-center shrink-0">
+          <span className="text-[10px] font-black text-yellow-200 uppercase animate-pulse">
+            Confirming board #{pendingBoardId}…
+          </span>
+        </div>
+      )}
+
       <div
-        className="flex-1 overflow-y-auto min-h-0 pt-2 px-2 pb-0 custom-scrollbar scroll-smooth"
+        ref={gridRef}
+        className="flex-1 overflow-y-auto min-h-0 pt-1 px-2 pb-0 custom-scrollbar scroll-smooth"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         <div className="grid grid-cols-10 gap-1.5 pb-32">
@@ -137,11 +206,12 @@ export default function SelectionPage({
                 className={`
                   aspect-[2/3] flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-transform active:scale-95 relative overflow-hidden
                   ${isPending ? 'opacity-60 animate-pulse' : ''}
-                  ${isSelected
-                    ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
-                    : isTaken
-                      ? 'bg-red-900/20 text-white/10 border-red-500/40 border-dashed cursor-not-allowed'
-                      : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
+                  ${
+                    isSelected
+                      ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
+                      : isTaken
+                        ? 'bg-red-900/20 text-white/10 border-red-500/40 border-dashed cursor-not-allowed'
+                        : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
                   }
                 `}
                 disabled={(!isSelected && isTaken) || (pendingBoardId !== null && pendingBoardId !== id)}

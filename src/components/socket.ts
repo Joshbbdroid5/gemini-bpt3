@@ -77,3 +77,12 @@ export const disconnectFromGame = () => {
   socket.off('connect', onSocketConnect);
   socket.disconnect();
 };
+
+/** Re-fetch room state, wallet, and history without a full page reload. */
+export const resyncGameState = () => {
+  if (socket.connected) {
+    socket.emit(socketEvents.JOIN_ROOM);
+  } else {
+    socket.connect();
+  }
+};

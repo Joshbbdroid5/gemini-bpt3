@@ -2,14 +2,12 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Volume2, VolumeX, RefreshCw, LogOut } from 'lucide-react';
 import { generateBoard, WinningPattern } from '../logic';
-import { BingoBoardData, HistoryEntry } from '../types';
-import { socket, socketEvents } from './socket';
+import { BingoBoardData } from '../types';
+import { resyncGameState, socket, socketEvents } from './socket';
 
 interface Props {
   selectedBoardIds: number[];
-  onRestart: () => void;
   onLeaveToHome: () => void;
-  onGameEnd: (entry: HistoryEntry) => void;
 }
 
 interface GameStats {
@@ -31,7 +29,12 @@ const t = {
   refresh: 'Refresh',
   winners: 'Winners',
   playAgain: 'Play Again',
-  nextGameIn: 'Next game in',
+  nextRoundIn: 'Next round in',
+  youWon: 'You won',
+  roundEnding: 'Round Ending…',
+  liveRound: 'Live Round',
+  watching: 'Watching',
+  resync: 'Resync',
   boardNum: 'Board #',
 };
 
@@ -47,11 +50,12 @@ const REGISTER_GRID_INDICES = Array.from({ length: 15 }).map((_, rowIndex) =>
   [0, 1, 2, 3, 4].map(colIndex => (colIndex * 15) + rowIndex + 1)
 );
 
-const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, t }: { 
+const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, isMyBoard, t }: { 
   winner: any, 
   winnersCount: number, 
   totalPrize: number, 
   calledNumbers: Set<number>,
+  isMyBoard: boolean,
   t: any
 }) => {
   const winningIndices = useMemo(() => new Set(
@@ -59,11 +63,11 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, t }:
   ), [winner.patterns]);
 
   return (
-    <div key={winner.id} className="bg-white/5 p-3 rounded-2xl border border-white/5">
+    <div key={winner.id} className={`bg-white/5 p-3 rounded-2xl border ${isMyBoard ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white/5'}`}>
       <div className="flex justify-between items-center mb-2">
         <div className="flex flex-col">
-          <span className="font-black text-indigo-400 text-xs uppercase tracking-tight leading-none">
-            {t.boardNum}{winner.id}
+          <span className={`font-black text-xs uppercase tracking-tight leading-none ${isMyBoard ? 'text-yellow-400' : 'text-indigo-400'}`}>
+            {isMyBoard ? `${t.boardNum}${winner.id} (YOU)` : `${t.boardNum}${winner.id}`}
           </span>
           <div className="flex flex-wrap gap-1 mt-1"> {/* Display winning patterns */}
             {winner.patterns.map((p: WinningPattern, pIdx: number) => (
@@ -128,15 +132,16 @@ const BoardCell = memo(({ value, isMarked, isCurrentBall, isPendingMark, onToggl
   );
 });
 
-export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, onGameEnd }: Props) {
+export default function GamePage({ selectedBoardIds, onLeaveToHome }: Props) {
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[]; payout: number }[]>([]);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [popupTimeLeft, setPopupTimeLeft] = useState(10);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => localStorage.getItem('bingo_muted') === 'true');
   const [autoMarkMode, setAutoMarkMode] = useState(true);
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
+  const [isResyncing, setIsResyncing] = useState(false);
   const bingoAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [gameMetadata, setGameMetadata] = useState({
@@ -147,8 +152,6 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
 
   // Refs to prevent stale closures in socket handlers and prevent effect churn
   const showWinnerPopupRef = useRef(showWinnerPopup);
-  const onRestartRef = useRef(onRestart);
-  const onGameEndRef = useRef(onGameEnd);
   const selectedBoardIdsRef = useRef(selectedBoardIds);
   const gameMetadataRef = useRef(gameMetadata);
   const autoMarkModeRef = useRef(autoMarkMode);
@@ -162,13 +165,15 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
   // Keep refs synchronized with state and props
   useEffect(() => {
     showWinnerPopupRef.current = showWinnerPopup;
-    onRestartRef.current = onRestart;
-    onGameEndRef.current = onGameEnd;
     selectedBoardIdsRef.current = selectedBoardIds;
     gameMetadataRef.current = gameMetadata;
     autoMarkModeRef.current = autoMarkMode;
     winnersRef.current = winners;
-  }, [showWinnerPopup, onRestart, onGameEnd, selectedBoardIds, gameMetadata, autoMarkMode, winners]);
+  }, [showWinnerPopup, selectedBoardIds, gameMetadata, autoMarkMode, winners]);
+
+  useEffect(() => {
+    localStorage.setItem('bingo_muted', String(isMuted));
+  }, [isMuted]);
 
   // Pre-warm assets: Initialize and load audio on mount
   useEffect(() => {
@@ -244,13 +249,22 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
         ];
       });
       setShowWinnerPopup(true);
+      setPopupTimeLeft(10);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success');
+    };
+
+    const handleCountdown = (seconds: number) => {
+      if (showWinnerPopupRef.current) {
+        setPopupTimeLeft(seconds);
+      }
     };
 
     socket.on(socketEvents.BALL_DRAWN, handleNewBall);
     socket.on(socketEvents.GAME_INIT, handleInit);
-    socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate); // Use simplified handlePoolUpdate
+    socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.GAME_RESET, handleReset);
     socket.on(socketEvents.NEW_WINNER, handleServerWinner);
+    socket.on(socketEvents.COUNTDOWN, handleCountdown);
 
     return () => {
       socket.off(socketEvents.BALL_DRAWN, handleNewBall);
@@ -258,8 +272,9 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
       socket.off(socketEvents.GAME_RESET, handleReset);
       socket.off(socketEvents.NEW_WINNER, handleServerWinner);
+      socket.off(socketEvents.COUNTDOWN, handleCountdown);
     };
-  }, []); // Bound once on mount, cleaned up once on unmount
+  }, []);
   
   // Game Stats (fixed stake)
   const stats: GameStats = useMemo(() => ({
@@ -285,38 +300,27 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
     }
   }, [showWinnerPopup, isMuted]);
 
-  // Winner Popup Timer Logic
-  useEffect(() => {
-    if (!showWinnerPopup) return;
+  const isMyWin = useMemo(
+    () => winners.some((w) => selectedBoardIds.includes(w.id)),
+    [winners, selectedBoardIds]
+  );
 
-    const timer = window.setInterval(() => {
-      setPopupTimeLeft((prev: number) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          
-          // Centralized recording logic
-          const currentWinners = winnersRef.current;
-          const isMyWin = currentWinners.some((w: any) => selectedBoardIdsRef.current.includes(w.id));
-          
-          onGameEndRef.current({
-            gameId: gameMetadataRef.current.gameId,
-            date: new Date().toLocaleDateString(),
-            myBoardsCount: selectedBoardIdsRef.current.length,
-            totalWinners: currentWinners.length,
-            totalStaked: Math.round(gameMetadataRef.current.pool / 0.6),
-            payoutPerWinner: currentWinners.length > 0 ? gameMetadataRef.current.pool / currentWinners.length : 0,
-            isMyWin
-          });
+  const myPayout = useMemo(() => {
+    if (!isMyWin || winners.length === 0) return 0;
+    return stats.derash / winners.length;
+  }, [isMyWin, winners.length, stats.derash]);
 
-          onRestartRef.current();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000) as unknown as number;
+  const footerStatus = showWinnerPopup
+    ? t.roundEnding
+    : selectedBoardIds.length === 0
+      ? t.watching
+      : t.liveRound;
 
-    return () => clearInterval(timer);
-  }, [showWinnerPopup]); 
+  const handleResync = () => {
+    setIsResyncing(true);
+    resyncGameState();
+    setTimeout(() => setIsResyncing(false), 800);
+  };
 
   const toggleMark = useCallback((num: number) => {
     if (autoMarkModeRef.current || !calledNumbersRef.current.has(num)) return;
@@ -480,20 +484,19 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
           <span className="text-[8px] font-black uppercase">{t.leave}</span>
         </button>
         <button 
-          onClick={() => window.location.reload()} 
+          onClick={handleResync} 
           className="col-span-1 h-14 rounded-xl bg-[#4a4b6e] flex flex-col items-center justify-center"
-          aria-label={t.refresh}
-          title={t.refresh}
+          aria-label={t.resync}
+          title={t.resync}
         >
-          <RefreshCw size={16} className="text-lime-400" />
-          <span className="text-[8px] font-black text-white uppercase">{t.refresh}</span>
+          <RefreshCw size={16} className={`text-lime-400 ${isResyncing ? 'animate-spin' : ''}`} />
+          <span className="text-[8px] font-black text-white uppercase">{t.resync}</span>
         </button>
-        <button 
-          disabled
-          className="col-span-2 h-14 rounded-xl bg-[#b19539] opacity-70 text-indigo-950 font-black text-base italic uppercase tracking-tighter shadow-inner px-4 overflow-hidden text-center flex items-center justify-center"
+        <div
+          className="col-span-2 h-14 rounded-xl bg-[#b19539] text-indigo-950 font-black text-sm italic uppercase tracking-tighter shadow-inner px-4 flex items-center justify-center text-center"
         >
-          Live Game
-        </button>
+          {footerStatus}
+        </div>
       </div>
 
       {/* Winner Popup */}
@@ -515,17 +518,23 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
               >
                 <div className="bg-indigo-600 p-4 text-center">
                   <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" aria-hidden="true" />
-                  <h2 className="text-xl font-black italic uppercase">{t.winners}!</h2>
+                  <h2 id="winner-popup-title" className="text-xl font-black italic uppercase">{t.winners}!</h2>
+                  {isMyWin && (
+                    <p className="text-yellow-300 text-sm font-black mt-2">
+                      {t.youWon} {myPayout.toFixed(0)} ETB!
+                    </p>
+                  )}
                 </div>
                 <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
                   <div>
-                    {winners.map((winner: any, idx: number) => (
+                    {winners.map((winner: any) => (
                       <WinnerCard 
                         key={winner.id}
                         winner={winner} 
                         winnersCount={winners.length} 
                         totalPrize={stats.derash} 
                         calledNumbers={calledNumbers}
+                        isMyBoard={selectedBoardIds.includes(winner.id)}
                         t={t}
                       />
                     ))}
@@ -533,7 +542,7 @@ export default function GamePage({ selectedBoardIds, onRestart, onLeaveToHome, o
                 </div>
                 <div className="p-4 flex flex-col items-center gap-2">
                   <span className="text-[10px] font-black text-gray-400">
-                    {t.nextGameIn} {popupTimeLeft}s
+                    {t.nextRoundIn} {popupTimeLeft}s — then pick a board
                   </span>
                 </div>
               </motion.div>
