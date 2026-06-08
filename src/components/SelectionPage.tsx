@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { Wallet, Timer, ShoppingCart, ArrowLeft, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
+import { FixedSizeGrid } from 'react-window/fixed-size-grid';
 
 interface Props {
   wallet: number;
@@ -13,6 +14,64 @@ interface Props {
   serverTimeLeft?: number;
   showNextRoundHint?: boolean;
 }
+
+// Memoized BoardCell component to prevent unnecessary re-renders of individual cells
+const BoardCell = memo(({ columnIndex, rowIndex, style, data }: {
+  columnIndex: number;
+  rowIndex: number;
+  style: React.CSSProperties;
+  data: {
+    selectedIds: Set<number>;
+    takenBoards: Set<number>;
+    pendingBoardId: number | null;
+    handleSelect: (id: number) => void;
+    columnCount: number;
+    gap: number;
+  };
+}) => {
+  const { selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount, gap } = data;
+  const id = rowIndex * columnCount + columnIndex + 1;
+
+  // Ensure we don't render beyond TOTAL_BOARDS
+  if (id > TOTAL_BOARDS) {
+    return null;
+  }
+
+  const isSelected = selectedIds.has(id);
+  const isTaken = takenBoards.has(id) && !isSelected;
+  const isPending = pendingBoardId === id;
+
+  // Adjust style to account for gap
+  const adjustedStyle: React.CSSProperties = {
+    ...style,
+    width: (style.width as number) - gap,
+    height: (style.height as number) - gap,
+    left: (style.left as number) + gap / 2,
+    top: (style.top as number) + gap / 2,
+  };
+
+  return (
+    <button
+      id={`board-${id}`}
+      style={adjustedStyle} // Apply react-window's style
+      onClick={() => handleSelect(id)}
+      className={`
+        aspect-[2/3] flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-transform active:scale-95 relative overflow-hidden
+        ${isPending ? 'opacity-60 animate-pulse' : ''}
+        ${
+          isSelected
+            ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
+            : isTaken
+              ? 'bg-red-900/20 text-white/10 border-red-500/40 border-dashed cursor-not-allowed'
+              : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
+        }
+      `}
+      disabled={(!isSelected && isTaken) || (pendingBoardId !== null && pendingBoardId !== id)}
+    >
+      <span className="relative z-10">{id}</span>
+    </button>
+  );
+});
 
 export default function SelectionPage({
   wallet,
@@ -25,10 +84,39 @@ export default function SelectionPage({
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set(selectedBoardIds));
   const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
-  const [pendingBoardId, setPendingBoardId] = useState<number | null>(null);
+  const [pendingBoardId, setPendingBoardId] = useState<number | null>(null); // Board currently being processed by server
   const [jumpInput, setJumpInput] = useState('');
-  const gridRef = useRef<HTMLDivElement>(null);
 
+  // Refs for grid container and react-window instance
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<any>(null);
+
+  // State for dynamic grid dimensions
+  const [gridWidth, setGridWidth] = useState(0);
+  const [gridHeight, setGridHeight] = useState(0);
+
+  const columnCount = 10;
+  const gap = 6; // Tailwind's gap-1.5 is 0.375rem, assuming 1rem = 16px, so 6px
+
+  // Calculate item dimensions based on container width and aspect ratio
+  const itemWidth = useMemo(() => {
+    if (gridWidth === 0) return 0;
+    return (gridWidth - (columnCount - 1) * gap) / columnCount;
+  }, [gridWidth, columnCount, gap]);
+
+  const itemHeight = useMemo(() => {
+    return itemWidth * 1.5; // aspect-[2/3] means height is 1.5 times width
+  }, [itemWidth]);
+
+  // FixedSizeGrid expects total space for each item including gap
+  const columnWidth = itemWidth + gap;
+  const rowHeight = itemHeight + gap;
+
+  const rowCount = useMemo(() => {
+    return Math.ceil(TOTAL_BOARDS / columnCount);
+  }, [columnCount]);
+
+  // Timer display logic
   const timeLeft = serverTimeLeft ?? 0;
   const timerDisplay = timeLeft > 0 ? `${timeLeft}s` : 'Starting soon…';
 
@@ -36,6 +124,23 @@ export default function SelectionPage({
     setSelectedIds(new Set(selectedBoardIds));
   }, [selectedBoardIds]);
 
+  // Observe container size for dynamic grid dimensions
+  useEffect(() => {
+    const observer = new ResizeObserver(entries => {
+      if (entries[0]) {
+        setGridWidth(entries[0].contentRect.width);
+        setGridHeight(entries[0].contentRect.height);
+      }
+    });
+
+    if (gridContainerRef.current) {
+      observer.observe(gridContainerRef.current);
+    }
+
+    return () => {
+      observer.disconnect(); // Use disconnect for cleanup
+    };
+  }, []);
   useEffect(() => {
     const handleBoardSync = (data: { takenBoards?: number[] }) => {
       setTakenBoards(new Set(data?.takenBoards ?? []));
@@ -74,13 +179,16 @@ export default function SelectionPage({
     };
   }, [onSelectionChange]);
 
-  const scrollToBoard = (id: number) => {
+  const scrollToBoard = useCallback((id: number) => {
     if (id < 1 || id > TOTAL_BOARDS) {
       toast.error(`Enter a board number between 1 and ${TOTAL_BOARDS}`);
       return;
     }
-    document.getElementById(`board-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
+    const targetRow = Math.floor((id - 1) / columnCount);
+    const targetColumn = (id - 1) % columnCount;
+
+    gridRef.current?.scrollToItem({ rowIndex: targetRow, columnIndex: targetColumn, align: 'center' });
+  }, [columnCount]);
 
   const handleJump = () => {
     const id = parseInt(jumpInput, 10);
@@ -89,7 +197,7 @@ export default function SelectionPage({
     setJumpInput('');
   };
 
-  const handleSelect = (id: number) => {
+  const handleSelect = useCallback((id: number) => {
     if (pendingBoardId !== null) return;
 
     const isCurrentlySelected = selectedIds.has(id);
@@ -102,7 +210,7 @@ export default function SelectionPage({
 
     setPendingBoardId(id);
     socket.emit(socketEvents.PICK_BOARD, { boardId: id });
-  };
+  }, [pendingBoardId, selectedIds, wallet]);
 
   const selectedBoard = selectedIds.size > 0 ? Array.from(selectedIds)[0] : null;
 
@@ -188,39 +296,26 @@ export default function SelectionPage({
       )}
 
       <div
-        ref={gridRef}
+        ref={gridContainerRef}
         className="flex-1 overflow-y-auto min-h-0 pt-1 px-2 pb-0 custom-scrollbar scroll-smooth"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        <div className="grid grid-cols-10 gap-1.5 pb-32">
-          {Array.from({ length: TOTAL_BOARDS }, (_, i) => i + 1).map((id) => {
-            const isSelected = selectedIds.has(id);
-            const isTaken = takenBoards.has(id) && !isSelected;
-            const isPending = pendingBoardId === id;
-
-            return (
-              <button
-                id={`board-${id}`}
-                key={id}
-                onClick={() => handleSelect(id)}
-                className={`
-                  aspect-[2/3] flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-transform active:scale-95 relative overflow-hidden
-                  ${isPending ? 'opacity-60 animate-pulse' : ''}
-                  ${
-                    isSelected
-                      ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
-                      : isTaken
-                        ? 'bg-red-900/20 text-white/10 border-red-500/40 border-dashed cursor-not-allowed'
-                        : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg shadow-black/20'
-                  }
-                `}
-                disabled={(!isSelected && isTaken) || (pendingBoardId !== null && pendingBoardId !== id)}
-              >
-                <span className="relative z-10">{id}</span>
-              </button>
-            );
-          })}
-        </div>
+        {gridWidth > 0 && gridHeight > 0 && (
+          <FixedSizeGrid
+            ref={gridRef}
+            columnCount={columnCount}
+            columnWidth={columnWidth}
+            height={gridHeight}
+            rowCount={rowCount}
+            rowHeight={rowHeight}
+            width={gridWidth}
+            itemData={{ selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount, gap }}
+          >
+            {BoardCell as any}
+          </FixedSizeGrid>
+        )}
+        {/* Add a div to ensure the scrollbar is visible and has enough space */}
+        <div style={{ height: '32px' }} />
       </div>
     </div>
   );

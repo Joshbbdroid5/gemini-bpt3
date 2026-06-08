@@ -303,7 +303,7 @@ export default function App() {
     };
   }, []);
 
-  const completeSelection = (ids: number[]) => {
+  const completeSelection = useCallback((ids: number[]) => {
     setSelectedBoardIds(ids);
 
     if (!currentRoomStats.isEngineActive) {
@@ -316,9 +316,8 @@ export default function App() {
       toast.error('Please verify your phone number in the bot first.');
       return;
     }
-
     setPhase('game');
-  };
+  }, [currentRoomStats.isEngineActive, isVerified]);
 
   const handleResync = useCallback(() => {
     setConnectionError(false);
@@ -329,6 +328,14 @@ export default function App() {
   const handleBackToHome = useCallback(() => {
     setPhase('home'); // Set phase to home
     setBottomTab('game'); // Ensure the tab highlight moves back to the "Game/Play" tab
+  }, []);
+
+  const handleGameEnd = useCallback((entry: HistoryEntry) => {
+    setHistory(prev => [...prev, entry]);
+  }, []);
+
+  const handleRestartGame = useCallback(() => {
+    setPhase('selection');
   }, []);
 
   const handleViewHistory = useCallback(() => {
@@ -470,6 +477,8 @@ export default function App() {
                 <GamePage 
                   selectedBoardIds={selectedBoardIds} 
                   onLeaveToHome={handleBackToHome}
+                  onRestartGame={handleRestartGame} // Pass the memoized restart function
+                  onGameEnd={handleGameEnd} // Pass the memoized game end handler
                 />
               </motion.div>
             )}

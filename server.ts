@@ -958,6 +958,7 @@ interface RoomState {
   state: GameState;
   currentGameId: string;
   selectionTimer?: NodeJS.Timeout;
+  selectionInterval?: NodeJS.Timeout;
   selectionStartTime?: number; // Timestamp when selection phase started
   selectionDuration?: number; // Total duration of selection phase in ms
   playerBoards: Map<string, number[]>;
@@ -1038,10 +1039,10 @@ async function getUserHistory(userId: string): Promise<HistoryEntry[]> {
   const entries: HistoryEntry[] = [];
   for (const [gameId, data] of byGame.entries()) {
     const winnerCount = await GameArchive.countDocuments({ gameId });
-    const archive = await GameArchive.findOne({ gameId }).lean();
+    const archive = await GameArchive.findOne({ gameId }).lean(); //
     const totalWinners = Math.max(winnerCount, 1);
     const totalStaked = archive
-      ? Math.round(archive.prizePool / 0.6)
+      ? Math.round((archive.prizePool ?? 0) / 0.6)
       : data.stakes * SINGLE_STAKE;
 
     entries.push({
@@ -1053,7 +1054,7 @@ async function getUserHistory(userId: string): Promise<HistoryEntry[]> {
       payoutPerWinner: data.winAmount > 0
         ? data.winAmount
         : archive
-          ? archive.prizePool / totalWinners
+          ? (archive.prizePool ?? 0) / totalWinners //
           : 0,
       isMyWin: data.winAmount > 0,
     });
@@ -1374,7 +1375,23 @@ function startSelectionPhase() {
   
   // Start 40s "Quick Pick" window to finalize Total Players for this round
   if (singleRoomState.selectionTimer) clearTimeout(singleRoomState.selectionTimer);
+  if (singleRoomState.selectionInterval) clearInterval(singleRoomState.selectionInterval);
+
+  // Start interval to broadcast selection time left every second for client sync
+  singleRoomState.selectionInterval = setInterval(() => {
+    if (singleRoomState.state !== GameState.SELECTION) {
+      if (singleRoomState.selectionInterval) clearInterval(singleRoomState.selectionInterval);
+      return;
+    }
+    broadcastPoolUpdate();
+  }, 1000);
+
   singleRoomState.selectionTimer = setTimeout(() => { // Store the timer reference
+    if (singleRoomState.selectionInterval) {
+      clearInterval(singleRoomState.selectionInterval);
+      singleRoomState.selectionInterval = undefined;
+    }
+
     if (singleRoomState.boardStatus.size === 0) {
       logger.info("ENGINE_STATE_CHANGE: No players joined. Restarting selection phase.");
       startSelectionPhase();
@@ -1395,6 +1412,11 @@ function resetGame() {
     clearTimeout(singleRoomState.gameLoopTimeout);
     singleRoomState.gameLoopTimeout = undefined;
   }
+  if (singleRoomState.selectionInterval) {
+    clearInterval(singleRoomState.selectionInterval);
+    singleRoomState.selectionInterval = undefined;
+  }
+
   singleRoomState.currentBalls = [];
   singleRoomState.shuffledBalls = [];
   singleRoomState.globalPool = 0;

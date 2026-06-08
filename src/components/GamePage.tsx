@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Volume2, VolumeX, RefreshCw, LogOut } from 'lucide-react';
 import { generateBoard, WinningPattern } from '../logic';
-import { BingoBoardData } from '../types';
+import { BingoBoardData, HistoryEntry } from '../types';
 import { resyncGameState, socket, socketEvents } from './socket';
 
 interface Props {
   selectedBoardIds: number[];
   onLeaveToHome: () => void;
+  onRestartGame: () => void;
+  onGameEnd: (entry: HistoryEntry) => void;
 }
 
 interface GameStats {
@@ -61,23 +63,24 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, isMy
   const winningIndices = useMemo(() => new Set(
     winner.patterns.flatMap((p: WinningPattern) => p.indices.map(i => `${i.r}-${i.c}`))
   ), [winner.patterns]);
+  const isCompact = winnersCount > 1;
 
   return (
-    <div key={winner.id} className={`bg-white/5 p-3 rounded-2xl border ${isMyBoard ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white/5'}`}>
-      <div className="flex justify-between items-center mb-2">
+    <div key={winner.id} className={`bg-white/5 ${isCompact ? 'p-2' : 'p-3'} rounded-2xl border ${isMyBoard ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white/5'}`}>
+      <div className={`flex justify-between items-center ${isCompact ? 'mb-1' : 'mb-2'}`}>
         <div className="flex flex-col">
-          <span className={`font-black text-xs uppercase tracking-tight leading-none ${isMyBoard ? 'text-yellow-400' : 'text-indigo-400'}`}>
+          <span className={`font-black ${isCompact ? 'text-[10px]' : 'text-xs'} uppercase tracking-tight leading-none ${isMyBoard ? 'text-yellow-400' : 'text-indigo-400'}`}>
             {isMyBoard ? `${t.boardNum}${winner.id} (YOU)` : `${t.boardNum}${winner.id}`}
           </span>
-          <div className="flex flex-wrap gap-1 mt-1"> {/* Display winning patterns */}
+          <div className="flex flex-wrap gap-1 mt-0.5"> {/* Display winning patterns */}
             {winner.patterns.map((p: WinningPattern, pIdx: number) => (
-              <span key={pIdx} className="text-[7px] font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase">
+              <span key={pIdx} className={`${isCompact ? 'text-[6px]' : 'text-[7px]'} font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase`}>
                 {p.name}
               </span>
             ))}
           </div>
         </div>
-        <span className="text-green-400 text-lg font-black italic"> {/* Increased font size for payout */}
+        <span className={`text-green-400 ${isCompact ? 'text-sm' : 'text-lg'} font-black italic`}>
           {(totalPrize / winnersCount).toFixed(0)} ETB
         </span>
       </div>
@@ -93,7 +96,7 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, isMy
               <div
                 key={`${rIdx}-${cIdx}`}
                 className={`
-                  aspect-square flex items-center justify-center text-[8px] font-bold rounded-sm border
+                  aspect-square flex items-center justify-center ${isCompact ? 'text-[7px]' : 'text-[8px]'} font-bold rounded-sm border
                   ${isWinningCell
                     ? 'bg-yellow-400 text-indigo-950 border-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.4)]'
                     : isMarkedWinner
@@ -132,7 +135,7 @@ const BoardCell = memo(({ value, isMarked, isCurrentBall, isPendingMark, onToggl
   );
 });
 
-export default function GamePage({ selectedBoardIds, onLeaveToHome }: Props) {
+export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGame, onGameEnd }: Props) {
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
   const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[]; payout: number }[]>([]);
@@ -224,11 +227,24 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome }: Props) {
     };
 
     const handleReset = () => {
+      // Record history before wiping state
+      if (winnersRef.current.length > 0) {
+        const isMyWin = winnersRef.current.some((w) => selectedBoardIdsRef.current.includes(w.id));
+        onGameEnd({
+          gameId: gameMetadataRef.current.gameId,
+          date: new Date().toLocaleDateString(),
+          myBoardsCount: selectedBoardIdsRef.current.length,
+          totalWinners: winnersRef.current.length,
+          totalStaked: Math.round(gameMetadataRef.current.pool / 0.6),
+          payoutPerWinner: winnersRef.current.length > 0 ? gameMetadataRef.current.pool / winnersRef.current.length : 0,
+          isMyWin: isMyWin,
+        });
+      }
+
       setCalledNumbers(new Set());
       setCurrentBall(null);
       setShowWinnerPopup(false);
       setWinners([]);
-      setPopupTimeLeft(10);
       setManualMarks(new Set());
     };
 
@@ -249,7 +265,6 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome }: Props) {
         ];
       });
       setShowWinnerPopup(true);
-      setPopupTimeLeft(10);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success');
     };
 
@@ -503,7 +518,6 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome }: Props) {
       <AnimatePresence>
         {showWinnerPopup && (
           <div className="fixed inset-0 z-200 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="winner-popup-title">
-            <AnimatePresence>
               <motion.div
                 initial={window.Telegram?.WebApp ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -525,8 +539,8 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome }: Props) {
                     </p>
                   )}
                 </div>
-                <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                  <div>
+                <div className="p-4 max-h-[65vh] overflow-y-auto custom-scrollbar">
+                  <div className={`grid gap-3 ${winners.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     {winners.map((winner: any) => (
                       <WinnerCard 
                         key={winner.id}
@@ -546,7 +560,6 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome }: Props) {
                   </span>
                 </div>
               </motion.div>
-            </AnimatePresence>
           </div>
         )}
       </AnimatePresence>
