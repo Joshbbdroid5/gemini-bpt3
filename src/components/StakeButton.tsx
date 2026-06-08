@@ -10,6 +10,7 @@ interface StakeButtonProps {
   playLabel: string;
   onPlay: () => void;
   isDisabled?: boolean;
+  hideStats?: boolean; // New prop to control visibility of stats
 }
 
 const pulseVariants = {
@@ -34,11 +35,12 @@ export function StakeButton({
   playLabel,
   onPlay,
   isDisabled,
+  hideStats,
 }: StakeButtonProps) {
   return (
     <motion.button
       variants={pulseVariants}
-      animate={isEngineActive && !isDisabled ? 'active' : 'idle'}
+      animate={isEngineActive && !isDisabled && !hideStats ? 'active' : 'idle'}
       whileHover={isDisabled ? {} : { scale: 1.05 }}
       whileTap={isDisabled ? {} : { scale: 0.98 }}
       disabled={isDisabled}
@@ -49,13 +51,13 @@ export function StakeButton({
     >
       <div className="flex justify-between items-center w-full mb-2">
         <span className="text-2xl font-black italic uppercase tracking-tighter">{amount} ETB</span>
-        {isEngineActive && !isLive && !isDisabled && (
+        {!hideStats && isEngineActive && !isLive && !isDisabled && (
           <span className="flex h-2 w-2 relative">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
           </span>
         )}
-        {isLive && (
+        {!hideStats && isLive && (
           <span className="bg-red-500 text-white text-[8px] px-2 py-0.5 rounded-full animate-pulse font-black uppercase">
             LIVE
           </span>
@@ -63,14 +65,16 @@ export function StakeButton({
       </div>
 
       <span className="text-sm font-black uppercase tracking-wide mb-3">{playLabel}</span>
-
-      <div className="flex gap-4 text-xs font-bold text-indigo-900/60">
-        <span className="flex items-center gap-1">
-          <Users size={14} />
-          {players} players
-        </span>
-        {pool > 0 && <span>Pool: {Math.round(pool)} ETB</span>}
-      </div>
+      
+      {!hideStats && (
+        <div className="flex gap-4 text-xs font-bold text-indigo-900/60">
+          <span className="flex items-center gap-1">
+            <Users size={14} />
+            {players} players
+          </span>
+          {pool > 0 && <span>Pool: {Math.round(pool)} ETB</span>}
+        </div>
+      )}
 
       <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
         <div className="w-12 h-12 bg-black rounded-full -mr-6 -mt-6" />

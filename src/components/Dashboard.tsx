@@ -1,39 +1,15 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { StakeButton } from './StakeButton';
-import { Wrench, Hammer, Users, Trophy } from 'lucide-react';
-import { GameState } from '../types';
+import { Wrench, Hammer } from 'lucide-react';
 
 interface Props {
   onPlay: () => void;
-  roomStats: {
-    players: number;
-    pool: number;
-    isLive: boolean;
-    isEngineActive: boolean;
-    state?: GameState;
-    selectionTimeLeft?: number;
-  };
-  isMaintenanceMode?: boolean;
+  isPlayDisabled: boolean;
+  playButtonLabel: string;
+  showEngineIdleHint: boolean;
 }
 
-function getPlayLabel(stats: Props['roomStats'], isMaintenanceMode?: boolean): string {
-  if (isMaintenanceMode) return 'Unavailable';
-  if (!stats.isEngineActive) return 'Engine Starting Soon';
-  if (stats.isLive) return 'Watch Live Game';
-  return 'Join Selection';
-}
-
-export default function Dashboard({ onPlay, roomStats, isMaintenanceMode }: Props) {
-  const stats = roomStats || { players: 0, pool: 0, isLive: false, isEngineActive: false };
-  const playLabel = getPlayLabel(stats, isMaintenanceMode);
-  const timerLabel =
-    stats.isLive || stats.state === GameState.GAME
-      ? 'Game in progress'
-      : stats.selectionTimeLeft && stats.selectionTimeLeft > 0
-        ? `${stats.selectionTimeLeft}s left to pick`
-        : stats.isEngineActive
-          ? 'Selection open'
-          : 'Waiting for admin';
+export default function Dashboard({ onPlay, isPlayDisabled, playButtonLabel, showEngineIdleHint }: Props) {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
@@ -51,7 +27,7 @@ export default function Dashboard({ onPlay, roomStats, isMaintenanceMode }: Prop
       </motion.div>
 
       <AnimatePresence>
-        {isMaintenanceMode && (
+        {isPlayDisabled && showEngineIdleHint && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -76,35 +52,19 @@ export default function Dashboard({ onPlay, roomStats, isMaintenanceMode }: Prop
         )}
       </AnimatePresence>
 
-      {stats.isEngineActive && !isMaintenanceMode && (
-        <div className="mb-6 grid grid-cols-3 gap-2 w-full max-w-xs">
-          <div className="bg-black/30 rounded-2xl p-3 border border-white/10">
-            <Users size={14} className="text-lime-400 mx-auto mb-1" />
-            <span className="text-[9px] font-black text-gray-400 uppercase block">Players</span>
-            <span className="text-lg font-black text-white">{stats.players}</span>
-          </div>
-          <div className="bg-black/30 rounded-2xl p-3 border border-white/10">
-            <Trophy size={14} className="text-yellow-400 mx-auto mb-1" />
-            <span className="text-[9px] font-black text-gray-400 uppercase block">Derash</span>
-            <span className="text-lg font-black text-white">{Math.round(stats.pool)}</span>
-          </div>
-          <div className="bg-black/30 rounded-2xl p-3 border border-white/10">
-            <span className="text-[9px] font-black text-gray-400 uppercase block mt-4">Status</span>
-            <span className="text-[10px] font-black text-lime-400 leading-tight">{timerLabel}</span>
-          </div>
-        </div>
-      )}
+      {/* Removed the stats.isEngineActive && !isMaintenanceMode block */}
 
       <div className="flex flex-col gap-6 w-full max-w-xs">
         <StakeButton
           amount={10}
-          players={stats.players}
-          pool={stats.pool}
-          isLive={stats.isLive}
-          isEngineActive={stats.isEngineActive}
-          isDisabled={isMaintenanceMode}
-          playLabel={playLabel}
+          players={0} // Dummy value, as stats are hidden
+          pool={0}    // Dummy value, as stats are hidden
+          isLive={false} // Dummy value, as stats are hidden
+          isEngineActive={false} // Dummy value, as stats are hidden
+          isDisabled={isPlayDisabled}
+          playLabel={playButtonLabel}
           onPlay={onPlay}
+          hideStats={true} // Explicitly hide stats on the dashboard
         />
       </div>
 

@@ -35,6 +35,19 @@ const IS_BOT_CONFIGURED = BOT_USERNAME && BOT_USERNAME !== 'YOUR_BOT_USERNAME_HE
 
 const VALID_PHASES: AppPhase[] = ['home', 'selection', 'game', 'history', 'wallet', 'profile'];
 
+function getPlayLabel(stats: RoomStats, isMaintenanceMode: boolean): string {
+  if (isMaintenanceMode) return 'Unavailable';
+  if (!stats.isEngineActive) return 'Engine Starting Soon';
+  if (stats.isLive) return 'Watch Live Game';
+  return 'Join Selection';
+}
+
+function getTimerLabel(stats: RoomStats & { selectionTimeLeft?: number }, isEngineActive: boolean): string { 
+  if (stats.isLive || stats.state === GameState.GAME) return 'Game in progress';
+  if (stats.selectionTimeLeft && stats.selectionTimeLeft > 0) return `${stats.selectionTimeLeft}s left to pick`;
+  return isEngineActive ? 'Selection open' : 'Waiting for admin';
+}
+
 export default function App() {
   // State persistence for "refreshing that exact page"
   const [phase, setPhase] = useState<AppPhase>(() => {
@@ -419,9 +432,10 @@ export default function App() {
                 className="flex-1 flex flex-col min-h-0"
               >
                 <Dashboard
-                  onPlay={() => handleHomePlay()} // No amount argument
-                  roomStats={roomStats}
-                  isMaintenanceMode={isMaintenanceMode}
+                  onPlay={handleHomePlay}
+                  isPlayDisabled={isMaintenanceMode || !roomStats.isEngineActive}
+                  playButtonLabel={getPlayLabel(roomStats, isMaintenanceMode)}
+                  showEngineIdleHint={showEngineIdleModal}
                 />
               </motion.div>
             )}
