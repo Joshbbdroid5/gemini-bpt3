@@ -3,7 +3,11 @@ import { Wallet, Timer, ShoppingCart, ArrowLeft, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
-import { FixedSizeGrid } from 'react-window';
+// react-window typings vary by version; FixedSizeGrid may not be exported in older typings.
+// Import the module and cast to any to avoid TS errors while preserving runtime behavior.
+import * as ReactWindow from 'react-window';
+
+
 
 interface Props {
   wallet: number;
@@ -301,18 +305,24 @@ export default function SelectionPage({
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {gridWidth > 0 && gridHeight > 0 && (
-          <FixedSizeGrid
-            ref={gridRef}
-            columnCount={columnCount}
-            columnWidth={columnWidth}
-            height={gridHeight}
-            rowCount={rowCount}
-            rowHeight={rowHeight}
-            width={gridWidth}
-            itemData={{ selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount, gap }}
-          >
-            {BoardCell as any}
-          </FixedSizeGrid>
+          (() => {
+            const FixedSizeGrid: any = (ReactWindow as any).FixedSizeGrid;
+            if (!FixedSizeGrid) return null;
+            return (
+              <FixedSizeGrid
+                ref={gridRef}
+                columnCount={columnCount}
+                columnWidth={columnWidth}
+                height={gridHeight}
+                rowCount={rowCount}
+                rowHeight={rowHeight}
+                width={gridWidth}
+                itemData={{ selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount, gap }}
+              >
+                {BoardCell as any}
+              </FixedSizeGrid>
+            );
+          })()
         )}
         {/* Add a div to ensure the scrollbar is visible and has enough space */}
         <div style={{ height: '32px' }} />
