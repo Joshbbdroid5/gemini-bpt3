@@ -3,7 +3,7 @@ import { Wallet, Timer, ShoppingCart, ArrowLeft, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
-import { FixedSizeGrid } from 'react-window/fixed-size-grid';
+import { FixedSizeGrid } from 'react-window';
 
 interface Props {
   wallet: number;
