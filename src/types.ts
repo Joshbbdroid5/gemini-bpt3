@@ -66,3 +66,4 @@ export const BINGO_COLUMNS = {
 };
 
 export const TOTAL_BOARDS = 600;
+export const SINGLE_STAKE = 10;

@@ -16,7 +16,14 @@ import mongoose, { Error as MongooseError } from 'mongoose';
 import logger from './src/logger';
 import client from 'prom-client';
 import { metrics, Counter, ObservableGauge } from '@opentelemetry/api';
-import { GameState, RoomStats, PoolUpdateData, HistoryEntry, PickBoardResult } from './src/types';
+import { 
+  GameState, 
+  RoomStats, 
+  PoolUpdateData, 
+  HistoryEntry, 
+  PickBoardResult, 
+  SINGLE_STAKE 
+} from './src/types';
 
 dotenv.config();
 
@@ -111,8 +118,6 @@ const globalGameState = {
   stopRequested: false,
   activePlayers: 0,
 };
-
-const SINGLE_STAKE = 10;
 
 // TopUpHistory Schema
 interface ITopUpHistory {

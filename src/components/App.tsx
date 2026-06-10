@@ -15,7 +15,15 @@ import ProfilePage from './ProfilePage';
 import WalletPage from './WalletPage';
 import BottomTabs, { BottomTabKey } from './BottomTabs';
 import RuleItem from './RuleItem';
-import { HistoryEntry, AppPhase, RoomStats, PoolUpdateData, GameState, GameInitData } from '../types'; // Import new types
+import { 
+  HistoryEntry, 
+  AppPhase, 
+  RoomStats, 
+  PoolUpdateData, 
+  GameState, 
+  GameInitData, 
+  SINGLE_STAKE 
+} from '../types'; // Import new types
 import { connectToGame, disconnectFromGame, resyncGameState, socket, socketEvents } from './socket';
 
 const t = {
@@ -97,10 +105,8 @@ export default function App() {
 
   // Persist navigation state to localStorage
   useEffect(() => {
-    localStorage.setItem('bingo_phase', phase);
-    localStorage.setItem('bingo_tab', bottomTab);
     localStorage.setItem('bingo_selected_ids', JSON.stringify(selectedBoardIds));
-  }, [phase, bottomTab, selectedBoardIds]);
+  }, [selectedBoardIds]);
 
   const currentRoomStats: RoomStats = roomStats || { // Get stats for the current stake room, or default values
     pool: 0,
@@ -206,6 +212,7 @@ export default function App() {
     const handleGameStopped = (msg?: string) => {
       setShowGameStoppedModal(msg || 'Games are over for today. Please come back tomorrow.');
       setPhase('home');
+      setSelectedBoardIds([]);
       setRoomStats(prev => ({
         ...prev, isLive: false, isEngineActive: false, state: GameState.FINISHED
       }));
@@ -222,14 +229,10 @@ export default function App() {
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
     socket.on(socketEvents.GAME_RESET, () => {
       setRoomStats(prev => ({ ...prev, state: GameState.SELECTION, isLive: false }));
+      setSelectedBoardIds([]);
       setPhase(prev => {
         if (prev === 'game') {
-          setSelectedBoardIds([]);
           setShowNextRoundHint(true);
-          return 'selection';
-        }
-        if (prev === 'selection') {
-          setSelectedBoardIds([]);
           return 'selection';
         }
         return prev;
@@ -619,7 +622,7 @@ export default function App() {
                     ><X size={20} /></button>
                   </div>
                   <div className="space-y-6">
-                    <RuleItem number="1" text="Stake 10 ETB to enter the round." />
+                    <RuleItem number="1" text={`Stake ${SINGLE_STAKE} ETB to enter the round.`} />
                     <RuleItem number="2" text="Pick your board from the 600 available options within 40 seconds." />
                     <RuleItem number="3" text="Wait for the system to call a ball every 3 seconds." />
                     <RuleItem number="4" text="Numbers are marked automatically. Complete a row, column, diagonal, or four corners to win." />
