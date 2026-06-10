@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wallet, ArrowLeft, RefreshCw, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import TransactionCard from './TransactionCard';
 
 interface Props {
   walletBalance: number;
   phoneNumber?: string;
   isVerified: boolean;
+  transactions?: any[];
+  userId?: string;
+  telegramDisplayName?: string;
   onRefresh?: () => void;
   onBack?: () => void;
 }
@@ -14,6 +18,9 @@ export default function WalletPage({
   walletBalance, 
   phoneNumber, 
   isVerified, 
+  transactions = [],
+  userId = '',
+  telegramDisplayName = '',
   onRefresh, 
   onBack 
 }: Props) {
@@ -62,7 +69,7 @@ export default function WalletPage({
         {/* User Profile Info */}
         <div className="ml-12 flex flex-col gap-1">
           <div className="text-lg font-black text-white italic tracking-tight">
-            {phoneNumber || 'No phone number linked'}
+            {telegramDisplayName || phoneNumber || 'Loading profile...'}
           </div>
           <div className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${isVerified ? 'text-lime-400' : 'text-orange-400'}`}>
             {isVerified ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
@@ -141,13 +148,25 @@ export default function WalletPage({
               <h3 className="px-2 text-[11px] font-black text-gray-500 uppercase tracking-[0.3em] mb-2">
                 {t.transactions}
               </h3>
-              <div className="flex flex-col items-center justify-center py-16 opacity-40 border-2 border-dashed border-white/10 rounded-[32px] px-6 text-center">
-                <Clock size={40} className="text-white mb-3" />
-                <p className="font-black text-white uppercase text-xs tracking-widest mb-2">{t.noHistory}</p>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
-                  Deposits and withdrawals appear here once processed via the bot.
-                </p>
-              </div>
+              {transactions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 opacity-40 border-2 border-dashed border-white/10 rounded-[32px] px-6 text-center">
+                  <Clock size={40} className="text-white mb-3" />
+                  <p className="font-black text-white uppercase text-xs tracking-widest mb-2">{t.noHistory}</p>
+                  <p className="text-[10px] text-gray-400 leading-relaxed">
+                    Deposits and withdrawals appear here once processed via the bot.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {transactions.map((log, i) => (
+                    <TransactionCard 
+                      key={i} 
+                      log={log} 
+                      wallets={{ [userId]: { balance: walletBalance, username: telegramDisplayName } }} 
+                    />
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

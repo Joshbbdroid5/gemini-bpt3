@@ -72,6 +72,9 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, isMy
           <span className={`font-black ${isCompact ? 'text-[10px]' : 'text-xs'} uppercase tracking-tight leading-none ${isMyBoard ? 'text-yellow-400' : 'text-indigo-400'}`}>
             {isMyBoard ? `${t.boardNum}${winner.id} (YOU)` : `${t.boardNum}${winner.id}`}
           </span>
+          <span className="text-[9px] font-bold text-gray-400 truncate max-w-[80px]">
+            {winner.username}
+          </span>
           <div className="flex flex-wrap gap-1 mt-0.5"> {/* Display winning patterns */}
             {winner.patterns.map((p: WinningPattern, pIdx: number) => (
               <span key={pIdx} className={`${isCompact ? 'text-[6px]' : 'text-[7px]'} font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase`}>
@@ -138,7 +141,7 @@ const BoardCell = memo(({ value, isMarked, isCurrentBall, isPendingMark, onToggl
 export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGame, onGameEnd }: Props) {
   const [calledNumbers, setCalledNumbers] = useState<Set<number>>(new Set());
   const [currentBall, setCurrentBall] = useState<number | null>(null);
-  const [winners, setWinners] = useState<{ id: number; grid: BingoBoardData; patterns: WinningPattern[]; payout: number }[]>([]);
+  const [winners, setWinners] = useState<{ id: number; username: string; grid: BingoBoardData; patterns: WinningPattern[]; payout: number }[]>([]);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [popupTimeLeft, setPopupTimeLeft] = useState(10);
   const [isMuted, setIsMuted] = useState(() => localStorage.getItem('bingo_muted') === 'true');
@@ -258,6 +261,7 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
           ...prev,
           {
             id: boardId,
+            username: winnerData.username || 'Anonymous',
             grid: generateBoard(boardId),
             patterns: winnerData.patterns,
             payout: winnerData.payout,

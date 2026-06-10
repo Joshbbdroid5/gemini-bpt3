@@ -59,7 +59,7 @@ export default function ProfilePage({
         {/* User Profile Info */}
         <div className="ml-12 flex flex-col gap-1">
           <div className="text-lg font-black text-white italic tracking-tight">
-            {telegramDisplayName || `@${telegramName}`}
+            {telegramDisplayName || 'Anonymous User'}
           </div>
           <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-lime-400">
             <User size={12} />

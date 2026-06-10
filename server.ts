@@ -707,6 +707,27 @@ app.get('/admin/referral-leaderboard', async (req, res) => {
   }
 });
 
+// USER ENDPOINT: Fetch specific user's transaction log (deposits, withdrawals, adjustments)
+app.get('/api/user-transactions', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  try {
+    const logs = await ActivityLog.find({ 
+      userId: userId as string,
+      type: { $in: ['deposit', 'withdrawal', 'adjustment'] }
+    })
+    .sort({ timestamp: -1 })
+    .limit(50)
+    .lean();
+    
+    res.json(logs);
+  } catch (err) {
+    logger.error("User Transactions Fetch Error", { error: err, userId });
+    res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+});
+
 // ADMIN ENDPOINT: Get users referred by a specific user
 app.get('/admin/referred-users', async (req, res) => {
   const { userId, secret } = req.query;
@@ -1041,22 +1062,32 @@ async function getUserHistory(userId: string): Promise<HistoryEntry[]> {
     byGame.set(log.gameId, existing);
   }
 
+  // Collect all unique gameIds to query GameArchive once
+  const uniqueGameIds = Array.from(byGame.keys());
+  const gameArchives = await GameArchive.find({ gameId: { $in: uniqueGameIds } }).lean();
+  const gameArchiveMap = new Map<string, any>();
+  const winnerCounts = new Map<string, number>();
+
+  gameArchives.forEach(archive => {
+    gameArchiveMap.set(archive.gameId, archive);
+    winnerCounts.set(archive.gameId, (winnerCounts.get(archive.gameId) || 0) + 1);
+  });
+
   const entries: HistoryEntry[] = [];
   for (const [gameId, data] of byGame.entries()) {
-    const winnerCount = await GameArchive.countDocuments({ gameId });
-    const archive = await GameArchive.findOne({ gameId }).lean(); //
-    const totalWinners = Math.max(winnerCount, 1);
+    const archive = gameArchiveMap.get(gameId);
+    const totalWinners = Math.max(winnerCounts.get(gameId) || 0, 1);
     const totalStaked = archive
       ? Math.round((archive.prizePool ?? 0) / 0.6)
-      : data.stakes * SINGLE_STAKE;
+      : data.stakes * SINGLE_STAKE; // Fallback if archive not found
 
     entries.push({
       gameId,
       date: new Date(data.latestAt).toLocaleDateString(),
       myBoardsCount: data.stakes,
       totalWinners,
-      totalStaked,
-      payoutPerWinner: data.winAmount > 0
+      totalStaked, // This will be more accurate with the archive data
+      payoutPerWinner: data.winAmount > 0 // If user won, this is their actual payout
         ? data.winAmount
         : archive
           ? (archive.prizePool ?? 0) / totalWinners //
@@ -1117,6 +1148,7 @@ async function processBoardPick(userId: string, boardId: number): Promise<PickBo
     return buildPickFailure(userId, boardId, 'Selection phase has ended.');
   }
 
+  // Fetch user record to get username and other non-balance related info if needed, but use atomic updates for balance.
   const userRecord = await User.findOne({ userId });
   if (!userRecord) {
     return buildPickFailure(userId, boardId, 'User account not found.');
@@ -1138,24 +1170,45 @@ async function processBoardPick(userId: string, boardId: number): Promise<PickBo
   }
 
   if (isDeselecting) {
-    userRecord.balance += SINGLE_STAKE;
+    const updatedUser = await User.findOneAndUpdate(
+      { userId },
+      { $inc: { balance: SINGLE_STAKE } },
+      { new: true }
+    );
+    if (!updatedUser) {
+      return buildPickFailure(userId, boardId, 'Failed to refund balance. User not found.');
+    }
     singleRoomState.boardStatus.delete(boardKey);
     singleRoomState.playerBoards.set(userId, []);
     singleRoomState.globalPool -= SINGLE_STAKE;
+    // Emit wallet update
+    const socketId = socketMapping.get(userId);
+    if (socketId) {
+      io.to(socketId).emit(socketEvents.WALLET_UPDATE, updatedUser.balance);
+    }
   } else if (isSwapping) {
     const oldId = currentSelected[0];
     singleRoomState.boardStatus.delete(oldId);
     singleRoomState.boardStatus.set(boardKey, userId);
     singleRoomState.playerBoards.set(userId, [boardId]);
   } else if (isFirstSelection) {
-    if (userRecord.balance < SINGLE_STAKE) {
-      return buildPickFailure(userId, boardId, 'Insufficient balance.');
+    const updatedUser = await User.findOneAndUpdate(
+      { userId, balance: { $gte: SINGLE_STAKE } }, // Ensure sufficient balance
+      { $inc: { balance: -SINGLE_STAKE } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      // This means either user not found (unlikely after initial check) or insufficient balance.
+      // The $gte check handles insufficient balance atomically.
+      return buildPickFailure(userId, boardId, 'Insufficient balance or user not found.');
     }
-    userRecord.balance -= SINGLE_STAKE;
+
     singleRoomState.boardStatus.set(boardKey, userId);
     singleRoomState.playerBoards.set(userId, [boardId]);
     singleRoomState.globalPool += SINGLE_STAKE;
     globalGameState.totalVolume += SINGLE_STAKE;
+
     await ActivityLog.create({
       userId,
       type: 'stake',
@@ -1167,19 +1220,16 @@ async function processBoardPick(userId: string, boardId: number): Promise<PickBo
       { $inc: { totalVolume: SINGLE_STAKE } },
       { upsert: true }
     ).catch((e) => logger.error('Global stats volume update error', { error: e }));
-  }
 
-  await userRecord.save().catch((e) =>
-    logger.error('User record save error on board pick', { error: e, userId })
-  );
+    // Emit wallet update
+    const socketId = socketMapping.get(userId);
+    if (socketId) {
+      io.to(socketId).emit(socketEvents.WALLET_UPDATE, updatedUser.balance);
+    }
+  }
 
   if (singleRoomState.markModified) singleRoomState.markModified('playerBoards');
   if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
-
-  const socketId = socketMapping.get(userId);
-  if (socketId) {
-    io.to(socketId).emit(socketEvents.WALLET_UPDATE, userRecord.balance);
-  }
 
   return {
     success: true,
@@ -1312,15 +1362,16 @@ async function runGameLoop() {
 
         Promise.all(winnersThisRound.map(async (w) => {
             singleRoomState.boardStatus.set(w.boardId.toString(), w.userId);
+            const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
             const winnerInfo = {
               ...w,
+              username: user?.username || 'Anonymous',
               payout: splitPayout,
               gameId: singleRoomState.currentGameId,
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
 
             jackpotWinsCounter.add(1);
-            const user = await User.findOneAndUpdate({ userId: w.userId }, { $inc: { balance: splitPayout } }, { new: true });
             const sId = socketMapping.get(w.userId);
             if (sId && user) io.to(sId).emit(socketEvents.WALLET_UPDATE, user.balance); // Emit to specific user
             io.emit(socketEvents.NEW_WINNER, winnerInfo); // Emit to all in the room
@@ -1490,20 +1541,18 @@ function registerSocketHandlers(io: SocketIOServer) {
   io.on('connection', async (socket) => {
     logger.info(`User connected: ${socket.id}`);
 
-  const { initData, user, userId: fallbackId } = socket.handshake.auth;
-  let userId = fallbackId || `guest_${socket.id.substring(0, 4)}`;
+  const { initData, user } = socket.handshake.auth;
   let isVerified = false;
-  const telegramUsername = user?.username ? `@${user.username}` : user?.first_name || 'Guest';
 
-  if (initData && verifyTelegramData(initData)) {
-    userId = user?.id?.toString() || userId;
-    isVerified = true;
-    logger.info(`Verified Telegram User: ${telegramUsername}`, { userId });
-  } else {
-    logger.info(`Unverified connection using ID: ${userId}`);
-    // For development/testing, you might want to auto-verify guests:
-    // verifiedUsers.add(userId);
+  if (!initData || !verifyTelegramData(initData) || !user?.id) {
+    logger.warn(`Unauthorized or non-Telegram connection attempt: ${socket.id}`);
+    socket.disconnect();
+    return;
   }
+
+  const userId = user.id.toString();
+  const telegramUsername = user.username ? `@${user.username}` : (user.first_name || 'User');
+  isVerified = true;
 
   logger.debug(`Authenticated as: ${userId}`);
   socketMapping.set(userId, socket.id);
@@ -1522,14 +1571,13 @@ function registerSocketHandlers(io: SocketIOServer) {
     let currentBalance = 0;
     let isUserVerified = false;
     if (!user) {
-      const newUser = await User.create({ userId, username: telegramUsername, balance: 1000, isVerified: isVerified });
+      // Create unverified user record. Balance is 0 until phone verification.
+      const newUser = await User.create({ userId, username: telegramUsername, balance: 0, isVerified: false });
       currentBalance = newUser.balance;
       isUserVerified = newUser.isVerified;
     } else {
-      // Update verification status or username if it changed
       let update: any = {};
-      if (isVerified && !user.isVerified) update.isVerified = true;
-      if (telegramUsername !== 'Guest' && user.username !== telegramUsername) {
+      if (telegramUsername !== 'User' && user.username !== telegramUsername) {
         update.username = telegramUsername;
       }
 

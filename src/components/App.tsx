@@ -77,12 +77,15 @@ export default function App() {
   const [selectedBoardIds, setSelectedBoardIds] = useState<number[]>(() => {
     try {
       const saved = localStorage.getItem('bingo_selected_ids');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
       return [];
     }
   });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
@@ -99,7 +102,7 @@ export default function App() {
   const [referredCount, setReferredCount] = useState<number>(0);
 
   const [roomStats, setRoomStats] = useState<RoomStats & { selectionTimeLeft?: number }>({ // Single room stats
-    pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false, state: GameState.SELECTION
+    pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false, state: GameState.SELECTION, selectionTimeLeft: 0
   });
   const [totalActivePlayers, setTotalActivePlayers] = useState(0); // State to track total active players across all rooms
 
@@ -107,6 +110,23 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bingo_selected_ids', JSON.stringify(selectedBoardIds));
   }, [selectedBoardIds]);
+
+  const fetchTransactions = useCallback(async (uid: string) => {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || window.location.origin;
+    try {
+      const resp = await fetch(`${backendUrl}/api/user-transactions?userId=${uid}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setTransactions(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch transactions:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (phase === 'wallet' && myId) fetchTransactions(myId);
+  }, [phase, myId, fetchTransactions]);
 
   const currentRoomStats: RoomStats = roomStats || { // Get stats for the current stake room, or default values
     pool: 0,
@@ -185,7 +205,7 @@ export default function App() {
           players: data.players ?? prev.players
         };
       });
-      if (data.myBoardIds !== undefined) {
+      if (Array.isArray(data.myBoardIds)) {
         setSelectedBoardIds(data.myBoardIds);
       }
     };
@@ -289,16 +309,7 @@ export default function App() {
         user: user // Pass Telegram user data to connectToGame
       });
     } else {
-
-      // Fallback for browser testing
-      // Persist guestId in localStorage to prevent balance reset on refresh
-      let guestId = localStorage.getItem('bingoGuestId');
-      if (!guestId) {
-        guestId = `guest_${Math.floor(1000 + Math.random() * 9000)}`;
-        localStorage.setItem('bingoGuestId', guestId);
-      }
-      connectToGame({ userId: guestId });
-      setMyId(guestId); // Set myId for guest users
+      console.warn("Telegram WebApp not detected. Access restricted.");
     }
     return () => {
       cleanup();
@@ -325,8 +336,9 @@ export default function App() {
   const handleResync = useCallback(() => {
     setConnectionError(false);
     resyncGameState();
+    if (myId) fetchTransactions(myId);
     toast.success('Syncing…');
-  }, []);
+  }, [myId, fetchTransactions]);
 
   const handleBackToHome = useCallback(() => {
     setPhase('home'); // Set phase to home
@@ -510,6 +522,9 @@ export default function App() {
                   walletBalance={wallet} 
                   phoneNumber={phoneNumber} 
                   isVerified={isVerified === true}
+                  transactions={transactions}
+                  userId={myId}
+                  telegramDisplayName={telegramDisplayName}
                   onRefresh={handleResync}
                   onBack={handleBackToHome} 
                 />
