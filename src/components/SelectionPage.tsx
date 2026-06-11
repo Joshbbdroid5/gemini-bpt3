@@ -156,19 +156,23 @@ export default function SelectionPage({
 
   // Observe container size for dynamic grid dimensions
   useEffect(() => {
-    const observer = new ResizeObserver(entries => {
+    // Guard for environments where ResizeObserver is missing (can crash mount)
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
       if (entries[0]) {
         setGridWidth(entries[0].contentRect.width);
         setGridHeight(entries[0].contentRect.height);
       }
     });
 
-    if (gridContainerRef.current) {
-      observer.observe(gridContainerRef.current);
-    }
+    const el = gridContainerRef.current;
+    if (el) observer.observe(el);
 
     return () => {
-      observer.disconnect(); // Use disconnect for cleanup
+      observer.disconnect();
     };
   }, []);
   useEffect(() => {
