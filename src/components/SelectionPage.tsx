@@ -3,9 +3,9 @@ import { Wallet, Timer, ShoppingCart, ArrowLeft, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, SINGLE_STAKE, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
-// Use namespace import to avoid "no exported member" errors if typings are inconsistent
 import * as ReactWindow from 'react-window';
 
+// Use namespace import to avoid "no exported member" errors if typings are inconsistent
 const FixedSizeGrid = (ReactWindow as any).FixedSizeGrid;
 
 interface Props {
@@ -44,13 +44,19 @@ const BoardCell = memo(({ columnIndex, rowIndex, style, data }: {
   const isTaken = takenBoards.has(id) && !isSelected;
   const isPending = pendingBoardId === id;
 
+  // Safety check for dimension types to prevent NaN crashes during math operations
+  const width = typeof style.width === 'number' ? style.width : 0;
+  const height = typeof style.height === 'number' ? style.height : 0;
+  const left = typeof style.left === 'number' ? style.left : 0;
+  const top = typeof style.top === 'number' ? style.top : 0;
+
   // Adjust style to account for gap
   const adjustedStyle: React.CSSProperties = {
     ...style,
-    width: (style.width as number) - gap,
-    height: (style.height as number) - gap,
-    left: (style.left as number) + gap / 2,
-    top: (style.top as number) + gap / 2,
+    width: Math.max(0, width - gap),
+    height: Math.max(0, height - gap),
+    left: left + gap / 2,
+    top: top + gap / 2,
   };
 
   return (
@@ -95,8 +101,8 @@ export default function SelectionPage({
   const gridRef = useRef<any>(null);
 
   // State for dynamic grid dimensions
-  const [gridWidth, setGridWidth] = useState(0);
-  const [gridHeight, setGridHeight] = useState(0);
+  const [gridWidth, setGridWidth] = useState(window.innerWidth - 32); // Better initial guess
+  const [gridHeight, setGridHeight] = useState(500);
 
   // Responsive column count: ensures touch targets don't get too small on narrow screens
   const columnCount = useMemo(() => {
@@ -126,16 +132,17 @@ export default function SelectionPage({
   const itemWidth = useMemo(() => {
     if (gridWidth === 0) return 0;
     // Calculate width so that (columnCount * itemWidth) + (columnCount * gap) = gridWidth
-    return (gridWidth / columnCount) - gap;
+    return Math.max(1, (gridWidth / columnCount) - gap);
   }, [gridWidth, columnCount, gap]);
 
   const itemHeight = useMemo(() => {
-    return itemWidth * 1.5; // aspect-[2/3] means height is 1.5 times width
+    return Math.max(1, itemWidth * 1.5); // aspect-[2/3] means height is 1.5 times width
   }, [itemWidth]);
 
-  // FixedSizeGrid expects total space for each item including gap
-  const columnWidth = itemWidth + gap;
-  const rowHeight = itemHeight + gap;
+  // Ensure we have reasonable minimums for virtualization to prevent "pixel-sized" cell rendering 
+  // which can cause performance hangs or memory crashes.
+  const columnWidth = useMemo(() => Math.max(38, itemWidth + gap), [itemWidth, gap]);
+  const rowHeight = useMemo(() => Math.max(57, itemHeight + gap), [itemHeight, gap]);
 
   // Memoize itemData to prevent unnecessary re-renders of all cells
   const itemData = useMemo(() => (
@@ -182,8 +189,9 @@ export default function SelectionPage({
 
     const handlePickResult = (result: PickBoardResult) => {
       setPendingBoardId(null);
-      setSelectedIds(new Set(result.selectedBoardIds));
-      onSelectionChange(result.selectedBoardIds);
+      const newIds = result.selectedBoardIds ?? [];
+      setSelectedIds(new Set(newIds));
+      onSelectionChange(newIds);
       if (result.takenBoards) {
         setTakenBoards(new Set(result.takenBoards));
       }
@@ -323,10 +331,10 @@ export default function SelectionPage({
             ref={gridRef}
             columnCount={columnCount}
             columnWidth={columnWidth}
-            height={gridHeight}
+            height={gridHeight || 500}
             rowCount={rowCount}
             rowHeight={rowHeight}
-            width={gridWidth}
+            width={gridWidth || 300}
             itemData={itemData}
             className="custom-scrollbar"
           >
