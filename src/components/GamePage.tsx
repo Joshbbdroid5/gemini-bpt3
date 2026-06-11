@@ -84,11 +84,11 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, isMy
           </div>
         </div>
         <span className={`text-green-400 ${isCompact ? 'text-sm' : 'text-lg'} font-black italic`}>
-          {(totalPrize / winnersCount).toFixed(0)} ETB
+          {((totalPrize || 0) / (winnersCount || 1)).toFixed(0)} ETB
         </span>
       </div>
       <div className="grid grid-cols-5 gap-0.5">
-        {winner.grid.map((row: any, rIdx: number) =>
+        {Array.isArray(winner.grid) && winner.grid.map((row: any, rIdx: number) =>
           row.map((cell: any, cIdx: number) => {
             const isMarkedWinner = typeof cell.value === 'number'
               ? calledNumbers.has(cell.value)
@@ -373,7 +373,7 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
         <CompactStat label={t.gameId} value={stats.gameId.slice(0, 8)} />
         <CompactStat label={t.players} value={stats.players} />
         <CompactStat label={t.bet} value={stats.staked} />
-        <CompactStat label={t.derash} value={stats.derash.toFixed(0)} />
+        <CompactStat label={t.derash} value={(stats.derash || 0).toFixed(0)} />
         <CompactStat label={t.called} value={calledNumbers.size} />
       </div>
 

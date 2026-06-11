@@ -177,6 +177,7 @@ const activityLogSchema = new mongoose.Schema<IActivityLog>({
   gameId: { type: String },
   timestamp: { type: Date, default: Date.now }
 });
+activityLogSchema.index({ userId: 1, timestamp: -1 }); // Optimized for sorted history retrieval
 const ActivityLog = mongoose.model<IActivityLog>('ActivityLog', activityLogSchema);
 
 // User Schema
@@ -228,7 +229,7 @@ const RoomStateModel = mongoose.model<IRoomState>('RoomState', roomStateSchema);
 
 // Archive Schema for Auditing
 const gameArchiveSchema = new mongoose.Schema({
-  gameId: String,
+  gameId: { type: String, index: true },
   winnerId: String,
   winnerBoardId: Number,
   prizePool: Number,
@@ -274,11 +275,15 @@ async function syncCache() {
     );
 
     if (roomDoc) {
+      const docObj = roomDoc.toObject();
       singleRoomState = { 
-        ...roomDoc.toObject(),
-        playerBoards: new Map(roomDoc.playerBoards),
-        boardStatus: new Map(roomDoc.boardStatus),
-        winCache: new Map(), // Initialize winCache as an empty Map
+        ...docObj,
+        playerBoards: new Map(Object.entries(docObj.playerBoards || {})),
+        boardStatus: new Map(Object.entries(docObj.boardStatus || {})),
+        winCache: new Map(),
+        currentBallsSet: new Set(docObj.currentBalls || []),
+        save: () => roomDoc.save(),
+        markModified: (path: string) => roomDoc.markModified(path),
       };
     }
   } catch (err) {
@@ -989,6 +994,7 @@ interface RoomState {
   selectionDuration?: number; // Total duration of selection phase in ms
   playerBoards: Map<string, number[]>;
   boardStatus: Map<string, string>;
+  currentBallsSet: Set<number>; // Optimization: Incremental set to avoid re-creation
   winCache: Map<number, { isWinner: boolean; patterns: any[] }>;
   gameLoopTimeout?: NodeJS.Timeout;
   save?: () => Promise<any>;
@@ -1007,6 +1013,7 @@ let singleRoomState: RoomState = {
   currentGameId: generateGameId(),
   playerBoards: new Map(),
   boardStatus: new Map(),
+  currentBallsSet: new Set(),
   winCache: new Map(),
 };
 
@@ -1321,11 +1328,11 @@ async function runGameLoop() {
   if (singleRoomState.currentBalls.length < singleRoomState.shuffledBalls.length) {
     const ball = singleRoomState.shuffledBalls[singleRoomState.currentBalls.length];
     singleRoomState.currentBalls.push(ball);
+    singleRoomState.currentBallsSet.add(ball); // Incrementally update the set
     io.emit(socketEvents.BALL_DRAWN, ball); // Emit to all connected clients
 
       // AUTO-CLAIM CHECK: Collect all winners for this specific ball
       const winnersThisRound: any[] = [];
-      const currentBallsSet = new Set(singleRoomState.currentBalls);
 
       // Get all board IDs that contain the newly drawn ball
       const boardsWithDrawnBall = numberToBoardIdsMap.get(ball) || new Set<number>();
@@ -1336,7 +1343,7 @@ async function runGameLoop() {
         if (!userId) continue; // Skip boards not owned by any player
 
         const grid = boardsCache.get(boardId);
-        const win = checkWin(grid, currentBallsSet);
+        const win = checkWin(grid, singleRoomState.currentBallsSet);
         
         // Update the cache for this board
         singleRoomState.winCache.set(boardId, win);
@@ -1476,6 +1483,7 @@ function resetGame() {
   singleRoomState.currentBalls = [];
   singleRoomState.shuffledBalls = [];
   singleRoomState.globalPool = 0;
+  singleRoomState.currentBallsSet.clear(); // Reset for next game
   singleRoomState.playerBoards.clear();
   singleRoomState.winCache.clear();
   singleRoomState.boardStatus.clear(); // Clear board status for new game

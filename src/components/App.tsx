@@ -111,21 +111,25 @@ export default function App() {
     localStorage.setItem('bingo_selected_ids', JSON.stringify(selectedBoardIds));
   }, [selectedBoardIds]);
 
-  const fetchTransactions = useCallback(async (uid: string) => {
+  const fetchTransactions = useCallback(async (uid: string, signal?: AbortSignal) => {
     const backendUrl = import.meta.env.VITE_BACKEND_URL || window.location.origin;
     try {
-      const resp = await fetch(`${backendUrl}/api/user-transactions?userId=${uid}`);
+      const resp = await fetch(`${backendUrl}/api/user-transactions?userId=${uid}`, { signal });
       if (resp.ok) {
         const data = await resp.json();
         setTransactions(data);
       }
     } catch (e) {
-      console.error("Failed to fetch transactions:", e);
+      if (e instanceof Error && e.name !== 'AbortError') console.error("Failed to fetch transactions:", e);
     }
   }, []);
 
   useEffect(() => {
-    if (phase === 'wallet' && myId) fetchTransactions(myId);
+    if (phase === 'wallet' && myId) {
+      const controller = new AbortController();
+      fetchTransactions(myId, controller.signal);
+      return () => controller.abort();
+    }
   }, [phase, myId, fetchTransactions]);
 
   const currentRoomStats: RoomStats = roomStats || { // Get stats for the current stake room, or default values
@@ -180,9 +184,16 @@ export default function App() {
   useEffect(() => {
     // Wake up the backend (Render cold start mitigation)
     const backendUrl = import.meta.env.VITE_BACKEND_URL || window.location.origin;
-    fetch(`${backendUrl}/health`).catch((e) => console.error("Backend health check failed:", e)); // Simple poke to wake up backend, with error logging
+    const healthController = new AbortController();
+    fetch(`${backendUrl}/health`, { signal: healthController.signal })
+      .catch((e) => {
+        if (e instanceof Error && e.name !== 'AbortError') console.error("Backend health check failed:", e);
+      });
+
+    let connectionTimeoutId: any;
 
     const handleStatus = (status: { isVerified: boolean; phone?: string; referredCount?: number }) => {
+      if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
       setIsVerified(status.isVerified);
       if (status.phone) setPhoneNumber(status.phone);
       if (status.referredCount !== undefined) setReferredCount(status.referredCount);
@@ -217,6 +228,7 @@ export default function App() {
 
     const handleConnectError = (err: Error) => {
       console.error("Socket connection error:", err);
+      if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
       setConnectionError(true);
     };
 
@@ -247,7 +259,8 @@ export default function App() {
     socket.on(socketEvents.POOL_UPDATE, handlePoolUpdate);
     socket.on(socketEvents.GAME_INIT, handleInit);
     socket.on(socketEvents.WIN_HISTORY, handleWinHistory);
-    socket.on(socketEvents.GAME_RESET, () => {
+    
+    const handleGameReset = () => {
       setRoomStats(prev => ({ ...prev, state: GameState.SELECTION, isLive: false }));
       setSelectedBoardIds([]);
       setPhase(prev => {
@@ -257,22 +270,24 @@ export default function App() {
         }
         return prev;
       });
-    });
+    };
+
+    socket.on(socketEvents.GAME_RESET, handleGameReset);
     socket.on(socketEvents.GAME_STATUS, handleGameStatus);
-    socket.on(socketEvents.GAME_STOPPED, (msg?: string) => handleGameStopped(msg));
+    socket.on(socketEvents.GAME_STOPPED, handleGameStopped);
     socket.on('connect', handleConnect);
     socket.on('connect_error', handleConnectError);
     const slowConnectId = setTimeout(() => setIsConnectingSlow(true), 5000);
-    const timeoutId = setTimeout(() => {
-      // Hard fallback: prevent permanent overlay when socket events never arrive.
-      if (!socket.connected) {
-        setConnectionError(true);
-      }
-      setIsVerified(currentStatus => {
-        // Keep state consistent; overlay will switch to Connection Failed when connectionError=true.
-        return currentStatus;
+
+    connectionTimeoutId = setTimeout(() => {
+      // Hard fallback: trigger error overlay if initial handshake (USER_STATUS) hasn't arrived.
+      setIsVerified(current => {
+        if (current === null) {
+          setConnectionError(true);
+        }
+        return current;
       });
-    }, 15000); // Fail fast to avoid “blank page” perception
+    }, 18000); // 18s window allows for Render cold start + handshake
 
     // Add cleanup to prevent memory leaks and duplicate listeners
     const cleanup = () => {
@@ -281,14 +296,14 @@ export default function App() {
       socket.off(socketEvents.POOL_UPDATE, handlePoolUpdate);
       socket.off(socketEvents.GAME_INIT, handleInit);
       socket.off(socketEvents.WIN_HISTORY, handleWinHistory);
-      socket.off(socketEvents.BALL_DRAWN);
-      socket.off(socketEvents.GAME_RESET);
+      socket.off(socketEvents.GAME_RESET, handleGameReset);
       socket.off(socketEvents.GAME_STATUS, handleGameStatus);
       socket.off(socketEvents.GAME_STOPPED, handleGameStopped);
       socket.off('connect', handleConnect);
       socket.off('connect_error', handleConnectError);
+      healthController.abort();
       clearTimeout(slowConnectId);
-      clearTimeout(timeoutId);
+      if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
     };
 
     const tg = window.Telegram?.WebApp;
@@ -315,6 +330,15 @@ export default function App() {
       cleanup();
       disconnectFromGame();
     };
+  }, []);
+
+  // Memoize state setters and callbacks to prevent infinite loops in child components
+  const handleSelectionChange = useCallback((ids: number[]) => {
+    setSelectedBoardIds(ids);
+  }, []);
+
+  const handleDismissNextRoundHint = useCallback(() => {
+    setShowNextRoundHint(false);
   }, []);
 
   const completeSelection = useCallback((ids: number[]) => {
@@ -473,9 +497,9 @@ export default function App() {
                 <SelectionPage 
                   wallet={wallet} 
                   selectedBoardIds={selectedBoardIds}
-                  onSelectionChange={(ids) => setSelectedBoardIds(ids)} 
+                  onSelectionChange={handleSelectionChange} 
                   onBack={handleBackToHome} 
-                  onDismissHint={() => setShowNextRoundHint(false)}
+                  onDismissHint={handleDismissNextRoundHint}
                   showNextRoundHint={showNextRoundHint}
                   serverTimeLeft={roomStats.selectionTimeLeft}
                 />

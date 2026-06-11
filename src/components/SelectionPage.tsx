@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
-import { Wallet, Timer, ShoppingCart, ArrowLeft, Search } from 'lucide-react';
+import { Wallet, Timer, ShoppingCart, ArrowLeft, Search, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, SINGLE_STAKE, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
 import * as ReactWindow from 'react-window';
 
-// Use namespace import to avoid "no exported member" errors if typings are inconsistent
-const FixedSizeGrid = (ReactWindow as any).FixedSizeGrid;
+// Robust component extraction to handle ESM/CJS interop issues in different bundlers
+const FixedSizeGrid = (ReactWindow as any).FixedSizeGrid || (ReactWindow as any).default?.FixedSizeGrid;
 
 interface Props {
   wallet: number;
@@ -96,6 +96,11 @@ export default function SelectionPage({
   const [pendingBoardId, setPendingBoardId] = useState<number | null>(null); // Board currently being processed by server
   const [jumpInput, setJumpInput] = useState('');
 
+  // Sync state tracking
+  const [isSyncing, setIsSyncing] = useState(true);
+  const [syncError, setSyncError] = useState(false);
+  const syncTimeoutRef = useRef<any>(null);
+
   // Refs for grid container and react-window instance
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<any>(null);
@@ -153,6 +158,20 @@ export default function SelectionPage({
     return Math.ceil(TOTAL_BOARDS / columnCount);
   }, [columnCount]);
 
+  const startSyncTimer = useCallback(() => {
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    setSyncError(false);
+    setIsSyncing(true);
+    
+    // Explicitly request board state from server
+    socket.emit(socketEvents.JOIN_ROOM);
+    
+    syncTimeoutRef.current = setTimeout(() => {
+      setIsSyncing(false);
+      setSyncError(true);
+    }, 8000); // 8 seconds timeout for initial data fetch
+  }, []);
+
   // Timer display logic
   const timeLeft = serverTimeLeft ?? 0;
   const timerDisplay = timeLeft > 0 ? `${timeLeft}s` : 'Starting soon…';
@@ -182,8 +201,17 @@ export default function SelectionPage({
       observer.disconnect();
     };
   }, []);
+
+  // Separate initial sync from listener management to prevent loops
+  useEffect(() => {
+    startSyncTimer();
+  }, [startSyncTimer]);
+
   useEffect(() => {
     const handleBoardSync = (data: { takenBoards?: number[] }) => {
+      setIsSyncing(false);
+      setSyncError(false);
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       setTakenBoards(new Set(data?.takenBoards ?? []));
     };
 
@@ -203,6 +231,9 @@ export default function SelectionPage({
     };
 
     const handleGameInit = (data: { takenBoards?: number[]; myBoardIds?: number[] }) => {
+      setIsSyncing(false);
+      setSyncError(false);
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       if (data.takenBoards) setTakenBoards(new Set(data.takenBoards));
       if (data.myBoardIds !== undefined) {
         setSelectedIds(new Set(data.myBoardIds));
@@ -218,6 +249,7 @@ export default function SelectionPage({
       socket.off(socketEvents.BOARD_SYNC, handleBoardSync);
       socket.off(socketEvents.PICK_BOARD_RESULT, handlePickResult);
       socket.off(socketEvents.GAME_INIT, handleGameInit);
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     };
   }, [onSelectionChange]);
 
@@ -326,7 +358,34 @@ export default function SelectionPage({
         ref={gridContainerRef}
         className="flex-1 min-h-0 pt-1 px-2 pb-0 relative"
       >
-        {gridWidth > 0 && gridHeight > 0 && (
+        {syncError && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm p-6 text-center">
+            <div className="bg-indigo-950 border border-white/10 p-6 rounded-[32px] shadow-2xl max-w-[260px]">
+              <RefreshCw size={32} className="text-yellow-500 mb-4 mx-auto opacity-50" />
+              <h3 className="text-white text-sm font-black uppercase italic tracking-tight mb-2">Sync Timeout</h3>
+              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wide mb-6 leading-relaxed">
+                We are having trouble syncing the board states from the server.
+              </p>
+              <button 
+                onClick={startSyncTimer}
+                className="w-full py-3.5 bg-yellow-500 text-indigo-950 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shadow-yellow-900/20"
+              >
+                <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                {isSyncing ? 'Syncing...' : 'Retry Sync'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isSyncing && !syncError && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            <div className="bg-black/20 backdrop-blur-sm rounded-full p-3 border border-white/5">
+              <RefreshCw size={24} className="text-lime-400 animate-spin" />
+            </div>
+          </div>
+        )}
+
+        {gridWidth > 0 && gridHeight > 0 && FixedSizeGrid && (
           <FixedSizeGrid
             ref={gridRef}
             columnCount={columnCount}
@@ -337,6 +396,7 @@ export default function SelectionPage({
             width={gridWidth || 300}
             itemData={itemData}
             className="custom-scrollbar"
+            overscanCount={5}
           >
             {BoardCell as any}
           </FixedSizeGrid>
