@@ -34,7 +34,7 @@ export const socketEvents = {
   WIN_HISTORY: 'game:win_history',
   COUNTDOWN: 'game:countdown',
   WALLET_UPDATE: 'wallet:update',
-} as const;
+} as const; // Added ensuring this is properly closed
 
 export interface ServerToClientEvents {
   [socketEvents.USER_STATUS]: (status: {
