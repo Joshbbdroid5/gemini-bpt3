@@ -28,6 +28,7 @@ const BoardCell = memo(({ columnIndex, rowIndex, style, data }: {
     takenBoards: Set<number>;
     pendingBoardId: number | null;
     handleSelect: (id: number) => void;
+    columnCount: number;
   };
 }) => {
   const { selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount } = data;
