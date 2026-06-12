@@ -555,11 +555,9 @@ app.post('/admin/update-wallet', async (req, res) => {
     } else {
       // Prevent balance from going negative during adjustment
       if (amount < 0 && user.balance + amount < 0) {
-        return res
-          .status(400)
-          .json({
-            error: 'Cannot subtract, resulting balance would be negative.',
-          });
+        return res.status(400).json({
+          error: 'Cannot subtract, resulting balance would be negative.',
+        });
       }
     }
 
@@ -834,12 +832,10 @@ app.post('/admin/verify-user', async (req, res) => {
     res.json({ success: true, isNewUser: !existingUser?.phone });
   } catch (err) {
     logger.error('Verification Route Error', { error: err, userId }); // Log the real error
-    res
-      .status(500)
-      .json({
-        error: 'Internal server error',
-        details: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      error: 'Internal server error',
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
@@ -1801,15 +1797,13 @@ function startSelectionPhase() {
     setTimeout(() => runGameLoop(), 2000);
   }, 40000);
   if (singleRoomState.save)
-    singleRoomState
-      .save()
-      .catch((e) =>
-        logger.error('Room selection start save error', {
-          error: e.message,
-          stack: e.stack,
-          stake: SINGLE_STAKE,
-        })
-      );
+    singleRoomState.save().catch((e) =>
+      logger.error('Room selection start save error', {
+        error: e.message,
+        stack: e.stack,
+        stake: SINGLE_STAKE,
+      })
+    );
 }
 
 function resetGame() {
@@ -1863,16 +1857,26 @@ function resetGame() {
   if (singleRoomState.markModified)
     singleRoomState.markModified('playerBoards');
   if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
-  if (singleRoomState.save)
-    singleRoomState
-      .save()
-      .catch((e) =>
-        logger.error('Room reset save error', {
-          error: e.message,
-          stack: e.stack,
-          stake: SINGLE_STAKE,
-        })
-      );
+  // Prevent ParallelSaveError: ensure we never call save() concurrently on the same mongoose doc
+  // during resetGame() (which can be triggered by timers / overlapping game-loop transitions).
+  if (singleRoomState.save) {
+    const anyRoom: any = singleRoomState;
+    if (!anyRoom.__saveInFlight) {
+      anyRoom.__saveInFlight = true;
+      void singleRoomState
+        .save()
+        .catch((e) =>
+          logger.error('Room reset save error', {
+            error: (e as any)?.message ?? String(e),
+            stack: (e as any)?.stack,
+            stake: SINGLE_STAKE,
+          })
+        )
+        .finally(() => {
+          anyRoom.__saveInFlight = false;
+        });
+    }
+  }
   broadcastPoolUpdate();
   refreshAllUserHistories().catch((e) =>
     logger.error('History refresh error after reset', { error: e })
