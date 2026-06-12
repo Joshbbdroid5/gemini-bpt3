@@ -1,11 +1,24 @@
-import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
-import { Wallet, Timer, ShoppingCart, ArrowLeft, Search, RefreshCw } from 'lucide-react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  memo,
+  useCallback,
+  useMemo,
+} from 'react';
+import {
+  Wallet,
+  Timer,
+  ShoppingCart,
+  ArrowLeft,
+  Search,
+  RefreshCw,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, SINGLE_STAKE, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
+// @ts-ignore - react-window types can be problematic with named exports in some ESM setups
 import * as ReactWindow from 'react-window';
-
-// Use namespace import and cast to resolve "no exported member" TypeScript errors (2305)
 const { FixedSizeGrid, areEqual } = ReactWindow as any;
 
 interface Props {
@@ -19,36 +32,51 @@ interface Props {
 }
 
 // Memoized BoardCell component to prevent unnecessary re-renders of individual cells
-const BoardCell = memo(({ columnIndex, rowIndex, style, data }: {
-  columnIndex: number;
-  rowIndex: number;
-  style: React.CSSProperties;
-  data: {
-    selectedIds: Set<number>;
-    takenBoards: Set<number>;
-    pendingBoardId: number | null;
-    handleSelect: (id: number) => void;
-    columnCount: number;
-  };
-}) => {
-  const { selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount } = data;
-  const id = rowIndex * columnCount + columnIndex + 1;
+const BoardCell = memo(
+  ({
+    columnIndex,
+    rowIndex,
+    style,
+    data,
+  }: {
+    columnIndex: number;
+    rowIndex: number;
+    style: React.CSSProperties;
+    data: {
+      selectedIds: Set<number>;
+      takenBoards: Set<number>;
+      pendingBoardId: number | null;
+      handleSelect: (id: number) => void;
+      columnCount: number;
+      totalBoards: number;
+    };
+  }) => {
+    const {
+      selectedIds,
+      takenBoards,
+      pendingBoardId,
+      handleSelect,
+      columnCount,
+      totalBoards,
+    } = data;
+    const id = rowIndex * columnCount + columnIndex + 1;
 
-  // Ensure we don't render beyond TOTAL_BOARDS
-  if (id > TOTAL_BOARDS) {
-    return null;
-  }
+    // Ensure we don't render beyond TOTAL_BOARDS
+    if (id > totalBoards) {
+      return null;
+    }
 
-  const isSelected = selectedIds.has(id);
-  const isTaken = takenBoards.has(id) && !isSelected;
-  const isPending = pendingBoardId === id;
+    const isSelected = selectedIds.has(id);
+    const isTaken = takenBoards.has(id) && !isSelected;
+    const isPending = pendingBoardId === id;
 
-  return (
-    <div style={style} className="p-[3px]">
-      <button
-        id={`board-${id}`}
-        onClick={() => handleSelect(id)}
-        className={`
+    return (
+      /* webhint-disable no-inline-styles */
+      <div style={style} className="p-0.75">
+        <button
+          id={`board-${id}`}
+          onClick={() => handleSelect(id)}
+          className={`
           w-full h-full flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-all active:scale-95 relative overflow-hidden
           ${isPending ? 'opacity-60 animate-pulse' : ''}
           ${
@@ -59,13 +87,15 @@ const BoardCell = memo(({ columnIndex, rowIndex, style, data }: {
                 : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg'
           }
         `}
-        disabled={(!isSelected && isTaken) || pendingBoardId !== null}
-      >
-        <span className="relative z-10">{id}</span>
-      </button>
-    </div>
-  );
-}, areEqual);
+          disabled={(!isSelected && isTaken) || pendingBoardId !== null}
+        >
+          <span className="relative z-10">{id}</span>
+        </button>
+      </div>
+    );
+  },
+  areEqual
+);
 
 export default function SelectionPage({
   wallet,
@@ -76,10 +106,15 @@ export default function SelectionPage({
   serverTimeLeft,
   showNextRoundHint,
 }: Props) {
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set(selectedBoardIds));
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(
+    new Set(selectedBoardIds)
+  );
   const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
   const [pendingBoardId, setPendingBoardId] = useState<number | null>(null); // Board currently being processed by server
   const [jumpInput, setJumpInput] = useState('');
+
+  // Centralized total boards count with fallback
+  const totalBoardsCount = useMemo(() => TOTAL_BOARDS || 600, []);
 
   // Sync state tracking
   const [isSyncing, setIsSyncing] = useState(true);
@@ -103,41 +138,65 @@ export default function SelectionPage({
   const gap = 6; // Tailwind's gap-1.5 is 0.375rem, assuming 1rem = 16px, so 6px
 
   // Move handleSelect declaration above itemData to fix "used before its declaration" error
-  const handleSelect = useCallback((id: number) => {
-    if (pendingBoardId !== null) return;
+  const handleSelect = useCallback(
+    (id: number) => {
+      if (pendingBoardId !== null) return;
 
-    const isCurrentlySelected = selectedIds.has(id);
-    const hasAnySelected = selectedIds.size > 0;
+      const isCurrentlySelected = selectedIds.has(id);
+      const hasAnySelected = selectedIds.size > 0;
 
-    if (!isCurrentlySelected && !hasAnySelected && wallet < SINGLE_STAKE) {
-      toast.error('Insufficient balance!');
-      return;
-    }
+      if (!isCurrentlySelected && !hasAnySelected && wallet < SINGLE_STAKE) {
+        toast.error('Insufficient balance!');
+        return;
+      }
 
-    setPendingBoardId(id);
-    socket.emit(socketEvents.PICK_BOARD, { boardId: id });
-  }, [pendingBoardId, selectedIds, wallet]);
+      setPendingBoardId(id);
+      socket.emit(socketEvents.PICK_BOARD, { boardId: id });
+    },
+    [pendingBoardId, selectedIds, wallet]
+  );
 
   // Calculate item dimensions based on container width and aspect ratio
   const itemWidth = useMemo(() => {
     if (gridWidth === 0) return 0;
     // Calculate width so that (columnCount * itemWidth) + (columnCount * gap) = gridWidth
-    return Math.max(1, (gridWidth / columnCount) - gap);
+    return Math.max(1, gridWidth / columnCount - gap);
   }, [gridWidth, columnCount, gap]);
 
   const itemHeight = useMemo(() => {
     return Math.max(1, itemWidth * 1.5); // aspect-[2/3] means height is 1.5 times width
   }, [itemWidth]);
 
-  // Ensure we have reasonable minimums for virtualization to prevent "pixel-sized" cell rendering 
+  // Ensure we have reasonable minimums for virtualization to prevent "pixel-sized" cell rendering
   // which can cause performance hangs or memory crashes.
-  const columnWidth = useMemo(() => Math.max(38, itemWidth + gap), [itemWidth, gap]);
-  const rowHeight = useMemo(() => Math.max(57, itemHeight + gap), [itemHeight, gap]);
+  const columnWidth = useMemo(
+    () => Math.max(38, itemWidth + gap),
+    [itemWidth, gap]
+  );
+  const rowHeight = useMemo(
+    () => Math.max(57, itemHeight + gap),
+    [itemHeight, gap]
+  );
 
   // Memoize itemData to prevent unnecessary re-renders of all cells
-  const itemData = useMemo(() => (
-    { selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount }
-  ), [selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount]);
+  const itemData = useMemo(
+    () => ({
+      selectedIds,
+      takenBoards,
+      pendingBoardId,
+      handleSelect,
+      columnCount,
+      totalBoards: totalBoardsCount,
+    }),
+    [
+      selectedIds,
+      takenBoards,
+      pendingBoardId,
+      handleSelect,
+      columnCount,
+      totalBoardsCount,
+    ]
+  );
 
   // Stable key generator for virtualization performance
   const itemKey = useCallback(({ columnIndex, rowIndex, data }: any) => {
@@ -145,18 +204,17 @@ export default function SelectionPage({
   }, []);
 
   const rowCount = useMemo(() => {
-    const total = TOTAL_BOARDS || 600;
-    return Math.ceil(total / columnCount);
-  }, [columnCount]);
+    return Math.ceil(totalBoardsCount / columnCount);
+  }, [columnCount, totalBoardsCount]);
 
   const startSyncTimer = useCallback(() => {
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     setSyncError(false);
     setIsSyncing(true);
-    
+
     // Explicitly request board state from server
     socket.emit(socketEvents.JOIN_ROOM);
-    
+
     syncTimeoutRef.current = setTimeout(() => {
       setIsSyncing(false);
       setSyncError(true);
@@ -223,7 +281,10 @@ export default function SelectionPage({
       }
     };
 
-    const handleGameInit = (data: { takenBoards?: number[]; myBoardIds?: number[] }) => {
+    const handleGameInit = (data: {
+      takenBoards?: number[];
+      myBoardIds?: number[];
+    }) => {
       setIsSyncing(false);
       setSyncError(false);
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
@@ -246,16 +307,23 @@ export default function SelectionPage({
     };
   }, [onSelectionChange]);
 
-  const scrollToBoard = useCallback((id: number) => {
-    if (id < 1 || id > TOTAL_BOARDS) {
-      toast.error(`Enter a board number between 1 and ${TOTAL_BOARDS}`);
-      return;
-    }
-    const targetRow = Math.floor((id - 1) / columnCount);
-    const targetColumn = (id - 1) % columnCount;
+  const scrollToBoard = useCallback(
+    (id: number) => {
+      if (id < 1 || id > totalBoardsCount) {
+        toast.error(`Enter a board number between 1 and ${totalBoardsCount}`);
+        return;
+      }
+      const targetRow = Math.floor((id - 1) / columnCount);
+      const targetColumn = (id - 1) % columnCount;
 
-    gridRef.current?.scrollToItem({ rowIndex: targetRow, columnIndex: targetColumn, align: 'center' });
-  }, [columnCount]);
+      gridRef.current?.scrollToItem({
+        rowIndex: targetRow,
+        columnIndex: targetColumn,
+        align: 'center',
+      });
+    },
+    [columnCount]
+  );
 
   const handleJump = () => {
     const id = parseInt(jumpInput, 10);
@@ -264,16 +332,20 @@ export default function SelectionPage({
     setJumpInput('');
   };
 
-  const selectedBoard = selectedIds.size > 0 ? Array.from(selectedIds)[0] : null;
+  const selectedBoard =
+    selectedIds.size > 0 ? Array.from(selectedIds)[0] : null;
 
   return (
-    <div className="flex-1 h-full flex flex-col overflow-hidden relative bg-gradient-to-br from-yellow-600 via-yellow-700 to-lime-900">
+    <div className="flex-1 h-full flex flex-col overflow-hidden relative bg-linear-to-br from-yellow-600 via-yellow-700 to-lime-900">
       {showNextRoundHint && (
         <div className="bg-lime-500/90 text-indigo-950 px-4 py-2 flex items-center justify-between gap-2 shrink-0">
           <span className="text-[10px] font-black uppercase tracking-wide">
             New round — pick a board to play ({SINGLE_STAKE} ETB)
           </span>
-          <button onClick={onDismissHint} className="text-[10px] font-black uppercase underline shrink-0">
+          <button
+            onClick={onDismissHint}
+            className="text-[10px] font-black uppercase underline shrink-0"
+          >
             Got it
           </button>
         </div>
@@ -295,13 +367,17 @@ export default function SelectionPage({
           </div>
           <div className="flex flex-col items-center justify-center bg-black/20 p-2 rounded-xl border border-white/5">
             <ShoppingCart size={14} className="text-orange-400 mb-1" />
-            <span className="text-[10px] font-black text-white uppercase italic">{SINGLE_STAKE}</span>
+            <span className="text-[10px] font-black text-white uppercase italic">
+              {SINGLE_STAKE}
+            </span>
           </div>
           <div className="flex flex-col items-center justify-center bg-black/20 p-2 rounded-xl border border-white/5">
             <Timer size={14} className="text-yellow-400 mb-1" />
             <span
               className={`text-[11px] font-mono font-black ${
-                timeLeft > 0 && timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-white'
+                timeLeft > 0 && timeLeft <= 5
+                  ? 'text-red-500 animate-pulse'
+                  : 'text-white'
               }`}
             >
               {timerDisplay}
@@ -316,7 +392,7 @@ export default function SelectionPage({
           <input
             type="number"
             min={1}
-            max={TOTAL_BOARDS}
+            max={totalBoardsCount}
             placeholder="Jump to board #"
             value={jumpInput}
             onChange={(e) => setJumpInput(e.target.value)}
@@ -334,8 +410,12 @@ export default function SelectionPage({
 
       {selectedBoard && (
         <div className="mx-2 mb-1 px-3 py-2 bg-green-500/20 border border-green-400/40 rounded-xl flex items-center justify-between shrink-0">
-          <span className="text-[11px] font-black text-green-200 uppercase">Your board: #{selectedBoard}</span>
-          <span className="text-[9px] font-bold text-green-300/80">Tap again to deselect</span>
+          <span className="text-[11px] font-black text-green-200 uppercase">
+            Your board: #{selectedBoard}
+          </span>
+          <span className="text-[9px] font-bold text-green-300/80">
+            Tap again to deselect
+          </span>
         </div>
       )}
 
@@ -353,17 +433,25 @@ export default function SelectionPage({
       >
         {syncError && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm p-6 text-center">
-            <div className="bg-indigo-950 border border-white/10 p-6 rounded-[32px] shadow-2xl max-w-[260px]">
-              <RefreshCw size={32} className="text-yellow-500 mb-4 mx-auto opacity-50" />
-              <h3 className="text-white text-sm font-black uppercase italic tracking-tight mb-2">Sync Timeout</h3>
+            <div className="bg-indigo-950 border border-white/10 p-6 rounded-4xl shadow-2xl max-w-65">
+              <RefreshCw
+                size={32}
+                className="text-yellow-500 mb-4 mx-auto opacity-50"
+              />
+              <h3 className="text-white text-sm font-black uppercase italic tracking-tight mb-2">
+                Sync Timeout
+              </h3>
               <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wide mb-6 leading-relaxed">
                 We are having trouble syncing the board states from the server.
               </p>
-              <button 
+              <button
                 onClick={startSyncTimer}
                 className="w-full py-3.5 bg-yellow-500 text-indigo-950 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shadow-yellow-900/20"
               >
-                <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                <RefreshCw
+                  size={14}
+                  className={isSyncing ? 'animate-spin' : ''}
+                />
                 {isSyncing ? 'Syncing...' : 'Retry Sync'}
               </button>
             </div>
@@ -386,11 +474,11 @@ export default function SelectionPage({
             height={gridHeight || 500}
             rowCount={rowCount}
             rowHeight={rowHeight}
-            width={gridWidth || (window.innerWidth - 32)}
+            width={gridWidth || window.innerWidth - 32}
             itemKey={itemKey}
             itemData={itemData}
             className="custom-scrollbar"
-            overscanCount={5}
+            overscanCount={2}
           >
             {BoardCell as any}
           </FixedSizeGrid>

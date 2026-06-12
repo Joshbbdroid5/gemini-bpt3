@@ -1,12 +1,18 @@
 import { io, Socket } from 'socket.io-client';
-import { GameInitData, HistoryEntry, PickBoardResult, PoolUpdateData } from '../types';
+import {
+  GameInitData,
+  HistoryEntry,
+  PickBoardResult,
+  PoolUpdateData,
+} from '../types';
 
-const isNode = typeof process !== 'undefined' && process.versions && !!process.versions.node;
+const isNode =
+  typeof process !== 'undefined' && process.versions && !!process.versions.node;
 
 // Environment-aware URL resolution to prevent Node.js crashes
-const SOCKET_URL: string = isNode 
-  ? (process.env.VITE_BACKEND_URL || 'http://localhost:3001')
-  : (import.meta.env.VITE_BACKEND_URL || window.location.origin);
+const SOCKET_URL: string = isNode
+  ? process.env.VITE_BACKEND_URL || 'http://localhost:3001'
+  : import.meta.env.VITE_BACKEND_URL || window.location.origin;
 
 export const socketEvents = {
   // Outgoing Events (Player -> Server)
@@ -31,9 +37,16 @@ export const socketEvents = {
 } as const;
 
 export interface ServerToClientEvents {
-  [socketEvents.USER_STATUS]: (status: { isVerified: boolean; phone?: string; referredCount?: number }) => void;
+  [socketEvents.USER_STATUS]: (status: {
+    isVerified: boolean;
+    phone?: string;
+    referredCount?: number;
+  }) => void;
   [socketEvents.GAME_INIT]: (data: GameInitData) => void;
-  [socketEvents.GAME_STATUS]: (status: { isGameRunning: boolean; gameId: string }) => void;
+  [socketEvents.GAME_STATUS]: (status: {
+    isGameRunning: boolean;
+    gameId: string;
+  }) => void;
   [socketEvents.GAME_STOPPED]: (msg?: string) => void;
   [socketEvents.GAME_RESET]: () => void;
   [socketEvents.BALL_DRAWN]: (num: number) => void;
@@ -52,11 +65,14 @@ export interface ClientToServerEvents {
   [socketEvents.FORCE_START]: (data: { secret: string }) => void;
 }
 
-export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_URL, {
-  autoConnect: false,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
-});
+export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
+  SOCKET_URL,
+  {
+    autoConnect: false,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+  }
+);
 
 const onSocketConnect = () => {
   socket.emit(socketEvents.JOIN_ROOM);

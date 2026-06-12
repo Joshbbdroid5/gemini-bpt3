@@ -915,7 +915,7 @@ export default function AdminDashboard({ onBack }: Props) {
   );
 }
 
-function SidebarStatCard({ label, value, unit, icon, color }: { label: string, value: number, unit?: string, icon: React.ReactNode, color: string }) {
+const SidebarStatCard = ({ label, value, unit, icon, color }: { label: string, value: number, unit?: string, icon: React.ReactNode, color: string }) => {
   const styles: Record<string, { bg: string, border: string, text: string, icon: string }> = {
     indigo: { bg: 'bg-indigo-600/20', border: 'border-indigo-500/30', text: 'text-indigo-300', icon: 'text-indigo-400' },
     green: { bg: 'bg-green-600/20', border: 'border-green-500/30', text: 'text-green-300', icon: 'text-green-400' },
@@ -937,14 +937,14 @@ function SidebarStatCard({ label, value, unit, icon, color }: { label: string, v
       </div>
     </div>
   );
-}
+};
 
-function RoundSortBtn({ label, activeKey, currentSort, onSort }: { 
+const RoundSortBtn = ({ label, activeKey, currentSort, onSort }: { 
   label: string, 
   activeKey: 'date' | 'players' | 'pool', 
   currentSort: { key: string, order: 'asc' | 'desc' }, 
   onSort: (s: any) => void 
-}) {
+}) => {
   const isActive = currentSort.key === activeKey;
   return (
     <button
@@ -961,4 +961,4 @@ function RoundSortBtn({ label, activeKey, currentSort, onSort }: {
       {isActive ? (currentSort.order === 'desc' ? '↓' : '↑') : <ArrowUpDown size={10} aria-hidden="true" />}
     </button>
   );
-}
+};
