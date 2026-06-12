@@ -1,3 +1,7 @@
+/// <reference types="react" />
+
+/// <reference types="react" />
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {

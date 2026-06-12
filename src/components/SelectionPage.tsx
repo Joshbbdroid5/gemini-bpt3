@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { Wallet, Timer, ShoppingCart, ArrowLeft, Search, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, SINGLE_STAKE, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
 import * as ReactWindow from 'react-window';
 
-// Robust component extraction to handle ESM/CJS interop issues in different bundlers
-const FixedSizeGrid = (ReactWindow as any).FixedSizeGrid || (ReactWindow as any).default?.FixedSizeGrid;
+// Use namespace import and cast to resolve "no exported member" TypeScript errors (2305)
+const { FixedSizeGrid, areEqual } = ReactWindow as any;
 
 interface Props {
   wallet: number;
@@ -28,11 +28,9 @@ const BoardCell = memo(({ columnIndex, rowIndex, style, data }: {
     takenBoards: Set<number>;
     pendingBoardId: number | null;
     handleSelect: (id: number) => void;
-    columnCount: number;
-    gap: number;
   };
 }) => {
-  const { selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount, gap } = data;
+  const { selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount } = data;
   const id = rowIndex * columnCount + columnIndex + 1;
 
   // Ensure we don't render beyond TOTAL_BOARDS
@@ -44,43 +42,29 @@ const BoardCell = memo(({ columnIndex, rowIndex, style, data }: {
   const isTaken = takenBoards.has(id) && !isSelected;
   const isPending = pendingBoardId === id;
 
-  // Safety check for dimension types to prevent NaN crashes during math operations
-  const width = typeof style.width === 'number' ? style.width : 0;
-  const height = typeof style.height === 'number' ? style.height : 0;
-  const left = typeof style.left === 'number' ? style.left : 0;
-  const top = typeof style.top === 'number' ? style.top : 0;
-
-  // Adjust style to account for gap
-  const adjustedStyle: React.CSSProperties = {
-    ...style,
-    width: Math.max(0, width - gap),
-    height: Math.max(0, height - gap),
-    left: left + gap / 2,
-    top: top + gap / 2,
-  };
-
   return (
-    <button
-      id={`board-${id}`}
-      style={adjustedStyle}
-      onClick={() => handleSelect(id)}
-      className={`
-        flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-all active:scale-95 relative overflow-hidden
-        ${isPending ? 'opacity-60 animate-pulse' : ''}
-        ${
-          isSelected
-            ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
-            : isTaken
-              ? 'bg-black/20 text-white/20 border-white/5 border-dashed cursor-not-allowed'
-              : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg'
-        }
-      `}
-      disabled={(!isSelected && isTaken) || pendingBoardId !== null}
-    >
-      <span className="relative z-10">{id}</span>
-    </button>
+    <div style={style} className="p-[3px]">
+      <button
+        id={`board-${id}`}
+        onClick={() => handleSelect(id)}
+        className={`
+          w-full h-full flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-all active:scale-95 relative overflow-hidden
+          ${isPending ? 'opacity-60 animate-pulse' : ''}
+          ${
+            isSelected
+              ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
+              : isTaken
+                ? 'bg-black/20 text-white/20 border-white/5 border-dashed cursor-not-allowed'
+                : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg'
+          }
+        `}
+        disabled={(!isSelected && isTaken) || pendingBoardId !== null}
+      >
+        <span className="relative z-10">{id}</span>
+      </button>
+    </div>
   );
-});
+}, areEqual);
 
 export default function SelectionPage({
   wallet,
@@ -151,11 +135,17 @@ export default function SelectionPage({
 
   // Memoize itemData to prevent unnecessary re-renders of all cells
   const itemData = useMemo(() => (
-    { selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount, gap }
-  ), [selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount, gap]);
+    { selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount }
+  ), [selectedIds, takenBoards, pendingBoardId, handleSelect, columnCount]);
+
+  // Stable key generator for virtualization performance
+  const itemKey = useCallback(({ columnIndex, rowIndex, data }: any) => {
+    return rowIndex * data.columnCount + columnIndex + 1;
+  }, []);
 
   const rowCount = useMemo(() => {
-    return Math.ceil(TOTAL_BOARDS / columnCount);
+    const total = TOTAL_BOARDS || 600;
+    return Math.ceil(total / columnCount);
   }, [columnCount]);
 
   const startSyncTimer = useCallback(() => {
@@ -189,8 +179,10 @@ export default function SelectionPage({
 
     const observer = new ResizeObserver((entries) => {
       if (entries[0]) {
-        setGridWidth(entries[0].contentRect.width);
-        setGridHeight(entries[0].contentRect.height);
+        window.requestAnimationFrame(() => {
+          setGridWidth(entries[0].contentRect.width);
+          setGridHeight(entries[0].contentRect.height);
+        });
       }
     });
 
@@ -385,7 +377,7 @@ export default function SelectionPage({
           </div>
         )}
 
-        {gridWidth > 0 && gridHeight > 0 && FixedSizeGrid && (
+        {FixedSizeGrid && (
           <FixedSizeGrid
             ref={gridRef}
             columnCount={columnCount}
@@ -393,7 +385,8 @@ export default function SelectionPage({
             height={gridHeight || 500}
             rowCount={rowCount}
             rowHeight={rowHeight}
-            width={gridWidth || 300}
+            width={gridWidth || (window.innerWidth - 32)}
+            itemKey={itemKey}
             itemData={itemData}
             className="custom-scrollbar"
             overscanCount={5}

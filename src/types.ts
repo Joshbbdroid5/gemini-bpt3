@@ -20,6 +20,7 @@ export interface RoomStats {
   state: GameState;
   isLive: boolean;
   isEngineActive: boolean;
+  selectionTimeLeft?: number;
 }
 
 export interface PoolUpdateData {

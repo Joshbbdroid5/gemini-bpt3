@@ -84,6 +84,9 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo'
 if (!ADMIN_SECRET) {
   logger.error('CRITICAL: ADMIN_SECRET is not set in environment variables!');
 }
+if (!BOT_TOKEN) {
+  logger.error('CRITICAL: TELEGRAM_BOT_TOKEN is not set! Socket authentication will always fail.');
+}
 
 // MongoDB Connection
 if (process.env.NODE_ENV === 'production' && MONGODB_URI.includes('localhost')) {
@@ -1562,7 +1565,7 @@ function registerSocketHandlers(io: SocketIOServer) {
   const telegramUsername = user.username ? `@${user.username}` : (user.first_name || 'User');
   isVerified = true;
 
-  logger.debug(`Authenticated as: ${userId}`);
+  logger.info(`Socket authenticated: User ID ${userId} (${telegramUsername})`);
   socketMapping.set(userId, socket.id);
 
   // Force Start Round (Admin Only — requires secret)
