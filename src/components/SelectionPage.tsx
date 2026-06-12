@@ -17,9 +17,15 @@ import {
 import toast from 'react-hot-toast';
 import { TOTAL_BOARDS, SINGLE_STAKE, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
-// @ts-ignore - react-window types can be problematic with named exports in some ESM setups
-import * as ReactWindow from 'react-window';
-const { FixedSizeGrid, areEqual } = ReactWindow as any;
+// react-window exports vary between bundlers (ESM/CJS). Use runtime-safe import to avoid blank render.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const ReactWindow = require('react-window');
+const FixedSizeGrid =
+  ReactWindow.FixedSizeGrid || (ReactWindow as any).default?.FixedSizeGrid;
+const areEqual =
+  ReactWindow.areEqual ||
+  (ReactWindow as any).default?.areEqual ||
+  ((a: any, b: any) => a === b);
 
 interface Props {
   wallet: number;
@@ -466,15 +472,15 @@ export default function SelectionPage({
           </div>
         )}
 
-        {FixedSizeGrid && (
+        {FixedSizeGrid && gridWidth > 0 && gridHeight > 0 && (
           <FixedSizeGrid
             ref={gridRef}
             columnCount={columnCount}
             columnWidth={columnWidth}
-            height={gridHeight || 500}
+            height={gridHeight}
             rowCount={rowCount}
             rowHeight={rowHeight}
-            width={gridWidth || window.innerWidth - 32}
+            width={gridWidth}
             itemKey={itemKey}
             itemData={itemData}
             className="custom-scrollbar"
@@ -483,6 +489,13 @@ export default function SelectionPage({
             {BoardCell as any}
           </FixedSizeGrid>
         )}
+
+        {!syncError &&
+          (!FixedSizeGrid || gridWidth <= 0 || gridHeight <= 0) && (
+            <div className="flex items-center justify-center h-full w-full text-white/60 text-[10px] font-black uppercase">
+              Loading boards…
+            </div>
+          )}
       </div>
     </div>
   );
