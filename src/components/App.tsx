@@ -50,12 +50,6 @@ function getPlayLabel(stats: RoomStats, isMaintenanceMode: boolean): string {
   return 'Join Selection';
 }
 
-function getTimerLabel(stats: RoomStats & { selectionTimeLeft?: number }, isEngineActive: boolean): string { 
-  if (stats.isLive || stats.state === GameState.GAME) return 'Game in progress';
-  if (stats.selectionTimeLeft && stats.selectionTimeLeft > 0) return `${stats.selectionTimeLeft}s left to pick`;
-  return isEngineActive ? 'Selection open' : 'Waiting for admin';
-}
-
 export default function App() {
   // State persistence for "refreshing that exact page"
   const [phase, setPhase] = useState<AppPhase>(() => {
@@ -104,8 +98,6 @@ export default function App() {
   const [roomStats, setRoomStats] = useState<RoomStats & { selectionTimeLeft?: number }>({ // Single room stats
     pool: 0, players: 0, gameId: '---', isLive: false, isEngineActive: false, state: GameState.SELECTION, selectionTimeLeft: 0
   });
-  const [totalActivePlayers, setTotalActivePlayers] = useState(0); // State to track total active players across all rooms
-
   // Persist navigation state to localStorage
   useEffect(() => {
     localStorage.setItem('bingo_selected_ids', JSON.stringify(selectedBoardIds));
@@ -120,7 +112,7 @@ export default function App() {
         setTransactions(data);
       }
     } catch (e) {
-      if (e instanceof Error && e.name !== 'AbortError') console.error("Failed to fetch transactions:", e);
+      if (e instanceof Error && e.name !== 'AbortError') console.error("Failed to fetch transactions:", e.message.replace(/[\r\n]/g, ' '));
     }
   }, []);
 
@@ -187,7 +179,7 @@ export default function App() {
     const healthController = new AbortController();
     fetch(`${backendUrl}/health`, { signal: healthController.signal })
       .catch((e) => {
-        if (e instanceof Error && e.name !== 'AbortError') console.error("Backend health check failed:", e);
+        if (e instanceof Error && e.name !== 'AbortError') console.error("Backend health check failed:", String(e.message).replace(/[\r\n]/g, ' '));
       });
 
     let connectionTimeoutId: any;
@@ -202,7 +194,6 @@ export default function App() {
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: PoolUpdateData) => { // PoolUpdateData now contains single room
       if (data.room) setRoomStats(data.room as any); // Update single room stats
-      if (data.totalActive !== void 0) setTotalActivePlayers(data.totalActive);
       if (data.isMaintenance !== void 0) setIsMaintenanceMode(data.isMaintenance);
     };
 
@@ -227,7 +218,7 @@ export default function App() {
     };
 
     const handleConnectError = (err: Error) => {
-      console.error("Socket connection error:", err);
+      console.error("Socket connection error:", String(err?.message ?? '').replace(/[\r\n]/g, ' '));
       if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
       setConnectionError(true);
     };

@@ -3,10 +3,11 @@
 /// <reference types="react-dom" />
 
 interface ImportMetaEnv {
-  readonly VITE_API_URL: string; // Added for consistency, as admin-bot.ts uses it
+  readonly VITE_API_URL: string;
   readonly VITE_BACKEND_URL: string;
   readonly VITE_TELEGRAM_BOT_USERNAME: string;
-  readonly GEMINI_API_KEY?: string; // Assuming GEMINI_API_KEY might also be VITE_ prefixed or directly accessed
+  readonly VITE_ADMIN_CHAT_ID?: string;
+  readonly GEMINI_API_KEY?: string;
 }
 
 interface ImportMeta {

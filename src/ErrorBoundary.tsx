@@ -1,7 +1,3 @@
-/// <reference types="react" />
-
-/// <reference types="react" />
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -22,7 +18,9 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+    const msg = String(error?.message ?? '').replace(/[\r\n]/g, ' ');
+    const stack = String(errorInfo?.componentStack ?? '').replace(/[\r\n]/g, ' ');
+    console.error("Uncaught error:", msg, stack);
   }
 
   public render() {

@@ -1,5 +1,2 @@
-declare module 'framer-motion' {
-  export const motion: any;
-  export const AnimatePresence: any;
-}
-
+// framer-motion types are provided by the installed package.
+// This file is intentionally left empty to avoid overriding the real types.

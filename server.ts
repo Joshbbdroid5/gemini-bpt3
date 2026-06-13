@@ -377,6 +377,7 @@ function verifyTelegramData(initData: string): boolean {
 
   const urlParams = new URLSearchParams(initData);
   const hash = urlParams.get('hash');
+  if (!hash) return false;
   urlParams.delete('hash');
 
   const dataCheckString = Array.from(urlParams.entries())
@@ -386,7 +387,7 @@ function verifyTelegramData(initData: string): boolean {
 
   const secretKey = crypto
     .createHmac('sha256', 'WebAppData')
-    .update(BOT_TOKEN)
+    .update(BOT_TOKEN as string)
     .digest();
   const hmac = crypto
     .createHmac('sha256', secretKey)
@@ -1331,6 +1332,7 @@ async function getUserHistory(userId: string): Promise<HistoryEntry[]> {
   const winnerCounts = new Map<string, number>();
 
   gameArchives.forEach((archive) => {
+    if (!archive.gameId) return;
     gameArchiveMap.set(archive.gameId, archive);
     winnerCounts.set(
       archive.gameId,
