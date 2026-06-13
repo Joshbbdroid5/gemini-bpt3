@@ -19,8 +19,7 @@ import * as ReactWindow from 'react-window';
 import { TOTAL_BOARDS, SINGLE_STAKE, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
 
-// react-window exports can vary between bundlers (ESM/CJS).
-// Using these fallbacks ensures the component doesn't crash if the import structure changes.
+// Robust interop for react-window to prevent blank page on import failure
 const FixedSizeGrid =
   (ReactWindow as any).FixedSizeGrid ||
   (ReactWindow as any).default?.FixedSizeGrid;
@@ -135,7 +134,7 @@ export default function SelectionPage({
 
   // State for dynamic grid dimensions
   const [gridWidth, setGridWidth] = useState(window.innerWidth - 32); // Better initial guess
-  const [gridHeight, setGridHeight] = useState(500);
+  const [gridHeight, setGridHeight] = useState(window.innerHeight - 250); // Improved initial fallback
 
   // Responsive column count: ensures touch targets don't get too small on narrow screens
   const columnCount = useMemo(() => {
@@ -242,6 +241,16 @@ export default function SelectionPage({
     // Guard for environments where ResizeObserver is missing (can crash mount)
     if (typeof ResizeObserver === 'undefined') {
       return;
+    }
+
+    // Perform an initial measurement immediately on mount
+    if (gridContainerRef.current) {
+      setGridWidth(
+        gridContainerRef.current.offsetWidth || window.innerWidth - 32
+      );
+      setGridHeight(
+        gridContainerRef.current.offsetHeight || window.innerHeight - 250
+      );
     }
 
     const observer = new ResizeObserver((entries) => {
