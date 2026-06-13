@@ -67,7 +67,7 @@ export default function AdminDashboard({ onBack }: Props) {
         if (response.status === 403) setIsAuthenticated(false);
       }
     } catch (err) {
-      console.error('Admin login fetch error:', err);
+      console.error('Admin login fetch error:', err instanceof Error ? err.message.replace(/[\r\n]/g, ' ') : String(err));
       toast.error('Connection to admin services failed.');
     } finally {
       setLoading(false);

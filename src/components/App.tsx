@@ -1,5 +1,3 @@
-/// <reference types="react" />
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 

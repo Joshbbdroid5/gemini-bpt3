@@ -315,7 +315,7 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
   useEffect(() => {
     if (showWinnerPopup && !isMuted && bingoAudioRef.current) {
       bingoAudioRef.current.currentTime = 0;
-      bingoAudioRef.current.play().catch((e: any) => console.log('Audio playback prevented by browser:', e));
+      bingoAudioRef.current.play().catch((e: any) => console.log('Audio playback prevented by browser:', String(e?.message ?? e).replace(/[\r\n]/g, ' ')));
     }
   }, [showWinnerPopup, isMuted]);
 
