@@ -1538,6 +1538,21 @@ async function processBoardPick(
   };
 }
 
+// Serialize all Mongoose doc saves through a promise chain to prevent ParallelSaveError
+let roomSaveChain: Promise<void> = Promise.resolve();
+function safeRoomSave(context: string): void {
+  if (!singleRoomState.save) return;
+  roomSaveChain = roomSaveChain
+    .then(() => singleRoomState.save!())
+    .then(() => undefined as void)
+    .catch((e: any) => {
+      logger.error(`Room save error [${context}]`, {
+        error: e?.message ?? String(e),
+        stack: e?.stack,
+      });
+    });
+}
+
 // Debounce logic for high-concurrency state synchronization
 let syncTimer: NodeJS.Timeout | null = null;
 const scheduleStateSync = () => {
@@ -1549,7 +1564,7 @@ const scheduleStateSync = () => {
       io.emit(socketEvents.BOARD_SYNC, {
         takenBoards: getTakenBoardIds(),
       });
-      if (singleRoomState.save) await singleRoomState.save();
+      if (singleRoomState.save) safeRoomSave('scheduleStateSync');
     } catch (err) {
       logger.error('Debounced state sync error', { error: err });
     }
@@ -1746,7 +1761,7 @@ async function runGameLoop() {
   }
 
   singleRoomState.gameLoopTimeout = setTimeout(() => runGameLoop(), 3000);
-  if (singleRoomState.save) await singleRoomState.save().catch(console.error);
+  if (singleRoomState.save) safeRoomSave('runGameLoop');
 }
 function startSelectionPhase() {
   if (globalGameState.stopRequested) {
@@ -1798,14 +1813,7 @@ function startSelectionPhase() {
     // Give clients a 2s buffer to transition from Selection to Game page before drawing balls
     setTimeout(() => runGameLoop(), 2000);
   }, 40000);
-  if (singleRoomState.save)
-    singleRoomState.save().catch((e) =>
-      logger.error('Room selection start save error', {
-        error: e.message,
-        stack: e.stack,
-        stake: SINGLE_STAKE,
-      })
-    );
+  if (singleRoomState.save) safeRoomSave('startSelectionPhase');
 }
 
 function resetGame() {
@@ -1861,24 +1869,7 @@ function resetGame() {
   if (singleRoomState.markModified) singleRoomState.markModified('boardStatus');
   // Prevent ParallelSaveError: ensure we never call save() concurrently on the same mongoose doc
   // during resetGame() (which can be triggered by timers / overlapping game-loop transitions).
-  if (singleRoomState.save) {
-    const anyRoom: any = singleRoomState;
-    if (!anyRoom.__saveInFlight) {
-      anyRoom.__saveInFlight = true;
-      void singleRoomState
-        .save()
-        .catch((e) =>
-          logger.error('Room reset save error', {
-            error: (e as any)?.message ?? String(e),
-            stack: (e as any)?.stack,
-            stake: SINGLE_STAKE,
-          })
-        )
-        .finally(() => {
-          anyRoom.__saveInFlight = false;
-        });
-    }
-  }
+  if (singleRoomState.save) safeRoomSave('resetGame');
   broadcastPoolUpdate();
   refreshAllUserHistories().catch((e) =>
     logger.error('History refresh error after reset', { error: e })
