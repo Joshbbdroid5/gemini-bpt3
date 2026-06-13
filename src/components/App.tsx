@@ -296,24 +296,21 @@ export default function App() {
     };
 
     const tg = window.Telegram?.WebApp;
-    if (tg) { // Check if Telegram WebApp is available
-      tg.expand(); // Open full screen in Telegram
-      const user = tg.initDataUnsafe?.user; // Get user data from Telegram
+    if (tg && tg.initData) {
+      tg.expand();
+      const user = tg.initDataUnsafe?.user;
       if (user) {
-        // Construct display name from first_name, last_name, or username
         const displayName = user.first_name || user.username || '';
         const lastName = user.last_name ? ` ${user.last_name}` : '';
         setTelegramDisplayName(`${displayName}${lastName}`.trim());
       }
       if (user?.id) setMyId(user.id.toString());
-
-      connectToGame({
-
-        initData: tg.initData,
-        user: user // Pass Telegram user data to connectToGame
-      });
+      connectToGame({ initData: tg.initData, user });
     } else {
-      console.warn("Telegram WebApp not detected. Access restricted.");
+      // Not inside Telegram — show connection error immediately instead of waiting 18s
+      if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
+      clearTimeout(slowConnectId);
+      setConnectionError(true);
     }
     return () => {
       cleanup();
@@ -579,19 +576,21 @@ export default function App() {
 
           <AnimatePresence>
             {connectionError && (
-              <motion.div // Connection error overlay
+              <motion.div
                 key="connection-error"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-150 bg-red-800 flex flex-col items-center justify-center p-8 text-center text-white"
+                className="fixed inset-0 z-150 bg-[#0f170a] flex flex-col items-center justify-center p-8 text-center text-white"
               >
-                <RefreshCw size={40} className="mb-6 animate-spin-slow" />
-                <h2 className="text-2xl font-black uppercase italic mb-2">Connection Lost</h2>
-                <p className="text-red-200 text-sm mb-8">
-                  Could not connect to the game server. Please check your internet connection or try again later.
+                <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mb-6">
+                  <RefreshCw size={36} className="text-indigo-400" />
+                </div>
+                <h2 className="text-2xl font-black uppercase italic mb-2">Open in Telegram</h2>
+                <p className="text-gray-400 text-sm mb-8 max-w-xs leading-relaxed">
+                  This app must be opened through the Telegram bot. Please use the bot link to access Lomi Bingo.
                 </p>
-                <button onClick={handleResync} className="w-full bg-white text-red-800 py-4 rounded-2xl font-black uppercase">Retry Connection</button>
+                <button onClick={handleResync} className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-xs tracking-widest">Retry</button>
               </motion.div>
             )}
           </AnimatePresence>
