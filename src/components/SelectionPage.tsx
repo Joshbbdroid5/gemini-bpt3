@@ -287,17 +287,23 @@ export default function SelectionPage({
       }
     };
 
-    const handleGameInit = (data: {
-      takenBoards?: number[];
-      myBoardIds?: number[];
-    }) => {
+    const handleGameInit = (data: any) => {
       setIsSyncing(false);
       setSyncError(false);
+
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      if (data.takenBoards) setTakenBoards(new Set(data.takenBoards));
-      if (data.myBoardIds !== undefined) {
-        setSelectedIds(new Set(data.myBoardIds));
-        onSelectionChange(data.myBoardIds);
+
+      const taken = Array.isArray(data?.takenBoards)
+        ? data.takenBoards
+        : undefined;
+      const myIds = Array.isArray(data?.myBoardIds)
+        ? data.myBoardIds
+        : undefined;
+
+      if (taken) setTakenBoards(new Set(taken));
+      if (myIds) {
+        setSelectedIds(new Set(myIds));
+        onSelectionChange(myIds);
       }
     };
 
