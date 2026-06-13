@@ -1,10 +1,17 @@
-import { io, Socket } from 'socket.io-client';
+import * as socketIoModule from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import {
   GameInitData,
   HistoryEntry,
   PickBoardResult,
   PoolUpdateData,
 } from '../types';
+
+// Robust interop for socket.io-client to prevent blank page on import failure
+const io =
+  (socketIoModule as any).default ||
+  (socketIoModule as any).io ||
+  socketIoModule;
 
 const isNode =
   typeof process !== 'undefined' && process.versions && !!process.versions.node;

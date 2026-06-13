@@ -15,15 +15,17 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import * as ReactWindow from 'react-window';
 import { TOTAL_BOARDS, SINGLE_STAKE, PickBoardResult } from '../types';
 import { socket, socketEvents } from './socket';
-// react-window exports vary between bundlers (ESM/CJS). Use runtime-safe import to avoid blank render.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const ReactWindow = require('react-window');
+
+// react-window exports can vary between bundlers (ESM/CJS).
+// Using these fallbacks ensures the component doesn't crash if the import structure changes.
 const FixedSizeGrid =
-  ReactWindow.FixedSizeGrid || (ReactWindow as any).default?.FixedSizeGrid;
+  (ReactWindow as any).FixedSizeGrid ||
+  (ReactWindow as any).default?.FixedSizeGrid;
 const areEqual =
-  ReactWindow.areEqual ||
+  (ReactWindow as any).areEqual ||
   (ReactWindow as any).default?.areEqual ||
   ((a: any, b: any) => a === b);
 
