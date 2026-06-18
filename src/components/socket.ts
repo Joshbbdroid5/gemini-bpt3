@@ -5,13 +5,16 @@ import {
   HistoryEntry,
   PickBoardResult,
   PoolUpdateData,
+  IWinnerInfo,
+  ISocketAuthUser,
 } from '../types';
 
 // Robust interop for socket.io-client to prevent blank page on import failure
+type IoFunction = typeof socketIoModule.io;
 const io =
-  (socketIoModule as any).default ||
-  (socketIoModule as any).io ||
-  socketIoModule;
+  (socketIoModule as unknown as { default: IoFunction }).default ||
+  (socketIoModule as unknown as { io: IoFunction }).io ||
+  (socketIoModule as unknown as IoFunction);
 
 const isNode =
   typeof process !== 'undefined' && process.versions && !!process.versions.node;
@@ -57,7 +60,14 @@ export interface ServerToClientEvents {
   [socketEvents.GAME_STOPPED]: (msg?: string) => void;
   [socketEvents.GAME_RESET]: () => void;
   [socketEvents.BALL_DRAWN]: (num: number) => void;
-  [socketEvents.NEW_WINNER]: (data: any) => void;
+  [socketEvents.NEW_WINNER]: (
+    data: IWinnerInfo & {
+      username: string;
+      payout: number;
+      gameId: string;
+      time: string;
+    }
+  ) => void;
   [socketEvents.POOL_UPDATE]: (data: PoolUpdateData) => void;
   [socketEvents.BOARD_SYNC]: (data: { takenBoards: number[] }) => void;
   [socketEvents.PICK_BOARD_RESULT]: (result: PickBoardResult) => void;
@@ -85,7 +95,10 @@ const onSocketConnect = () => {
   socket.emit(socketEvents.JOIN_ROOM);
 };
 
-export const connectToGame = (authData: any) => {
+export const connectToGame = (authData: {
+  initData: string;
+  user: ISocketAuthUser;
+}) => {
   socket.auth = authData;
   socket.off('connect', onSocketConnect);
   socket.on('connect', onSocketConnect);

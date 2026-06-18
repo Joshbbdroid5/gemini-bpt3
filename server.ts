@@ -2,20 +2,20 @@ import dotenv from 'dotenv';
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import crypto from 'crypto';
-import { generateBoard, checkWin } from './src/logic';
+import { generateBoard, checkWin, WinningPattern } from './src/logic';
 import fs from 'fs';
 import { mainBot, notifyUser } from './main-bot';
 import { adminBot } from './admin-bot';
 import { Markup } from 'telegraf';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from 'url'; //
 import { socketEvents } from './src/components/socket'; // Import socketEvents
 import mongoose, { Error as MongooseError } from 'mongoose';
 import logger from './src/logger';
 import client from 'prom-client';
-import { metrics, Counter, ObservableGauge } from '@opentelemetry/api';
+import { metrics, ObservableResult } from '@opentelemetry/api';
 import {
   GameState,
   RoomStats,
@@ -23,6 +23,21 @@ import {
   HistoryEntry,
   PickBoardResult,
   SINGLE_STAKE,
+  IGlobalGameState,
+  IAdminCreateUserBody,
+  IAdminAddPendingDepositBody,
+  IAdminUpdateWalletBody,
+  IAdminWithdrawRequestBody,
+  IAdminRefundWithdrawalBody,
+  IAdminCompleteWithdrawalBody,
+  IAdminRejectDepositBody,
+  IAdminVerifyUserBody,
+  IAdminToggleMaintenanceBody,
+  IAdminQuery,
+  IWinnerInfo,
+  ISocketAuthUser,
+  IRoomDocToObject,
+  IUserLean,
 } from './src/types';
 
 dotenv.config();
@@ -48,7 +63,7 @@ register.registerMetric(httpRequestDurationMicroseconds);
 
 // Configure CORS for Socket.io
 let io: SocketIOServer; // Declare io here, initialize after DB connection
-
+//
 const allowedOrigins =
   process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map((url) =>
@@ -56,7 +71,7 @@ const allowedOrigins =
       )
     : ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
-const corsConfig = {
+const corsConfig: CorsOptions = {
   origin: allowedOrigins,
   methods: ['GET', 'POST'],
   credentials: true,
@@ -69,7 +84,7 @@ app.use((req, res, next) => {
     httpRequestDurationMicroseconds.observe(
       {
         method: req.method,
-        route: req.route?.path || req.path,
+        route: (req.route as { path?: string } | undefined)?.path ?? req.path,
         code: res.statusCode,
       },
       duration
@@ -81,13 +96,64 @@ app.use((req, res, next) => {
 app.use(cors(corsConfig)); // Match REST API CORS policy to Socket.io
 app.use(express.json());
 
+// Utility to wrap async Express route handlers for centralized error handling
+type AsyncHandler = (
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) => Promise<void>; // Changed to Promise<void>
+
+const asyncHandler =
+  (fn: AsyncHandler) =>
+  (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ): void => {
+    void Promise.resolve(fn(req, res, next)).catch((err: unknown) => {
+      logger.error('Unhandled route error', {
+        path: req.path,
+        method: req.method,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        body: req.body,
+        query: req.query,
+      });
+
+      if (err instanceof MongooseError.ValidationError) {
+        return res
+          .status(400)
+          .json({ error: 'Validation failed', details: err.message });
+      }
+      if (err instanceof MongooseError.CastError) {
+        return res
+          .status(400)
+          .json({ error: 'Invalid input format', details: err.message });
+      }
+
+      const error = err as { code?: number; message?: string };
+      if (error?.code === 11000) {
+        res
+          .status(409)
+          .json({ error: 'Duplicate entry', details: error.message });
+        return;
+      }
+
+      res.status(500).json({
+        error: 'Internal server error',
+        details:
+          (err instanceof Error ? err.message : String(err)) ??
+          'An unexpected error occurred.',
+      });
+    });
+  };
+
 // Ensure PORT is strictly parsed as a decimal integer
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const MONGODB_URI =
   process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo';
-
 // Debugging: Check for essential environment variables
 if (!ADMIN_SECRET) {
   logger.error('CRITICAL: ADMIN_SECRET is not set in environment variables!');
@@ -138,7 +204,7 @@ const dbPromise = mongoose
   });
 
 // Global Game State Object to track server-wide status
-const globalGameState = {
+const globalGameState: IGlobalGameState = {
   totalVolume: 0,
   totalProfit: 0,
   isMaintenanceMode: false,
@@ -239,6 +305,26 @@ const userSchema = new mongoose.Schema<IUser>({
   phone: { type: String, unique: true, sparse: true }, // Added unique: true and sparse: true
   referredCount: { type: Number, default: 0 }, // Added default value
 });
+
+interface RoomState {
+  currentBalls: number[];
+  shuffledBalls: number[];
+  globalPool: number;
+  state: GameState;
+  currentGameId: string;
+  selectionTimer?: NodeJS.Timeout;
+  selectionInterval?: NodeJS.Timeout;
+  selectionStartTime?: number; // Timestamp when selection phase started
+  selectionDuration?: number; // Total duration of selection phase in ms
+  playerBoards: Map<string, number[]>;
+  boardStatus: Map<string, string>;
+  currentBallsSet: Set<number>; // Optimization: Incremental set to avoid re-creation
+  winCache: Map<number, { isWinner: boolean; patterns: WinningPattern[] }>;
+  gameLoopTimeout?: NodeJS.Timeout;
+  save?: () => Promise<void>; // Changed to Promise<void>
+  markModified?: (path: string) => void;
+}
+
 const User = mongoose.model<IUser>('User', userSchema);
 
 // RoomState Schema for persistence
@@ -336,14 +422,15 @@ async function syncCache() {
     );
 
     if (roomDoc) {
-      const docObj = roomDoc.toObject();
+      const docObj = roomDoc.toObject() as unknown as IRoomDocToObject;
       singleRoomState = {
+        //
         ...docObj,
         playerBoards: new Map(Object.entries(docObj.playerBoards || {})),
         boardStatus: new Map(Object.entries(docObj.boardStatus || {})),
         winCache: new Map(),
         currentBallsSet: new Set(docObj.currentBalls || []),
-        save: () => {
+        save: async () => {
           // Automatically map in-memory state back to the Mongoose document
           const keysToSync: (keyof IRoomState)[] = [
             'currentBalls',
@@ -357,16 +444,16 @@ async function syncCache() {
             'boardStatus',
           ];
 
-          keysToSync.forEach((key) => {
+          keysToSync.forEach((key: keyof IRoomState) => {
             roomDoc.set(key, singleRoomState[key]);
           });
 
-          return roomDoc.save();
+          await roomDoc.save();
         },
         markModified: (path: string) => roomDoc.markModified(path),
       };
     }
-  } catch (err) {
+  } catch (err: unknown) {
     logger.error('Failed to sync cache from MongoDB', { error: err });
   }
 }
@@ -387,7 +474,7 @@ function verifyTelegramData(initData: string): boolean {
 
   const secretKey = crypto
     .createHmac('sha256', 'WebAppData')
-    .update(BOT_TOKEN as string)
+    .update(BOT_TOKEN)
     .digest();
   const hmac = crypto
     .createHmac('sha256', secretKey)
@@ -402,7 +489,7 @@ function verifyTelegramData(initData: string): boolean {
 app.get('/health', (req, res) => {
   const dbStatus =
     mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-  const clientsCount = io ? io.engine.clientsCount : 0;
+  const clientsCount = io ? io.engine.clientsCount : 0; // io is initialized later, so it can be undefined here.
   res.json({
     status: 'ok',
     database: dbStatus,
@@ -417,148 +504,202 @@ app.get('/metrics', async (req, res) => {
 });
 
 // ADMIN ENDPOINT: Create or update user record (used for referrals)
-app.post('/admin/create-user', async (req, res) => {
-  const { userId, referredBy, secret } = req.body;
-
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  try {
-    const user = await User.findOneAndUpdate(
-      { userId },
-      { $set: { referredBy } },
-      { upsert: true, new: true }
-    );
-    if (ADMIN_CHAT_ID) {
-      const displayId = user.username
-        ? `${user.username}\n<i>ID: ${userId}</i>`
-        : `<code>${userId}</code>`;
-      await adminBot.telegram
-        .sendMessage(
-          ADMIN_CHAT_ID,
-          `👤 <b>New User Created:</b>\n${displayId}${referredBy ? `\n(Referred by: ${referredBy})` : ''}`,
-          { parse_mode: 'HTML' }
-        )
-        .catch((e) => logger.error('Admin notify error', { error: e }));
+app.post(
+  '/admin/create-user',
+  asyncHandler(async (req, res) => {
+    //
+    const { userId, referredBy, secret }: IAdminCreateUserBody = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
     }
-    res.json({ success: true, user });
-  } catch (err) {
-    logger.error('User Creation Error', { error: err, userId });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+    //
+    try {
+      const user = await User.findOneAndUpdate(
+        { userId },
+        { $set: { referredBy } },
+        { upsert: true, new: true }
+      ); // `user` is implicitly `any` here, but its type is `IUser`
+      if (ADMIN_CHAT_ID) {
+        const displayId = user.username
+          ? `${user.username}\n<i>ID: ${userId}</i>`
+          : `<code>${userId}</code>`;
+        await adminBot.telegram
+          .sendMessage(
+            ADMIN_CHAT_ID,
+            `👤 <b>New User Created:</b>\n${displayId}${referredBy ? `\n(Referred by: ${referredBy})` : ''}`,
+            { parse_mode: 'HTML' }
+          )
+          .catch((e: unknown) =>
+            logger.error('Admin notify error', {
+              error: e instanceof Error ? e.message : String(e),
+            })
+          );
+      }
+      res.json({ success: true, user });
+      return;
+    } catch (err) {
+      logger.error('User Creation Error', { error: err, userId }); // Log the real error
+      throw err; // Re-throw for asyncHandler to catch
+    }
+  })
+);
 
 // ADMIN ENDPOINT: Register a pending deposit
-app.post('/admin/add-pending-deposit', async (req, res) => {
-  const { userId, amount, telebirrSms, secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-  try {
-    await PendingDeposit.create({ userId, amount, telebirrSms });
-
-    // Use adminBot to notify admin of the request
-    if (ADMIN_CHAT_ID) {
-      const user = await User.findOne({ userId });
-      const displayId = user?.username
-        ? `${user.username}\n<i>ID: ${userId}</i>`
-        : `<code>${userId}</code>`;
-
-      await adminBot.telegram.sendMessage(
-        ADMIN_CHAT_ID,
-        `🚨 <b>NEW TOP-UP REQUEST</b>\n\n👤 <b>User:</b>\n${displayId}\n💰 <b>Amount:</b> ${amount} ETB\n🧾 <b>SMS:</b>\n${telebirrSms}`,
-        {
-          parse_mode: 'HTML',
-          ...Markup.inlineKeyboard([
-            [
-              Markup.button.callback(
-                '✅ Approve',
-                `approve_${amount}_${userId}`
-              ),
-              Markup.button.callback('❌ Reject', `reject_${amount}_${userId}`),
-            ],
-          ]),
-        }
-      );
+app.post(
+  '/admin/add-pending-deposit',
+  asyncHandler(async (req, res) => {
+    //
+    const { userId, amount, telebirrSms, secret }: IAdminAddPendingDepositBody =
+      req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
     }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to save pending deposit' });
-  }
-});
+    try {
+      await PendingDeposit.create({ userId, amount, telebirrSms });
+
+      // Use adminBot to notify admin of the request
+      if (ADMIN_CHAT_ID) {
+        const user = await User.findOne({ userId });
+        const displayId = user?.username
+          ? `${user.username}\n<i>ID: ${userId}</i>`
+          : `<code>${userId}</code>`;
+
+        await adminBot.telegram.sendMessage(
+          ADMIN_CHAT_ID,
+          `🚨 <b>NEW TOP-UP REQUEST</b>\n\n👤 <b>User:</b>\n${displayId}\n💰 <b>Amount:</b> ${amount} ETB\n🧾 <b>SMS:</b>\n${telebirrSms}`,
+          {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard([
+              [
+                Markup.button.callback(
+                  '✅ Approve',
+                  `approve_${amount}_${userId}`
+                ),
+                Markup.button.callback(
+                  '❌ Reject',
+                  `reject_${amount}_${userId}`
+                ),
+              ],
+            ]),
+          }
+        );
+      }
+      res.json({ success: true });
+      return;
+    } catch (err) {
+      logger.error('Failed to save pending deposit', {
+        error: err,
+        userId,
+        amount,
+      });
+      throw err;
+    }
+  })
+);
 
 // ADMIN ENDPOINT: List all pending deposits
-app.get('/admin/pending-deposits', async (req, res) => {
-  const { secret } = req.query;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-  try {
-    const pending = await PendingDeposit.find().sort({ timestamp: -1 }).lean();
-    const results = await Promise.all(
-      pending.map(async (dep) => {
-        const u = await User.findOne({ userId: dep.userId })
-          .select('username')
-          .lean();
-        return { ...dep, username: u?.username };
-      })
-    );
-    res.json(results);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch pending deposits' });
-  }
-});
+app.get(
+  '/admin/pending-deposits',
+  asyncHandler(async (req, res) => {
+    const { secret }: IAdminQuery = req.query;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+    try {
+      const pending = await PendingDeposit.find()
+        .sort({ timestamp: -1 })
+        .lean();
+      const results = await Promise.all(
+        pending.map(async (dep) => {
+          const u = await User.findOne({ userId: dep.userId })
+            .select('username')
+            .lean();
+          return { ...dep, username: u?.username };
+        })
+      );
+      res.json(results);
+      return;
+    } catch (err) {
+      logger.error('Failed to fetch pending deposits', { error: err });
+      throw err;
+    }
+  })
+);
 
 // ADMIN ENDPOINT: List all pending withdrawals
-app.get('/admin/pending-withdrawals', async (req, res) => {
-  const { secret } = req.query;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-  try {
-    const pending = await PendingWithdrawal.find()
-      .sort({ timestamp: -1 })
-      .lean();
-    const results = await Promise.all(
-      pending.map(async (w) => {
-        const u = await User.findOne({ userId: w.userId })
-          .select('username')
-          .lean();
-        return { ...w, username: u?.username };
-      })
-    );
-    res.json(results);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch pending withdrawals' });
-  }
-});
+app.get(
+  '/admin/pending-withdrawals',
+  asyncHandler(async (req, res) => {
+    const { secret }: IAdminQuery = req.query;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+    try {
+      const pending = await PendingWithdrawal.find()
+        .sort({ timestamp: -1 })
+        .lean();
+      const results = await Promise.all(
+        pending.map(async (w) => {
+          const u = await User.findOne({ userId: w.userId })
+            .select('username')
+            .lean();
+          return { ...w, username: u?.username };
+        })
+      );
+      res.json(results);
+      return;
+    } catch (err) {
+      logger.error('Failed to fetch pending withdrawals', { error: err });
+      throw err;
+    }
+  })
+);
 
 // ADMIN ENDPOINT: Manually update user wallet
-// This is used by your bot/admin tool to add ETB after manual payment
-app.post('/admin/update-wallet', async (req, res) => {
-  const { userId, amount, secret, mode = 'adjust' } = req.body;
+app.post(
+  '/admin/update-wallet',
+  asyncHandler(async (req, res) => {
+    //
+    const {
+      userId,
+      amount,
+      secret,
+      mode = 'adjust',
+    }: IAdminUpdateWalletBody = req.body;
 
-  if (secret !== ADMIN_SECRET) {
-    return res.status(403).json({ error: 'Unauthorized' });
-  }
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
 
-  if (!userId || typeof amount !== 'number') {
-    return res.status(400).json({ error: 'Invalid data' });
-  }
+    if (!userId || typeof amount !== 'number') {
+      res.status(400).json({ error: 'Invalid data' });
+      return;
+    }
 
-  try {
     // Find the user to check current balance before applying the update
-    const user = await User.findOne({ userId });
+    const user: IUser | null = await User.findOne({ userId });
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'User not found' });
+      return;
     }
 
     if (mode === 'set') {
-      if (amount < 0)
-        return res.status(400).json({ error: 'Balance cannot be negative.' });
+      if (amount < 0) {
+        res.status(400).json({ error: 'Balance cannot be negative.' });
+        return;
+      }
     } else {
       // Prevent balance from going negative during adjustment
       if (amount < 0 && user.balance + amount < 0) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Cannot subtract, resulting balance would be negative.',
         });
+        return;
       }
     }
 
@@ -573,7 +714,8 @@ app.post('/admin/update-wallet', async (req, res) => {
     );
 
     if (!updatedUser) {
-      return res.status(500).json({ error: 'Failed to update user balance.' });
+      res.status(500).json({ error: 'Failed to update user balance.' });
+      return;
     }
     // Remove from pending list upon approval
     await PendingDeposit.findOneAndDelete({ userId, amount });
@@ -623,28 +765,29 @@ app.post('/admin/update-wallet', async (req, res) => {
     ]).catch((e) => logger.error('Approval notification failed', { error: e }));
 
     res.json({ success: true, newBalance: updatedUser.balance });
-  } catch (err) {
-    logger.error('Wallet Update Error', { error: err, userId, amount }); // Log the real error
-    if (err instanceof MongooseError) {
-      return res
-        .status(400)
-        .json({ error: 'Database operation failed', details: err.message });
-    }
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+    return;
+  })
+);
 
 // ADMIN ENDPOINT: Request a withdrawal
-app.post('/admin/withdraw-request', async (req, res) => {
-  const { userId, amount, secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
+app.post(
+  '/admin/withdraw-request',
+  asyncHandler(async (req, res) => {
+    const { userId, amount, secret }: IAdminWithdrawRequestBody = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
 
-  try {
     const user = await User.findOne({ userId });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.balance < amount)
-      return res.status(400).json({ error: 'Insufficient balance' });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+    if (user.balance < amount) {
+      res.status(400).json({ error: 'Insufficient balance' });
+      return;
+    }
 
     // Deduct immediately to prevent double spending
     user.balance -= amount;
@@ -684,22 +827,27 @@ app.post('/admin/withdraw-request', async (req, res) => {
             ]),
           }
         )
-        .catch((e) => logger.error('Admin notify error', { error: e }));
+        .catch((e: unknown) =>
+          logger.error('Admin notify error', {
+            error: e instanceof Error ? e.message : String(e),
+          })
+        );
     }
     res.json({ success: true, newBalance: user.balance });
-  } catch (err) {
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
+    return;
+  })
+);
 
 // ADMIN ENDPOINT: Refund a withdrawal
-app.post('/admin/refund-withdrawal', async (req, res) => {
-  const { userId, amount, secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
+app.post(
+  '/admin/refund-withdrawal',
+  asyncHandler(async (req, res) => {
+    const { userId, amount, secret }: IAdminRefundWithdrawalBody = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
 
-  try {
-    // Remove from pending
     await PendingWithdrawal.findOneAndDelete({ userId, amount });
 
     const user = await User.findOneAndUpdate(
@@ -716,19 +864,24 @@ app.post('/admin/refund-withdrawal', async (req, res) => {
       );
     }
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
+    return;
+  })
+);
 
 // ADMIN ENDPOINT: Mark withdrawal as paid
-app.post('/admin/complete-withdrawal', async (req, res) => {
-  const { userId, amount, secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
+app.post(
+  '/admin/complete-withdrawal',
+  asyncHandler(async (req, res) => {
+    const { userId, amount, secret }: IAdminCompleteWithdrawalBody = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+    if (!userId || typeof amount !== 'number') {
+      res.status(400).json({ error: 'Invalid data' });
+      return;
+    }
 
-  try {
-    // Remove from pending
     await PendingWithdrawal.findOneAndDelete({ userId, amount });
 
     await notifyUser(
@@ -743,467 +896,615 @@ app.post('/admin/complete-withdrawal', async (req, res) => {
       );
     }
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
+    return;
+  })
+);
 
 // ADMIN ENDPOINT: Reject a deposit (cleanup)
-app.post('/admin/reject-deposit', async (req, res) => {
-  const { userId, amount, secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-  try {
-    await PendingDeposit.findOneAndDelete({ userId, amount });
-
-    // Notify User and Admin
-    await notifyUser(
-      userId,
-      `❌ <b>Deposit Rejected</b>\nYour recent top-up request could not be verified. If you believe this is a mistake, please contact support.`
-    );
-    if (ADMIN_CHAT_ID) {
-      await adminBot.telegram.sendMessage(
-        ADMIN_CHAT_ID,
-        `❌ <b>Rejection Log:</b> Rejected top-up for <code>${userId}</code>.`,
-        { parse_mode: 'HTML' }
-      );
+app.post(
+  '/admin/reject-deposit',
+  asyncHandler(async (req, res) => {
+    const { userId, amount, secret }: IAdminRejectDepositBody = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
     }
+    if (!userId || typeof amount !== 'number') {
+      res.status(400).json({ error: 'Invalid data' });
+      return;
+    }
+    try {
+      await PendingDeposit.findOneAndDelete({ userId, amount });
 
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to reject' });
-  }
-});
+      // Notify User and Admin
+      await notifyUser(
+        userId,
+        `❌ <b>Deposit Rejected</b>\nYour recent top-up request could not be verified. If you believe this is a mistake, please contact support.`
+      );
+      if (ADMIN_CHAT_ID) {
+        await adminBot.telegram.sendMessage(
+          ADMIN_CHAT_ID,
+          `❌ <b>Rejection Log:</b> Rejected top-up for <code>${userId}</code>.`,
+          { parse_mode: 'HTML' }
+        );
+      }
+
+      res.json({ success: true });
+      return;
+    } catch (err) {
+      logger.error('Failed to reject deposit', { error: err, userId, amount });
+      throw err;
+    }
+  })
+);
 
 // ADMIN ENDPOINT: Mark user as verified (called by bot)
-app.post('/admin/verify-user', async (req, res) => {
-  const { userId, phone, secret } = req.body;
+app.post(
+  '/admin/verify-user',
+  asyncHandler(async (req, res) => {
+    const { userId, phone, secret }: IAdminVerifyUserBody = req.body;
 
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  try {
-    if (mongoose.connection.readyState !== 1) {
-      throw new Error('Database not connected');
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
     }
 
-    const existingUser = await User.findOne({ userId });
+    try {
+      if (mongoose.connection.readyState !== 1) {
+        throw new Error('Database not connected');
+      }
 
-    // Only award the initial registration bonus (1000 ETB) if the user is verifying for the first time
-    const balanceUpdate =
-      !existingUser || !existingUser.isVerified ? { balance: 1000 } : {};
+      const existingUser = await User.findOne({ userId });
 
-    const user = await User.findOneAndUpdate(
-      { userId },
-      {
-        $set: {
-          isVerified: true,
-          phone,
-          ...balanceUpdate,
-        },
-      },
-      { upsert: true, new: true }
-    );
+      // Only award the initial registration bonus (1000 ETB) if the user is verifying for the first time
+      const balanceUpdate: Partial<IUser> = !existingUser?.isVerified
+        ? { balance: 1000 }
+        : {};
 
-    // Notify connected socket that they are now verified
-    const socketId = socketMapping.get(userId);
-    if (socketId) {
-      io.to(socketId).emit(socketEvents.USER_STATUS, {
-        isVerified: true,
-        phone,
-      });
-      io.to(socketId).emit(socketEvents.WALLET_UPDATE, user.balance);
-    }
-
-    if (ADMIN_CHAT_ID) {
-      const displayId = user.username
-        ? `${user.username}\n<i>ID: ${userId}</i>`
-        : `<code>${userId}</code>`;
-      await adminBot.telegram
-        .sendMessage(
-          ADMIN_CHAT_ID,
-          `📱 <b>User Registered:</b>\n${displayId}\nhas verified phone: <code>${phone}</code>`,
-          { parse_mode: 'HTML' }
-        )
-        .catch((e) =>
-          logger.error('Admin registration notify error', { error: e })
-        );
-    }
-
-    res.json({ success: true, isNewUser: !existingUser?.phone });
-  } catch (err) {
-    logger.error('Verification Route Error', { error: err, userId }); // Log the real error
-    res.status(500).json({
-      error: 'Internal server error',
-      details: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
-
-// ADMIN ENDPOINT: Fetch specific user details for the bot profile
-app.get('/admin/user-info', async (req, res) => {
-  const { userId, secret } = req.query;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  try {
-    const target = userId as string;
-    // Search by ID or Username (with or without @ prefix)
-    const user = await User.findOne({
-      $or: [
-        { userId: target },
+      const user = await User.findOneAndUpdate(
+        { userId },
         {
-          username: {
-            $in: [target, target.startsWith('@') ? target : `@${target}`],
+          $set: {
+            isVerified: true,
+            phone,
+            ...balanceUpdate,
           },
         },
-      ],
-    })
-      .select('userId username balance referredCount')
-      .lean();
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+        { upsert: true, new: true }
+      );
+
+      // Notify connected socket that they are now verified
+      const socketId = socketMapping.get(userId);
+      if (socketId) {
+        io.to(socketId).emit(socketEvents.USER_STATUS, {
+          isVerified: true,
+          phone: phone,
+        });
+        io.to(socketId).emit(socketEvents.WALLET_UPDATE, user.balance);
+      }
+
+      if (ADMIN_CHAT_ID) {
+        const displayId = user.username
+          ? `${user.username}\n<i>ID: ${userId}</i>`
+          : `<code>${userId}</code>`;
+        await adminBot.telegram
+          .sendMessage(
+            ADMIN_CHAT_ID,
+            `📱 <b>User Registered:</b>\n${displayId}\nhas verified phone: <code>${phone}</code>`,
+            { parse_mode: 'HTML' }
+          )
+          .catch((e: unknown) =>
+            logger.error('Admin registration notify error', {
+              error: e instanceof Error ? e.message : String(e),
+            })
+          );
+      }
+
+      res.json({ success: true, isNewUser: !existingUser?.phone });
+      return;
+    } catch (err) {
+      logger.error('Verification Route Error', { error: err, userId });
+      throw err;
+    }
+  })
+);
+
+// ADMIN ENDPOINT: Fetch specific user details for the bot profile
+app.get(
+  '/admin/user-info',
+  asyncHandler(async (req, res) => {
+    const { userId, secret }: IAdminQuery = req.query;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
     }
 
-    const userName = user.username || 'Anonymous';
-    const responseBody = {
-      userId: user.userId,
-      balance: user.balance,
-      username: userName,
-      referredCount: user.referredCount,
-    };
-    res.json(responseBody);
-  } catch (err) {
-    logger.error('User Info Fetch Error', { error: err, userId });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+    try {
+      const target = userId!;
+      // Search by ID or Username (with or without @ prefix)
+      const user = await User.findOne({
+        $or: [
+          { userId: target },
+          {
+            username: {
+              $in: [target, target.startsWith('@') ? target : `@${target}`],
+            },
+          },
+        ],
+      })
+        .select('userId username balance referredCount')
+        .lean();
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      const userName = user.username || 'Anonymous';
+      const responseBody = {
+        userId: user.userId,
+        balance: user.balance,
+        username: userName,
+        referredCount: user.referredCount,
+      };
+      res.json(responseBody);
+      return;
+    } catch (err) {
+      logger.error('User Info Fetch Error', { error: err, userId });
+      throw err;
+    }
+  })
+);
 
 // ADMIN ENDPOINT: Get referral leaderboard
-app.get('/admin/referral-leaderboard', async (req, res) => {
-  const { secret } = req.query;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
+app.get(
+  '/admin/referral-leaderboard',
+  asyncHandler(async (req, res) => {
+    const { secret }: IAdminQuery = req.query;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
 
-  try {
-    const leaderboard = await User.aggregate([
-      { $match: { referredBy: { $exists: true, $nin: [null, ''] } } },
-      { $group: { _id: '$referredBy', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 10 },
-    ]);
+    try {
+      const leaderboard = await User.aggregate([
+        { $match: { referredBy: { $exists: true, $nin: [null, ''] } } },
+        { $group: { _id: '$referredBy', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 10 },
+      ]);
 
-    const enrichedLeaderboard = await Promise.all(
-      leaderboard.map(async (entry) => {
-        const user = await User.findOne({ userId: entry._id })
-          .select('username userId')
-          .lean();
-        return {
-          userId: entry._id,
-          username: user?.username || 'Anonymous',
-          count: entry.count,
-        };
-      })
-    );
-
-    res.json(enrichedLeaderboard);
-  } catch (err) {
-    logger.error('Leaderboard Fetch Error', { error: err });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+      const enrichedLeaderboard = await Promise.all(
+        leaderboard.map(async (entry) => {
+          const user = await User.findOne({ userId: entry._id })
+            .select('username userId')
+            .lean();
+          return {
+            userId: entry._id,
+            username: user?.username || 'Anonymous',
+            count: entry.count,
+          };
+        })
+      );
+      res.json(enrichedLeaderboard);
+      return;
+    } catch (err) {
+      logger.error('Referral Leaderboard Fetch Error', { error: err });
+      throw err;
+    }
+  })
+);
 
 // USER ENDPOINT: Fetch specific user's transaction log (deposits, withdrawals, adjustments)
-app.get('/api/user-transactions', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+app.get(
+  '/api/user-transactions',
+  asyncHandler(async (req, res) => {
+    const { userId }: IAdminQuery = req.query;
+    if (!userId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
 
-  try {
-    const logs = await ActivityLog.find({
-      userId: userId as string,
-      type: { $in: ['deposit', 'withdrawal', 'adjustment'] },
+    try {
+      const logs = await ActivityLog.find({
+        userId: userId,
+        type: { $in: ['deposit', 'withdrawal', 'adjustment'] },
+      })
+        .sort({ timestamp: -1 })
+        .limit(50)
+        .lean();
+      res.json(logs);
+      return;
+    } catch (err) {
+      logger.error('User Transactions Fetch Error', { error: err, userId });
+      throw err;
+    }
+  })
+);
+
+// ADMIN ENDPOINT: Get users referred by a specific user
+app.get(
+  '/admin/referred-users',
+  asyncHandler(async (req, res) => {
+    const { userId, secret }: IAdminQuery = req.query;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!userId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    try {
+      const referredUsers = await User.find({ referredBy: userId })
+        .select('userId username')
+        .lean();
+      res.json(referredUsers);
+      return;
+    } catch (err) {
+      logger.error('Referred Users Fetch Error', { error: err, userId });
+      throw err;
+    }
+  })
+);
+
+// ADMIN ENDPOINT: Delete a user
+app.post(
+  '/admin/delete-user',
+  asyncHandler(async (req, res) => {
+    const { userId, secret }: IAdminQuery = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!userId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    try {
+      const deletedUser = await User.findOneAndDelete({ userId });
+      if (!deletedUser) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      const socketId = socketMapping.get(userId);
+      if (socketId && io) {
+        io.to(socketId).emit(
+          'game:stopped',
+          'Your account has been deleted by an administrator.'
+        );
+        io.sockets.sockets.get(socketId)?.disconnect();
+        socketMapping.delete(userId);
+      }
+
+      res.json({ success: true });
+      return;
+    } catch (err) {
+      logger.error('User Deletion Error', { error: err, userId });
+      throw err;
+    }
+  })
+);
+
+// ADMIN ENDPOINT: Check user status
+app.get(
+  '/admin/check-user',
+  asyncHandler(async (req, res) => {
+    const { userId, secret }: IAdminQuery = req.query;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const user = await User.findOne({ userId: userId! });
+    res.json({
+      exists: !!user,
+      isVerified: user?.isVerified || false,
+    });
+  })
+);
+
+// ADMIN ENDPOINT: Fetch user activity log
+app.get(
+  '/admin/user-activity',
+  asyncHandler(async (req, res) => {
+    const { userId, secret }: IAdminQuery = req.query; // Destructure first
+    if (!userId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const logs = await ActivityLog.find({ userId: userId })
+        .sort({ timestamp: -1 })
+        .limit(50)
+        .lean();
+      res.json(logs);
+      return;
+    } catch (err) {
+      logger.error('Failed to fetch user activity', { error: err, userId });
+      throw err;
+    }
+  })
+);
+
+// ADMIN ENDPOINT: Fetch all wallets
+app.post(
+  '/admin/wallets',
+  asyncHandler(async (req, res) => {
+    const { secret }: { secret: string } = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const allUsers: IUserLean[] = await User.find({}).lean();
+    const walletData: Record<string, { balance: number; username?: string }> =
+      {};
+    allUsers.forEach((u) => {
+      walletData[u.userId] = { balance: u.balance, username: u.username };
+    });
+
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // 24h Summary: Stakes vs Payouts
+    const summary24h = await ActivityLog.aggregate([
+      {
+        $match: {
+          timestamp: { $gte: twentyFourHoursAgo },
+          type: { $in: ['stake', 'win'] },
+        },
+      },
+      { $group: { _id: '$type', total: { $sum: '$amount' } } },
+    ]);
+
+    const stakes24h =
+      summary24h.find((s: { _id: string; total: number }) => s._id === 'stake')
+        ?.total ?? 0; // Prefer nullish coalescing
+    const payouts24h = summary24h.find((s) => s._id === 'win')?.total ?? 0; // Prefer nullish coalescing
+
+    // Global Deposits and Withdrawals (Recent 50)
+    const recentActivity = await ActivityLog.find({
+      type: { $in: ['deposit', 'withdrawal'] },
     })
       .sort({ timestamp: -1 })
       .limit(50)
       .lean();
 
-    res.json(logs);
-  } catch (err) {
-    logger.error('User Transactions Fetch Error', { error: err, userId });
-    res.status(500).json({ error: 'Failed to fetch transactions' });
-  }
-});
-
-// ADMIN ENDPOINT: Get users referred by a specific user
-app.get('/admin/referred-users', async (req, res) => {
-  const { userId, secret } = req.query;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  if (!userId) {
-    return res.status(400).json({ error: 'User ID is required' });
-  }
-
-  try {
-    const referredUsers = await User.find({ referredBy: userId as string })
-      .select('userId username') // Select only necessary fields
-      .lean();
-
-    res.json(referredUsers);
-  } catch (err) {
-    logger.error('Referred Users Fetch Error', { error: err, userId });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ADMIN ENDPOINT: Delete a user
-app.post('/admin/delete-user', async (req, res) => {
-  const { userId, secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  try {
-    const deletedUser = await User.findOneAndDelete({ userId });
-    if (!deletedUser) return res.status(404).json({ error: 'User not found' });
-
-    const socketId = socketMapping.get(userId);
-    if (socketId && io) {
-      io.to(socketId).emit(
-        'game:stopped',
-        'Your account has been deleted by an administrator.'
-      );
-      io.sockets.sockets.get(socketId)?.disconnect();
-      socketMapping.delete(userId);
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    logger.error('User Deletion Error', { error: err, userId });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ADMIN ENDPOINT: Check user status
-app.get('/admin/check-user', async (req, res) => {
-  const { userId, secret } = req.query;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  const user = await User.findOne({ userId: userId as string });
-  res.json({
-    exists: !!user,
-    isVerified: user?.isVerified || false,
-  });
-});
-
-// ADMIN ENDPOINT: Fetch user activity log
-app.get('/admin/user-activity', async (req, res) => {
-  const { userId, secret } = req.query;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  try {
-    const logs = await ActivityLog.find({ userId: userId as string })
-      .sort({ timestamp: -1 })
-      .limit(50)
-      .lean();
-    res.json(logs);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch activity' });
-  }
-});
-
-// ADMIN ENDPOINT: Fetch all wallets
-app.post('/admin/wallets', async (req, res) => {
-  const { secret } = req.body;
-  if (secret !== ADMIN_SECRET) {
-    return res.status(403).json({ error: 'Unauthorized' });
-  }
-
-  const allUsers = await User.find({}).lean();
-  const walletData: Record<string, { balance: number; username?: string }> = {};
-  allUsers.forEach((u) => {
-    walletData[u.userId] = { balance: u.balance, username: u.username };
-  });
-
-  const now = new Date();
-  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-  // 24h Summary: Stakes vs Payouts
-  const summary24h = await ActivityLog.aggregate([
-    {
-      $match: {
-        timestamp: { $gte: twentyFourHoursAgo },
-        type: { $in: ['stake', 'win'] },
+    // Group winners by Game ID to show distinct rounds
+    const rounds = await GameArchive.aggregate([
+      {
+        $group: {
+          _id: '$gameId',
+          gameId: { $first: '$gameId' },
+          date: { $first: '$timestamp' },
+          pool: { $first: '$prizePool' },
+          ballsDrawn: { $first: '$ballsDrawn' },
+          players: { $sum: 1 }, // Note: This is winners count, real player count should be tracked in archive if needed
+          winners: {
+            $push: { boardId: '$winnerBoardId', payout: '$prizePool' },
+          },
+        },
       },
-    },
-    { $group: { _id: '$type', total: { $sum: '$amount' } } },
-  ]);
+      { $sort: { date: -1 } },
+      { $limit: 30 },
+    ]);
+    // Fix payout display for aggregated winners
+    rounds.forEach((r) =>
+      r.winners.forEach(
+        (w: { payout: number }) => (w.payout = r.pool / r.winners.length)
+      )
+    );
 
-  const stakes24h = summary24h.find((s) => s._id === 'stake')?.total || 0;
-  const payouts24h = summary24h.find((s) => s._id === 'win')?.total || 0;
-
-  // Global Deposits and Withdrawals (Recent 50)
-  const recentActivity = await ActivityLog.find({
-    type: { $in: ['deposit', 'withdrawal'] },
+    res.json({
+      wallets: walletData,
+      rounds,
+      recentActivity,
+      stats: {
+        totalVolume: globalGameState.totalVolume,
+        totalProfit: globalGameState.totalProfit,
+        activeBets: singleRoomState.globalPool,
+        totalUsers: allUsers.length,
+        isMaintenanceMode: globalGameState.isMaintenanceMode,
+        isGameRunning: globalGameState.isGameRunning,
+        stopRequested: globalGameState.stopRequested,
+        isEngineActive:
+          globalGameState.isGameRunning && !globalGameState.stopRequested,
+        stakes24h,
+        payouts24h,
+      },
+    });
+    return;
   })
-    .sort({ timestamp: -1 })
-    .limit(50)
-    .lean();
-
-  // Group winners by Game ID to show distinct rounds
-  const rounds = await GameArchive.aggregate([
-    {
-      $group: {
-        _id: '$gameId',
-        gameId: { $first: '$gameId' },
-        date: { $first: '$timestamp' },
-        pool: { $first: '$prizePool' },
-        ballsDrawn: { $first: '$ballsDrawn' },
-        players: { $sum: 1 }, // Note: This is winners count, real player count should be tracked in archive if needed
-        winners: { $push: { boardId: '$winnerBoardId', payout: '$prizePool' } },
-      },
-    },
-    { $sort: { date: -1 } },
-    { $limit: 30 },
-  ]);
-  // Fix payout display for aggregated winners
-  rounds.forEach((r) =>
-    r.winners.forEach((w: any) => (w.payout = r.pool / r.winners.length))
-  );
-
-  res.json({
-    wallets: walletData,
-    rounds,
-    recentActivity,
-    stats: {
-      totalVolume: globalGameState.totalVolume,
-      totalProfit: globalGameState.totalProfit,
-      activeBets: singleRoomState.globalPool,
-      totalUsers: allUsers.length,
-      isMaintenanceMode: globalGameState.isMaintenanceMode,
-      isGameRunning: globalGameState.isGameRunning,
-      stopRequested: globalGameState.stopRequested,
-      isEngineActive:
-        globalGameState.isGameRunning && !globalGameState.stopRequested,
-      stakes24h,
-      payouts24h,
-    },
-  });
-});
+);
 
 // ADMIN ENDPOINT: Toggle Maintenance Mode
-app.post('/admin/toggle-maintenance', (req, res) => {
-  const { secret, enabled } = req.body;
-  if (secret !== ADMIN_SECRET) {
-    return res.status(403).json({ error: 'Unauthorized' });
-  }
-
-  const wasMaintenance = globalGameState.isMaintenanceMode;
-  globalGameState.isMaintenanceMode = enabled;
-
-  if (wasMaintenance && !globalGameState.isMaintenanceMode) {
-    logger.info('Maintenance mode deactivated. Resuming game loops.');
-    if (singleRoomState.gameLoopTimeout) {
-      clearTimeout(singleRoomState.gameLoopTimeout);
+app.post(
+  '/admin/toggle-maintenance',
+  asyncHandler(async (req, res) => {
+    //
+    if (!req.body || typeof req.body.enabled !== 'boolean') {
+      res.status(400).json({
+        error: 'Invalid request body. "enabled" boolean is required.',
+      });
+      return;
     }
-    runGameLoop();
-  }
+    //
+    const { secret, enabled }: IAdminToggleMaintenanceBody = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
 
-  broadcastPoolUpdate();
-  res.json({
-    success: true,
-    isMaintenanceMode: globalGameState.isMaintenanceMode,
-  });
-});
+    const wasMaintenance = globalGameState.isMaintenanceMode;
+    globalGameState.isMaintenanceMode = enabled;
+
+    if (wasMaintenance && !globalGameState.isMaintenanceMode) {
+      logger.info('Maintenance mode deactivated. Resuming game loops.');
+      if (singleRoomState.gameLoopTimeout) {
+        clearTimeout(singleRoomState.gameLoopTimeout);
+      }
+      runGameLoop();
+    }
+
+    void broadcastPoolUpdate();
+    res.json({
+      success: true,
+      isMaintenanceMode: globalGameState.isMaintenanceMode,
+    });
+    return;
+  })
+);
 
 // ADMIN ENDPOINT: Explicitly start the game cycle
-app.post('/admin/start-game', (req, res) => {
-  const { secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
+app.post(
+  '/admin/start-game',
+  asyncHandler(async (req, res) => {
+    //
+    if (!req.body || typeof req.body.secret !== 'string') {
+      res
+        .status(400)
+        .json({ error: 'Invalid request body. \"secret\" is required.' });
+      return;
+    }
+    //
+    const { secret }: { secret: string } = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
 
-  const alreadyRunning =
-    globalGameState.isGameRunning && !globalGameState.stopRequested;
-  if (alreadyRunning)
-    return res.json({ success: true, message: 'Game already running' });
+    const alreadyRunning =
+      globalGameState.isGameRunning && !globalGameState.stopRequested;
+    if (alreadyRunning) {
+      res.json({ success: true, message: 'Game already running' });
+      return;
+    }
 
-  globalGameState.isGameRunning = true;
-  globalGameState.stopRequested = false;
-  logger.info(
-    'ENGINE_STATE_CHANGE: Game engine START command received via Admin API.'
-  );
-
-  if (singleRoomState.selectionTimer)
-    clearTimeout(singleRoomState.selectionTimer);
-  startSelectionPhase();
-  broadcastPoolUpdate();
-
-  res.json({ success: true, isGameRunning: globalGameState.isGameRunning });
-});
-
-// ADMIN ENDPOINT: Force-start the current selection round (skip countdown)
-app.post('/admin/force-start-round', (req, res) => {
-  const { secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  if (!globalGameState.isGameRunning || globalGameState.stopRequested) {
-    return res.status(400).json({ error: 'Game engine is not running' });
-  }
-
-  const started = forceStartSelectionRound();
-  if (!started) {
-    return res.status(400).json({ error: 'Round is not in selection phase' });
-  }
-
-  res.json({ success: true, message: 'Selection round force-started' });
-});
-
-// ADMIN ENDPOINT: Gracefully stop the game engine
-app.post('/admin/stop-game', (req, res) => {
-  const { secret } = req.body;
-  if (secret !== ADMIN_SECRET)
-    return res.status(403).json({ error: 'Unauthorized' });
-
-  if (!globalGameState.isGameRunning)
-    return res.json({
-      success: true,
-      isGameRunning: false,
-      message: 'Engine already idle',
-    });
-
-  const hasLiveGames = singleRoomState.state === GameState.GAME;
-
-  if (!hasLiveGames) {
-    // Stop immediately if no rounds are in progress
-    globalGameState.isGameRunning = false;
+    globalGameState.isGameRunning = true;
     globalGameState.stopRequested = false;
+    logger.info(
+      'ENGINE_STATE_CHANGE: Game engine START command received via Admin API.'
+    );
+
     if (singleRoomState.selectionTimer)
       clearTimeout(singleRoomState.selectionTimer);
-    logger.info(
-      'ENGINE_STATE_CHANGE: Game engine stopped IMMEDIATELY (no live rounds).'
-    );
-    broadcastPoolUpdate();
-    const stopMsg =
-      'Games are over for today. Please come back tomorrow to play!';
-    io.emit('game:stopped', stopMsg);
-    return res.json({ success: true, isGameRunning: false, message: stopMsg });
-  } else {
-    // Set flag to stop after current rounds finish
-    globalGameState.stopRequested = true;
-    logger.info(
-      'ENGINE_STATE_CHANGE: Graceful STOP requested. Waiting for current rounds to finish.'
-    );
-    broadcastPoolUpdate();
-    return res.json({
-      success: true,
-      isGameRunning: true,
-      stopRequested: true,
-      message: 'Stop requested. Waiting for live rounds to finish.',
-    });
-  }
-});
+    startSelectionPhase();
+    void broadcastPoolUpdate();
+
+    res.json({ success: true, isGameRunning: globalGameState.isGameRunning });
+    return;
+  })
+);
+
+// ADMIN ENDPOINT: Force-start the current selection round (skip countdown)
+app.post(
+  '/admin/force-start-round',
+  asyncHandler(async (req, res) => {
+    //
+    if (!req.body || typeof req.body.secret !== 'string') {
+      res
+        .status(400)
+        .json({ error: 'Invalid request body. \"secret\" is required.' });
+      return;
+    }
+    //
+    const { secret }: { secret: string } = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!globalGameState.isGameRunning || globalGameState.stopRequested) {
+      res.status(400).json({ error: 'Game engine is not running' });
+      return;
+    }
+
+    const started = forceStartSelectionRound();
+    if (!started) {
+      res.status(400).json({ error: 'Round is not in selection phase' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Selection round force-started' });
+    return;
+  })
+);
+
+// ADMIN ENDPOINT: Gracefully stop the game engine
+app.post(
+  '/admin/stop-game',
+  asyncHandler(async (req, res) => {
+    //
+    if (!req.body || typeof req.body.secret !== 'string') {
+      res
+        .status(400)
+        .json({ error: 'Invalid request body. \"secret\" is required.' });
+      return;
+    }
+    //
+    const { secret }: { secret: string } = req.body;
+    if (secret !== ADMIN_SECRET) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!globalGameState.isGameRunning) {
+      res.json({
+        success: true,
+        isGameRunning: false,
+        message: 'Engine already idle',
+      });
+      return;
+    }
+
+    const hasLiveGames = singleRoomState.state === GameState.GAME;
+
+    if (!hasLiveGames) {
+      // Stop immediately if no rounds are in progress
+      globalGameState.isGameRunning = false;
+      globalGameState.stopRequested = false;
+      if (singleRoomState.selectionTimer)
+        clearTimeout(singleRoomState.selectionTimer);
+      logger.info(
+        'ENGINE_STATE_CHANGE: Game engine stopped IMMEDIATELY (no live rounds).'
+      );
+      void broadcastPoolUpdate();
+      const stopMsg =
+        'Games are over for today. Please come back tomorrow to play!';
+      io.emit('game:stopped', stopMsg);
+      res.json({
+        success: true,
+        isGameRunning: false,
+        message: stopMsg,
+      });
+      return;
+    } else {
+      // Set flag to stop after current rounds finish
+      globalGameState.stopRequested = true;
+      logger.info(
+        'ENGINE_STATE_CHANGE: Graceful STOP requested. Waiting for current rounds to finish.'
+      );
+      void broadcastPoolUpdate();
+      res.json({
+        success: true,
+        isGameRunning: true,
+        stopRequested: true,
+        message: 'Stop requested. Waiting for live rounds to finish.',
+      });
+      return;
+    }
+  })
+);
 
 // OpenTelemetry Business Metrics (meter version updated for clarity)
 const meter = metrics.getMeter('bingo-business-logic', '1.0.0');
@@ -1212,7 +1513,7 @@ const meter = metrics.getMeter('bingo-business-logic', '1.0.0');
 const activeGamesGauge = meter.createObservableGauge('bingo_active_games', {
   description: 'Number of games currently in the drawing phase',
 });
-activeGamesGauge.addCallback((result) => {
+activeGamesGauge.addCallback((result: ObservableResult) => {
   const count = singleRoomState.state === GameState.GAME ? 1 : 0;
   result.observe(count);
 });
@@ -1221,7 +1522,7 @@ activeGamesGauge.addCallback((result) => {
 const totalVolumeGauge = meter.createObservableGauge('bingo_total_volume_etb', {
   description: 'Total amount of ETB staked across all rounds',
 });
-totalVolumeGauge.addCallback((result) => {
+totalVolumeGauge.addCallback((result: ObservableResult) => {
   result.observe(globalGameState.totalVolume);
 });
 
@@ -1229,24 +1530,6 @@ const jackpotWinsCounter = meter.createCounter('bingo_jackpot_wins_total', {
   description: 'Total number of winning boards declared',
 });
 
-interface RoomState {
-  currentBalls: number[];
-  shuffledBalls: number[];
-  globalPool: number;
-  state: GameState;
-  currentGameId: string;
-  selectionTimer?: NodeJS.Timeout;
-  selectionInterval?: NodeJS.Timeout;
-  selectionStartTime?: number; // Timestamp when selection phase started
-  selectionDuration?: number; // Total duration of selection phase in ms
-  playerBoards: Map<string, number[]>;
-  boardStatus: Map<string, string>;
-  currentBallsSet: Set<number>; // Optimization: Incremental set to avoid re-creation
-  winCache: Map<number, { isWinner: boolean; patterns: any[] }>;
-  gameLoopTimeout?: NodeJS.Timeout;
-  save?: () => Promise<any>;
-  markModified?: (path: string) => void;
-}
 function generateGameId() {
   return `LB-${SINGLE_STAKE}-${Math.floor(100000 + Math.random() * 900000)}`;
 }
@@ -1264,7 +1547,7 @@ let singleRoomState: RoomState = {
   winCache: new Map(),
 };
 
-const socketMapping = new Map<string, string>(); // userId -> socketId
+const socketMapping = new Map<string, string>(); // userId (string) -> socketId (string)
 
 // Serialize board picks to prevent concurrent race conditions on the same board
 let pickQueue: Promise<void> = Promise.resolve();
@@ -1272,7 +1555,7 @@ function enqueueBoardPick<T>(fn: () => Promise<T>): Promise<T> {
   const run = pickQueue.then(fn);
   pickQueue = run.then(() => undefined).catch(() => undefined);
   return run;
-}
+} //
 
 function getTakenBoardIds(): number[] {
   return Array.from(singleRoomState.boardStatus.keys()).map((id) => Number(id));
@@ -1309,8 +1592,9 @@ async function getUserHistory(userId: string): Promise<HistoryEntry[]> {
   const byGame = new Map<
     string,
     { stakes: number; winAmount: number; latestAt: Date }
-  >();
+  >(); //
   for (const log of logs) {
+    //
     if (!log.gameId) continue;
     const existing = byGame.get(log.gameId) || {
       stakes: 0,
@@ -1545,10 +1829,10 @@ function safeRoomSave(context: string): void {
   roomSaveChain = roomSaveChain
     .then(() => singleRoomState.save!())
     .then(() => undefined as void)
-    .catch((e: any) => {
+    .catch((e: unknown) => {
       logger.error(`Room save error [${context}]`, {
-        error: e?.message ?? String(e),
-        stack: e?.stack,
+        error: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
       });
     });
 }
@@ -1580,6 +1864,7 @@ for (let i = 1; i <= 600; i++) {
   boardsCache.set(i, generateBoard(i));
   const boardGrid = boardsCache.get(i);
   boardGrid.forEach((row: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     row.forEach((cell: any) => {
       if (typeof cell.value === 'number') {
         if (!numberToBoardIdsMap.has(cell.value)) {
@@ -1645,9 +1930,9 @@ async function runGameLoop() {
     singleRoomState.currentBalls.push(ball);
     singleRoomState.currentBallsSet.add(ball); // Incrementally update the set
     io.emit(socketEvents.BALL_DRAWN, ball); // Emit to all connected clients
-
-    // AUTO-CLAIM CHECK: Collect all winners for this specific ball
-    const winnersThisRound: any[] = [];
+    //
+    // AUTO-CLAIM CHECK: Collect all winners for this specific ball //
+    const winnersThisRound: IWinnerInfo[] = [];
 
     // Get all board IDs that contain the newly drawn ball
     const boardsWithDrawnBall =
@@ -1657,7 +1942,7 @@ async function runGameLoop() {
     for (const boardId of boardsWithDrawnBall) {
       const userId = singleRoomState.boardStatus.get(boardId.toString());
       if (!userId) continue; // Skip boards not owned by any player
-
+      //
       const grid = boardsCache.get(boardId);
       const win = checkWin(grid, singleRoomState.currentBallsSet);
 
@@ -1690,7 +1975,9 @@ async function runGameLoop() {
       const splitPayout = totalPayout / winnersThisRound.length;
 
       Promise.all(
-        winnersThisRound.map(async (w) => {
+        winnersThisRound.map(async (w: IWinnerInfo): Promise<any> => {
+          // Explicitly typed return for map callback
+          //
           singleRoomState.boardStatus.set(w.boardId.toString(), w.userId);
           const user = await User.findOneAndUpdate(
             { userId: w.userId },
@@ -1721,7 +2008,7 @@ async function runGameLoop() {
             gameId: singleRoomState.currentGameId,
           });
 
-          return GameArchive.create({
+          void GameArchive.create({
             gameId: singleRoomState.currentGameId,
             winnerId: w.userId,
             winnerBoardId: w.boardId,
@@ -1853,7 +2140,7 @@ function resetGame() {
       logger.info(
         'ENGINE_STATE_CHANGE: Game engine SHUT DOWN successfully after graceful stop.'
       );
-      broadcastPoolUpdate();
+      void broadcastPoolUpdate();
       io.emit(
         'game:stopped',
         'Games are over for today. Please come back tomorrow to play!'
@@ -1870,7 +2157,7 @@ function resetGame() {
   // Prevent ParallelSaveError: ensure we never call save() concurrently on the same mongoose doc
   // during resetGame() (which can be triggered by timers / overlapping game-loop transitions).
   if (singleRoomState.save) safeRoomSave('resetGame');
-  broadcastPoolUpdate();
+  void broadcastPoolUpdate();
   refreshAllUserHistories().catch((e) =>
     logger.error('History refresh error after reset', { error: e })
   );
@@ -1899,16 +2186,19 @@ dbPromise
             '🚀 <b>Bots Online</b>\nThe game server and both bots have started successfully.',
             { parse_mode: 'HTML' }
           )
-          .catch((e) =>
-            logger.error('Failed to send startup message', { error: e.message })
+          .catch((e: unknown) =>
+            logger.error('Failed to send startup message', {
+              error: e instanceof Error ? e.message : String(e),
+            })
           );
       }
     } catch (err) {
       logger.error('Failed to start application services', { error: err });
     }
   })
-  .catch((err) => {
+  .catch((err: unknown) => {
     logger.error(
+      //
       'Critical: Application failed to start due to MongoDB connection failure',
       { error: err }
     );
@@ -1918,8 +2208,12 @@ function registerSocketHandlers(io: SocketIOServer) {
   io.on('connection', async (socket) => {
     logger.info(`User connected: ${socket.id}`);
 
-    const { initData, user } = socket.handshake.auth;
-    let isVerified = false;
+    const auth = socket.handshake.auth as {
+      //
+      initData: string;
+      user: ISocketAuthUser;
+    };
+    const { initData, user } = auth;
 
     if (!initData || !verifyTelegramData(initData) || !user?.id) {
       logger.warn(
@@ -1933,7 +2227,7 @@ function registerSocketHandlers(io: SocketIOServer) {
     const telegramUsername = user.username
       ? `@${user.username}`
       : user.first_name || 'User';
-    isVerified = true;
+    // isVerified = true; // Removed: Assigned but never used
 
     logger.info(
       `Socket authenticated: User ID ${userId} (${telegramUsername})`
@@ -1954,7 +2248,7 @@ function registerSocketHandlers(io: SocketIOServer) {
 
     // Fetch or Create User in DB
     User.findOne({ userId })
-      .then(async (user: any) => {
+      .then(async (user: IUser | null) => {
         let currentBalance = 0;
         let isUserVerified = false;
         if (!user) {
@@ -1968,7 +2262,7 @@ function registerSocketHandlers(io: SocketIOServer) {
           currentBalance = newUser.balance;
           isUserVerified = newUser.isVerified;
         } else {
-          let update: any = {};
+          const update: { username?: string } = {};
           if (
             telegramUsername !== 'User' &&
             user.username !== telegramUsername
@@ -1990,19 +2284,19 @@ function registerSocketHandlers(io: SocketIOServer) {
           referredCount: user?.referredCount || 0,
         });
       })
-      .catch((err) =>
+      .catch((err: unknown) =>
         logger.error(`Error fetching/creating user for socket ${socket.id}`, {
           error: err,
         })
       );
 
     globalGameState.activePlayers++;
-    broadcastPoolUpdate(io); // Pass io instance to broadcastPoolUpdate
+    void broadcastPoolUpdate(io); // Pass io instance to broadcastPoolUpdate // Added void
 
     // Joining a specific room — full state resync (also runs on reconnect)
     socket.on(socketEvents.JOIN_ROOM, async () => {
       socket.rooms.forEach((room) => {
-        if (room !== socket.id) socket.leave(room as string);
+        if (room !== socket.id) void socket.leave(room);
       });
       socket.join(`room_${SINGLE_STAKE}`);
       await emitJoinState(socket, userId);
@@ -2010,7 +2304,8 @@ function registerSocketHandlers(io: SocketIOServer) {
 
     // Concurrency-controlled board selection with server ack/nack
     socket.on(socketEvents.PICK_BOARD, (data: { boardId: number }) => {
-      enqueueBoardPick(async () => {
+      void enqueueBoardPick(async () => {
+        // Added void
         try {
           const result = await processBoardPick(userId, data.boardId);
           socket.emit(socketEvents.PICK_BOARD_RESULT, result);
@@ -2042,7 +2337,7 @@ function registerSocketHandlers(io: SocketIOServer) {
         0,
         globalGameState.activePlayers - 1
       );
-      broadcastPoolUpdate();
+      void broadcastPoolUpdate(); // Added void
     });
   });
 }

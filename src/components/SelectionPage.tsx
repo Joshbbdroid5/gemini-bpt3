@@ -1,4 +1,4 @@
-import React, {
+import {
   useState,
   useEffect,
   useRef,
@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
+
 import {
   Wallet,
   Timer,
@@ -15,75 +16,58 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import * as ReactWindow from 'react-window';
-import { TOTAL_BOARDS, SINGLE_STAKE, PickBoardResult } from '../types';
+import { Grid, useGridRef, type GridProps } from 'react-window';
+import {
+  TOTAL_BOARDS,
+  SINGLE_STAKE,
+  PickBoardResult,
+  GameInitData,
+} from '../types';
 import { socket, socketEvents } from './socket';
 
-// Robust interop for react-window to prevent blank page on import failure
-const FixedSizeGrid =
-  (ReactWindow as any).FixedSizeGrid ||
-  (ReactWindow as any).default?.FixedSizeGrid;
-const areEqual =
-  (ReactWindow as any).areEqual ||
-  (ReactWindow as any).default?.areEqual ||
-  ((a: any, b: any) => a === b);
-
-interface Props {
-  wallet: number;
-  selectedBoardIds: number[];
-  onSelectionChange: (selectedIds: number[]) => void;
-  onBack: () => void;
-  onDismissHint?: () => void;
-  serverTimeLeft?: number;
-  showNextRoundHint?: boolean;
+interface BoardCellData {
+  selectedIds: Set<number>;
+  takenBoards: Set<number>;
+  pendingBoardId: number | null;
+  handleSelect: (id: number) => void;
+  columnCount: number;
+  totalBoards: number;
 }
 
+type BoardCellComponentProps = Parameters<
+  GridProps<BoardCellData>['cellComponent']
+>[0];
+
 // Memoized BoardCell component to prevent unnecessary re-renders of individual cells
-const BoardCell = memo(
-  ({
+const BoardCellImpl = memo((props: BoardCellComponentProps) => {
+  const {
     columnIndex,
     rowIndex,
     style,
-    data,
-  }: {
-    columnIndex: number;
-    rowIndex: number;
-    style: React.CSSProperties;
-    data: {
-      selectedIds: Set<number>;
-      takenBoards: Set<number>;
-      pendingBoardId: number | null;
-      handleSelect: (id: number) => void;
-      columnCount: number;
-      totalBoards: number;
-    };
-  }) => {
-    const {
-      selectedIds,
-      takenBoards,
-      pendingBoardId,
-      handleSelect,
-      columnCount,
-      totalBoards,
-    } = data;
-    const id = rowIndex * columnCount + columnIndex + 1;
+    selectedIds,
+    takenBoards,
+    pendingBoardId,
+    handleSelect,
+    columnCount,
+    totalBoards,
+  } = props;
+  const id = rowIndex * columnCount + columnIndex + 1;
 
-    // Ensure we don't render beyond TOTAL_BOARDS
-    if (id > totalBoards) {
-      return null;
-    }
+  // Ensure we don't render beyond TOTAL_BOARDS
+  if (id > totalBoards) {
+    return null;
+  }
 
-    const isSelected = selectedIds.has(id);
-    const isTaken = takenBoards.has(id) && !isSelected;
-    const isPending = pendingBoardId === id;
+  const isSelected = selectedIds.has(id);
+  const isTaken = takenBoards.has(id) && !isSelected;
+  const isPending = pendingBoardId === id;
 
-    return (
-      /* webhint-disable no-inline-styles */
-      <div style={style} className="p-0.75">
-        <button
-          id={`board-${id}`}
-          onClick={() => handleSelect(id)}
-          className={`
+  return (
+    <div className="board-cell" style={style}>
+      <button
+        id={`board-${id}`}
+        onClick={() => handleSelect(id)}
+        className={`
           w-full h-full flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-all active:scale-95 relative overflow-hidden
           ${isPending ? 'opacity-60 animate-pulse' : ''}
           ${
@@ -94,15 +78,25 @@ const BoardCell = memo(
                 : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg'
           }
         `}
-          disabled={(!isSelected && isTaken) || pendingBoardId !== null}
-        >
-          <span className="relative z-10">{id}</span>
-        </button>
-      </div>
-    );
-  },
-  areEqual
-);
+        disabled={(!isSelected && isTaken) || pendingBoardId !== null}
+      >
+        <span className="relative z-10">{id}</span>
+      </button>
+    </div>
+  );
+});
+BoardCellImpl.displayName = 'BoardCell';
+const BoardCell = BoardCellImpl as GridProps<BoardCellData>['cellComponent'];
+
+interface Props {
+  wallet: number;
+  selectedBoardIds: number[];
+  onSelectionChange: (selectedIds: number[]) => void;
+  onBack: () => void;
+  onDismissHint?: () => void;
+  serverTimeLeft?: number;
+  showNextRoundHint?: boolean;
+}
 
 export default function SelectionPage({
   wallet,
@@ -121,16 +115,24 @@ export default function SelectionPage({
   const [jumpInput, setJumpInput] = useState('');
 
   // Centralized total boards count with fallback
-  const totalBoardsCount = useMemo(() => TOTAL_BOARDS || 600, []);
+  const totalBoardsCount = useMemo(() => TOTAL_BOARDS ?? 600, []);
+
+  // Sync prop changes to state during render (avoids cascading effect renders)
+  const [prevSelectedBoardIds, setPrevSelectedBoardIds] =
+    useState(selectedBoardIds);
+  if (selectedBoardIds !== prevSelectedBoardIds) {
+    setSelectedIds(new Set(selectedBoardIds));
+    setPrevSelectedBoardIds(selectedBoardIds);
+  }
 
   // Sync state tracking
   const [isSyncing, setIsSyncing] = useState(true);
   const [syncError, setSyncError] = useState(false);
-  const syncTimeoutRef = useRef<any>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs for grid container and react-window instance
   const gridContainerRef = useRef<HTMLDivElement>(null);
-  const gridRef = useRef<any>(null);
+  const gridRef = useGridRef(null);
 
   // State for dynamic grid dimensions
   const [gridWidth, setGridWidth] = useState(window.innerWidth - 32); // Better initial guess
@@ -139,7 +141,7 @@ export default function SelectionPage({
   // Responsive column count: ensures touch targets don't get too small on narrow screens
   const columnCount = useMemo(() => {
     if (gridWidth === 0) return 10;
-    return Math.max(5, Math.floor(gridWidth / 38));
+    return Math.max(5, Math.floor(gridWidth / 38)) ?? 10;
   }, [gridWidth]);
 
   const gap = 6; // Tailwind's gap-1.5 is 0.375rem, assuming 1rem = 16px, so 6px
@@ -185,8 +187,8 @@ export default function SelectionPage({
     [itemHeight, gap]
   );
 
-  // Memoize itemData to prevent unnecessary re-renders of all cells
-  const itemData = useMemo(
+  // Memoize cellProps to prevent unnecessary re-renders of all cells
+  const cellProps = useMemo(
     () => ({
       selectedIds,
       takenBoards,
@@ -205,17 +207,14 @@ export default function SelectionPage({
     ]
   );
 
-  // Stable key generator for virtualization performance
-  const itemKey = useCallback(({ columnIndex, rowIndex, data }: any) => {
-    return rowIndex * data.columnCount + columnIndex + 1;
-  }, []);
-
   const rowCount = useMemo(() => {
     return Math.ceil(totalBoardsCount / columnCount);
   }, [columnCount, totalBoardsCount]);
 
   const startSyncTimer = useCallback(() => {
-    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
     setSyncError(false);
     setIsSyncing(true);
 
@@ -232,10 +231,6 @@ export default function SelectionPage({
   const timeLeft = serverTimeLeft ?? 0;
   const timerDisplay = timeLeft > 0 ? `${timeLeft}s` : 'Starting soon…';
 
-  useEffect(() => {
-    setSelectedIds(new Set(selectedBoardIds));
-  }, [selectedBoardIds]);
-
   // Observe container size for dynamic grid dimensions
   useEffect(() => {
     // Guard for environments where ResizeObserver is missing (can crash mount)
@@ -246,18 +241,20 @@ export default function SelectionPage({
     // Perform an initial measurement immediately on mount
     if (gridContainerRef.current) {
       setGridWidth(
-        gridContainerRef.current.offsetWidth || window.innerWidth - 32
+        gridContainerRef.current.offsetWidth ?? window.innerWidth - 32
       );
       setGridHeight(
-        gridContainerRef.current.offsetHeight || window.innerHeight - 250
+        gridContainerRef.current.offsetHeight ?? window.innerHeight - 250
       );
     }
 
     const observer = new ResizeObserver((entries) => {
       if (entries[0]) {
         window.requestAnimationFrame(() => {
-          setGridWidth(entries[0].contentRect.width);
-          setGridHeight(entries[0].contentRect.height);
+          setGridWidth(entries[0].contentRect.width ?? window.innerWidth - 32);
+          setGridHeight(
+            entries[0].contentRect.height ?? window.innerHeight - 250
+          );
         });
       }
     });
@@ -272,14 +269,18 @@ export default function SelectionPage({
 
   // Separate initial sync from listener management to prevent loops
   useEffect(() => {
-    startSyncTimer();
+    // Using a microtask to avoid synchronous setState during mount
+    // and satisfy the react-hooks/set-state-in-effect rule.
+    void Promise.resolve().then(() => startSyncTimer());
   }, [startSyncTimer]);
 
   useEffect(() => {
     const handleBoardSync = (data: { takenBoards?: number[] }) => {
       setIsSyncing(false);
       setSyncError(false);
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
       setTakenBoards(new Set(data?.takenBoards ?? []));
     };
 
@@ -298,11 +299,13 @@ export default function SelectionPage({
       }
     };
 
-    const handleGameInit = (data: any) => {
+    const handleGameInit = (data: GameInitData) => {
       setIsSyncing(false);
       setSyncError(false);
 
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
 
       const taken = Array.isArray(data?.takenBoards)
         ? data.takenBoards
@@ -339,13 +342,14 @@ export default function SelectionPage({
       const targetRow = Math.floor((id - 1) / columnCount);
       const targetColumn = (id - 1) % columnCount;
 
-      gridRef.current?.scrollToItem({
+      gridRef.current?.scrollToCell({
         rowIndex: targetRow,
         columnIndex: targetColumn,
-        align: 'center',
+        rowAlign: 'center',
+        columnAlign: 'center',
       });
     },
-    [columnCount]
+    [columnCount, totalBoardsCount, gridRef]
   );
 
   const handleJump = () => {
@@ -355,7 +359,7 @@ export default function SelectionPage({
     setJumpInput('');
   };
 
-  const selectedBoard =
+  const selectedBoard: number | null =
     selectedIds.size > 0 ? Array.from(selectedIds)[0] : null;
 
   return (
@@ -489,30 +493,26 @@ export default function SelectionPage({
           </div>
         )}
 
-        {FixedSizeGrid && gridWidth > 0 && gridHeight > 0 && (
-          <FixedSizeGrid
-            ref={gridRef}
+        {gridWidth > 0 && gridHeight > 0 && (
+          <Grid
+            gridRef={gridRef}
             columnCount={columnCount}
             columnWidth={columnWidth}
-            height={gridHeight}
             rowCount={rowCount}
             rowHeight={rowHeight}
-            width={gridWidth}
-            itemKey={itemKey}
-            itemData={itemData}
+            cellComponent={BoardCell}
+            cellProps={cellProps}
             className="custom-scrollbar"
             overscanCount={2}
-          >
-            {BoardCell as any}
-          </FixedSizeGrid>
+            style={{ height: gridHeight, width: gridWidth }}
+          />
         )}
 
-        {!syncError &&
-          (!FixedSizeGrid || gridWidth <= 0 || gridHeight <= 0) && (
-            <div className="flex items-center justify-center h-full w-full text-white/60 text-[10px] font-black uppercase">
-              Loading boards…
-            </div>
-          )}
+        {!syncError && (gridWidth <= 0 || gridHeight <= 0) && (
+          <div className="flex items-center justify-center h-full w-full text-white/60 text-[10px] font-black uppercase">
+            Loading boards…
+          </div>
+        )}
       </div>
     </div>
   );

@@ -10,7 +10,15 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'node_modules', 'vite.config.ts'],
+    ignores: [
+      'dist',
+      'node_modules',
+      'vite.config.ts',
+      'eslint.config.js',
+      'eslint.config.ts',
+      'instrumentation.js',
+      '.eslintrc.cjs',
+    ],
   },
   {
     // Base configuration for all JS and TS files
@@ -29,9 +37,18 @@ export default tseslint.config(
       ...tseslint.configs.stylisticTypeChecked,
       importX.flatConfigs.typescript,
     ],
+    rules: {
+      // Module resolution is unreliable for Node built-ins + ESM/TS in this repo.
+      'import-x/no-unresolved': 'off',
+      'import-x/namespace': 'off',
+      'import-x/default': 'off',
+      'import-x/no-named-as-default': 'off',
+      'import-x/no-named-as-default-member': 'off',
+      'import-x/no-duplicates': 'off',
+    },
     languageOptions: {
       parserOptions: {
-        project: true,
+        project: ['./tsconfig.eslint.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },

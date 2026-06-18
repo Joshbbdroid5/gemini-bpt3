@@ -241,7 +241,7 @@ export default function AdminDashboard({ onBack }: Props) {
 
   const filteredWallets = Object.entries(wallets).filter(([id, data]) => 
     id.toLowerCase().includes(search.toLowerCase()) ||
-    (data.username && data.username.toLowerCase().includes(search.toLowerCase()))
+    (data.username?.toLowerCase().includes(search.toLowerCase()))
   );
 
   const processedRounds = useMemo(() => {
@@ -814,7 +814,7 @@ export default function AdminDashboard({ onBack }: Props) {
             <div className="flex items-center justify-between mb-6">
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest leading-none mb-1">User Activity</span>
-                <h3 className="text-xl font-black text-white italic truncate">User: {wallets[selectedUserActivity!]?.username || selectedUserActivity}</h3>
+                <h3 className="text-xl font-black text-white italic truncate">User: {wallets[selectedUserActivity]?.username || selectedUserActivity}</h3>
               </div>
               <button 
                 onClick={() => setSelectedUserActivity(null)}

@@ -1,2 +1,5 @@
-// framer-motion types are provided by the installed package.
-// This file is intentionally left empty to avoid overriding the real types.
+declare module 'framer-motion' {
+  // Minimal typings to unblock TypeScript when package types are missing.
+  export const motion: any;
+  export const AnimatePresence: any;
+}

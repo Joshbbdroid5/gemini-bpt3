@@ -33,7 +33,7 @@ export async function notifyUser(userId: string, message: string) {
 }
 
 function parseAmount(text: string): number {
-  const m = text.match(/(\d+)/);
+  const m = /(\d+)/.exec(text);
   return m ? parseInt(m[1], 10) : NaN;
 }
 
@@ -132,7 +132,7 @@ mainBot.action('play', async (ctx) => {
   const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
   const data = await response.json();
   if (!data.isVerified) return ctx.reply('⚠️ Register first.', Markup.inlineKeyboard([[Markup.button.callback('📝 Register', 'register')]]));
-  return ctx.reply('Good luck! 🎮', Markup.inlineKeyboard([[Markup.button.webApp('Launch Game', FRONTEND_URL as string)]]));
+  return ctx.reply('Good luck! 🎮', Markup.inlineKeyboard([[Markup.button.webApp('Launch Game', FRONTEND_URL!)]]));
 });
 
 mainBot.action('deposit', (ctx) => ctx.reply('💰 Choose method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'deposit_method_telebirr')]])));
@@ -213,7 +213,7 @@ mainBot.on('text', async (ctx) => {
   }
 
   if (replyText.includes('DEPOSIT INSTRUCTIONS')) {
-    const amountMatch = replyText.match(/(\d+) ETB/);
+    const amountMatch = /(\d+) ETB/.exec(replyText);
     const amount = amountMatch ? amountMatch[1] : '0';
     
     // Trigger backend which will notify Admin Bot

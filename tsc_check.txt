@@ -1,1 +1,0 @@
-tsconfig.json(22,27): error TS5103: Invalid value for '--ignoreDeprecations'.

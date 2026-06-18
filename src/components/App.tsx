@@ -203,7 +203,7 @@ export default function App() {
     };
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: PoolUpdateData) => {
-      if (data.room) setRoomStats(data.room as any);
+      if (data.room) setRoomStats(data.room);
       if (data.isMaintenance !== void 0)
         setIsMaintenanceMode(data.isMaintenance);
     };
@@ -298,7 +298,7 @@ export default function App() {
     }, 4000);
 
     const tg = window.Telegram?.WebApp;
-    if (tg && tg.initData) {
+    if (tg?.initData) {
       tg.expand();
       const user = tg.initDataUnsafe?.user;
       if (user) {

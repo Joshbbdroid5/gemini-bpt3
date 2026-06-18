@@ -7,6 +7,7 @@
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    "typeRoots": ["./node_modules/@types", "./src/types"],
     "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",

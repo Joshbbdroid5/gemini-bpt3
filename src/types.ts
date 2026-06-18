@@ -5,7 +5,13 @@ export interface BingoCell {
 
 export type BingoBoardData = BingoCell[][];
 
-export type AppPhase = 'home' | 'selection' | 'game' | 'history' | 'wallet' | 'profile';
+export type AppPhase =
+  | 'home'
+  | 'selection'
+  | 'game'
+  | 'history'
+  | 'wallet'
+  | 'profile';
 
 export enum GameState {
   SELECTION = 'SELECTION',
@@ -68,3 +74,105 @@ export const BINGO_COLUMNS = {
 
 export const TOTAL_BOARDS = 600;
 export const SINGLE_STAKE = 10;
+
+export interface IGlobalGameState {
+  totalVolume: number;
+  totalProfit: number;
+  isMaintenanceMode: boolean;
+  isGameRunning: boolean;
+  stopRequested: boolean;
+  activePlayers: number;
+}
+
+export interface IAdminCreateUserBody {
+  userId: string;
+  referredBy?: string;
+  secret: string;
+}
+
+export interface IAdminAddPendingDepositBody {
+  userId: string;
+  amount: number;
+  telebirrSms: string;
+  secret: string;
+}
+
+export interface IAdminUpdateWalletBody {
+  userId: string;
+  amount: number;
+  secret: string;
+  mode?: 'adjust' | 'set';
+}
+
+export interface IAdminWithdrawRequestBody {
+  userId: string;
+  amount: number;
+  secret: string;
+}
+
+export interface IAdminRefundWithdrawalBody {
+  userId: string;
+  amount: number;
+  secret: string;
+}
+
+export interface IAdminCompleteWithdrawalBody {
+  userId: string;
+  amount: number;
+  secret: string;
+}
+
+export interface IAdminRejectDepositBody {
+  userId: string;
+  amount: number;
+  secret: string;
+}
+
+export interface IAdminVerifyUserBody {
+  userId: string;
+  phone: string;
+  secret: string;
+}
+
+export interface IAdminToggleMaintenanceBody {
+  secret: string;
+  enabled: boolean;
+}
+
+export interface IAdminQuery { userId?: string; secret?: string }
+
+export interface IWinnerInfo {
+  userId: string;
+  boardId: number;
+  patterns: any[];
+}
+
+export interface ISocketAuthUser {
+  id: number;
+  username?: string;
+  first_name: string;
+  last_name?: string;
+  [key: string]: any;
+}
+
+export interface IUserLean {
+  userId: string;
+  username?: string;
+  balance: number;
+  isVerified: boolean;
+  referredBy?: string;
+  phone?: string;
+  referredCount: number;
+}
+
+export interface IRoomDocToObject {
+  currentGameId: string;
+  state: GameState;
+  globalPool: number;
+  currentBalls: number[];
+  shuffledBalls: number[];
+  selectionStartTime?: number;
+  selectionDuration?: number;
+  playerBoards: Record<string, number[]>; // Mongoose Map.toObject() converts to plain object
+  boardStatus: Record<string, string>; // Mongoose Map.toObject() converts to plain object
+}

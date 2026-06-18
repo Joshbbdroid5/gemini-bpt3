@@ -1,13 +1,8 @@
 # TODO
 
-## Task
-- Show all winners in the 3-second winner popup when multiple players hit the winning pattern with exactly the same ball drawn.
-- Update `src/components/GamePage.tsx` modal to map through the `winners` array.
-
-## Plan
-- [ ] Inspect `GamePage.tsx` winner popup implementation.
-- [ ] Verify current behavior: popup renders winners array (Telegram + non-Telegram branches).
-- [ ] If not rendering all winners, adjust logic/state updates so `winners` accumulates per round and modal maps over all entries.
-- [ ] Ensure payout and winner indexing are correct for multiple winners.
-- [ ] Run `npm test` / `npm run build` (or equivalent) and confirm TypeScript compile.
-
+- [ ] Step 1: Fix ESLint import resolution causing `import-x/no-unresolved` false positives (Node built-ins + TS project).
+- [ ] Step 2: Re-run `npm run lint` to confirm unresolved-module errors are gone.
+- [ ] Step 3: Fix TypeScript errors in `server.ts` (string | undefined -> string, etc.).
+- [ ] Step 4: Reduce `@typescript-eslint/no-explicit-any` / `no-unsafe-*` by tightening mongoose/lean() types at the boundaries.
+- [ ] Step 5: Address remaining rule violations: `no-empty`, `prefer-const`, `prefer-nullish-coalescing`, `prefer-optional-chain`, `require-await`, `no-misused-promises`.
+- [ ] Step 6: Re-run `npm run lint` + `npm run server` (optional) / `tsc --noEmit`.

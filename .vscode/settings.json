@@ -10,5 +10,6 @@
   },
   "files.associations": {
     "*.css": "tailwindcss"
-  }
+  },
+  "npm.packageManager": "npm"
 }
