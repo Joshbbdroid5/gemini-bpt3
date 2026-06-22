@@ -1,8 +1,0 @@
-﻿node.exe : The unix formatter is no longer part of core ESLint. Install it manually with `npm install -D 
-eslint-formatter-unix`
-At line:1 char:1
-+ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (The unix format...formatter-unix`:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
