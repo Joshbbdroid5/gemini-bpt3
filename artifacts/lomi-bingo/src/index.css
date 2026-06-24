@@ -1,0 +1,34 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --color-primary: #1a1b2e;
+}
+
+body {
+  @apply bg-[#11121d] text-white antialiased;
+  background: radial-gradient(
+    circle at top right,
+    #2d2e4d 0%,
+    #1a1b2e 40%,
+    #11121d 100%
+  );
+  min-height: 100vh;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Enable smooth momentum scrolling on iOS */
+.scroll-touch,
+.custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* react-window cell layout (used by SelectionPage) */
+.board-cell {
+  position: absolute;
+}
