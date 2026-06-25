@@ -469,7 +469,20 @@ app.get(['/health', '/api/healthz'], (req, res) => {
   });
 });
 
-// metrics endpoint removed
+// Status endpoint — real-time game engine health
+app.get('/api/status', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  const engineActive = globalGameState.isGameRunning && !globalGameState.stopRequested;
+  res.json({
+    engine: engineActive ? 'active' : 'idle',
+    maintenance: globalGameState.isMaintenanceMode,
+    activePlayers: globalGameState.activePlayers,
+    gameRunning: globalGameState.isGameRunning,
+    database: dbStatus,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // ADMIN ENDPOINT: Create or update user record (used for referrals)
 app.post(
