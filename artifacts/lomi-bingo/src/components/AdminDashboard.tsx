@@ -35,6 +35,15 @@ export default function AdminDashboard({ onBack }: Props) {
   const [selectedUserActivity, setSelectedUserActivity] = useState<string | null>(null);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [modalData, setModalData] = useState<{ userId: string; amount: number; type: 'add' | 'subtract' | 'set' } | null>(null);
+  const [serverStatus, setServerStatus] = useState<{
+    engine: 'active' | 'idle';
+    maintenance: boolean;
+    activePlayers: number;
+    gameRunning: boolean;
+    database: 'connected' | 'disconnected';
+    uptime: number;
+    timestamp: string;
+  } | null>(null);
   // Backend URL from environment variables, with a fallback for local development
   const backendUrl = import.meta.env.VITE_BACKEND_URL || window.location.origin;
 
@@ -74,6 +83,15 @@ export default function AdminDashboard({ onBack }: Props) {
     }
   };
 
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch(`${backendUrl}/api/status`);
+      if (res.ok) setServerStatus(await res.json());
+    } catch {
+      // silent — status panel shows stale data
+    }
+  };
+
   // Auto-refresh wallets and stats every 30 seconds if authenticated
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -86,6 +104,14 @@ export default function AdminDashboard({ onBack }: Props) {
       if (intervalId) clearInterval(intervalId);
     };
   }, [isAuthenticated, secret, backendUrl]); // Re-run effect if isAuthenticated or secret changes
+
+  // Poll /api/status every 10 seconds when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchStatus();
+    const id = setInterval(fetchStatus, 10000);
+    return () => clearInterval(id);
+  }, [isAuthenticated, backendUrl]);
 
   const triggerUpdateBalance = (userId: string, amount: number, type: 'add' | 'subtract' | 'set') => {
     if (isNaN(amount) || (type !== 'set' && amount <= 0) || (type === 'set' && amount < 0)) return; 
@@ -492,6 +518,56 @@ export default function AdminDashboard({ onBack }: Props) {
                   <div className="text-lg font-black text-white italic">{stats.payouts24h.toFixed(0)} <span className="text-[10px] not-italic text-gray-500">ETB</span></div>
                 </div>
               </div>
+            </div>
+
+            {/* Server Health */}
+            <div className="space-y-2">
+              <h3 className="px-2 text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] flex items-center justify-between">
+                Server Health
+                {serverStatus && (
+                  <span className="text-[8px] text-gray-500 normal-case font-normal tracking-normal">
+                    {new Date(serverStatus.timestamp).toLocaleTimeString()}
+                  </span>
+                )}
+              </h3>
+              {serverStatus ? (
+                <div className="bg-black/20 rounded-[24px] p-3 border border-white/5 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={`rounded-2xl p-3 border ${serverStatus.engine === 'active' ? 'bg-green-500/10 border-green-500/20' : 'bg-gray-500/10 border-white/5'}`}>
+                      <span className="text-[8px] font-black uppercase tracking-widest block mb-1 text-gray-400">Engine</span>
+                      <div className={`flex items-center gap-1.5 ${serverStatus.engine === 'active' ? 'text-green-400' : 'text-gray-400'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${serverStatus.engine === 'active' ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
+                        <span className="text-[10px] font-black uppercase">{serverStatus.engine}</span>
+                      </div>
+                    </div>
+                    <div className={`rounded-2xl p-3 border ${serverStatus.database === 'connected' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                      <span className="text-[8px] font-black uppercase tracking-widest block mb-1 text-gray-400">Database</span>
+                      <div className={`flex items-center gap-1.5 ${serverStatus.database === 'connected' ? 'text-blue-400' : 'text-red-400'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${serverStatus.database === 'connected' ? 'bg-blue-400' : 'bg-red-400 animate-pulse'}`} />
+                        <span className="text-[10px] font-black uppercase">{serverStatus.database === 'connected' ? 'OK' : 'Down'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-2xl p-3 border border-white/5 bg-white/5">
+                      <span className="text-[8px] font-black uppercase tracking-widest block mb-1 text-gray-400">Active Players</span>
+                      <span className="text-lg font-black text-white italic">{serverStatus.activePlayers}</span>
+                    </div>
+                    <div className="rounded-2xl p-3 border border-white/5 bg-white/5">
+                      <span className="text-[8px] font-black uppercase tracking-widest block mb-1 text-gray-400">Uptime</span>
+                      <span className="text-[10px] font-black text-white">
+                        {serverStatus.uptime < 3600
+                          ? `${Math.floor(serverStatus.uptime / 60)}m`
+                          : `${Math.floor(serverStatus.uptime / 3600)}h ${Math.floor((serverStatus.uptime % 3600) / 60)}m`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-black/20 rounded-[24px] p-4 border border-white/5 text-center text-[9px] text-gray-500 uppercase tracking-widest">
+                  Fetching status…
+                </div>
+              )}
             </div>
           </div>
         </div>
