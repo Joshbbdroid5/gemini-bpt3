@@ -456,9 +456,8 @@ function verifyTelegramData(initData: string): boolean {
   return hmac === hash;
 }
 
-// Health check endpoint for Render monitoring
-// Render may hit /health without any API routes being mounted yet; also avoid crashing if io isn't ready.
-app.get('/health', (req, res) => {
+// Health check endpoint — reachable at both /health and /api/healthz
+app.get(['/health', '/api/healthz'], (req, res) => {
   const dbStatus =
     mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
   const clientsCount = io ? io.engine.clientsCount : 0; // io is initialized later, so it can be undefined here.

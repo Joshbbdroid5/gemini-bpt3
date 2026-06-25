@@ -378,7 +378,7 @@ adminBot?.action(/w_ref_(\d+)_(.+)/, async (ctx: Context & { match: RegExpExecAr
 
 // Delete Confirmation
 adminBot?.action(/del_conf_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
-  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) void ctx.answerCbQuery('Unauthorized'); return;
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) { void ctx.answerCbQuery('Unauthorized'); return; }
   const userId = ctx.match[1];
   await ctx.editMessageReplyMarkup(
     Markup.inlineKeyboard([
@@ -390,7 +390,7 @@ adminBot?.action(/del_conf_(.+)/, async (ctx: Context & { match: RegExpExecArray
 
 // Delete Execution
 adminBot?.action(/del_exec_(.+)/, async (ctx: Context & { match: RegExpExecArray }) => {
-  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) void ctx.answerCbQuery('Unauthorized'); return;
+  if (ctx.from?.id.toString() !== ADMIN_CHAT_ID) { void ctx.answerCbQuery('Unauthorized'); return; }
   if (!requireAdminSecret(ctx)) return void ctx.answerCbQuery();
   const userId = ctx.match[1];
 
