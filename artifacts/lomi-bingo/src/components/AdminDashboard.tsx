@@ -36,7 +36,7 @@ export default function AdminDashboard({ onBack }: Props) {
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [modalData, setModalData] = useState<{ userId: string; amount: number; type: 'add' | 'subtract' | 'set' } | null>(null);
   // Backend URL from environment variables, with a fallback for local development
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || window.location.origin;
 
   const fetchWallets = async () => {
     setLoading(true);

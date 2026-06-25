@@ -143,6 +143,7 @@ export default function App() {
       fetchTransactions(myId, controller.signal);
       return () => controller.abort();
     }
+    return undefined;
   }, [phase, myId, fetchTransactions]);
 
   // Engine watchdog
