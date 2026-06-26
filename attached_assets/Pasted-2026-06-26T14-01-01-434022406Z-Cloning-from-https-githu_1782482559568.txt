@@ -1,0 +1,26 @@
+2026-06-26T14:01:01.434022406Z ==> Cloning from https://github.com/Joshbbdroid5/gemini-bpt3
+2026-06-26T14:01:02.447897488Z ==> Checking out commit 7bd497acfbf848c53e624f89d1cfca8f88108d3c in branch main
+2026-06-26T14:01:03.468439334Z ==> Using Node.js version 24.14.1 (default)
+2026-06-26T14:01:03.468449815Z ==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+2026-06-26T14:01:03.511570609Z ==> Running build command 'pnpm install --frozen-lockfile && pnpm --filter @workspace/lomi-bingo run build && pnpm --filter @workspace/api-server run build'...
+2026-06-26T14:01:13.676352337Z 
+2026-06-26T14:01:13.676379719Z > @workspace/lomi-bingo@0.0.0 build /opt/render/project/src/artifacts/lomi-bingo
+2026-06-26T14:01:13.67638888Z > vite build --config vite.config.ts
+2026-06-26T14:01:13.67639282Z 
+2026-06-26T14:01:13.945481716Z failed to load config from /opt/render/project/src/artifacts/lomi-bingo/vite.config.ts
+2026-06-26T14:01:13.947579665Z error during build:
+2026-06-26T14:01:13.947595457Z Error: BASE_PATH environment variable is required but was not provided.
+2026-06-26T14:01:13.947601427Z     at file:///opt/render/project/src/artifacts/lomi-bingo/node_modules/.vite-temp/vite.config.ts.timestamp-1782482473835-ef2c0c0673d11.mjs:20:9
+2026-06-26T14:01:13.947606137Z     at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+2026-06-26T14:01:13.947611498Z     at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+2026-06-26T14:01:13.947621548Z     at async loadConfigFromBundledFile (file:///opt/render/project/src/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:35936:12)
+2026-06-26T14:01:13.947626018Z     at async bundleAndLoadConfigFile (file:///opt/render/project/src/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:35824:17)
+2026-06-26T14:01:13.947630969Z     at async loadConfigFromFile (file:///opt/render/project/src/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:35791:42)
+2026-06-26T14:01:13.947635479Z     at async resolveConfig (file:///opt/render/project/src/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:35440:22)
+2026-06-26T14:01:13.947640239Z     at async createBuilder (file:///opt/render/project/src/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/config.js:33895:19)
+2026-06-26T14:01:13.947644909Z     at async CAC.<anonymous> (file:///opt/render/project/src/node_modules/.pnpm/vite@7.3.3_@types+node@25.6.2_jiti@2.7.0_lightningcss@1.32.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/cli.js:629:10)
+2026-06-26T14:01:13.974915785Z /opt/render/project/src/artifacts/lomi-bingo:
+2026-06-26T14:01:13.974932615Z  ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/lomi-bingo@0.0.0 build: `vite build --config vite.config.ts`
+2026-06-26T14:01:13.974938646Z Exit status 1
+2026-06-26T14:01:14.036608266Z ==> Build failed 😞
+2026-06-26T14:01:14.036627598Z ==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
