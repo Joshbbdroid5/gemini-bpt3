@@ -2308,8 +2308,9 @@ function registerSocketHandlers(io: SocketIOServer) {
 }
 
 // SPA catch-all: serve index.html for any non-API route in production
+// Express 5 requires a named wildcard — bare '*' is invalid in path-to-regexp v8
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
+  app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
   });
 }

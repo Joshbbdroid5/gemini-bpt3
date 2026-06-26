@@ -1,0 +1,50 @@
+2026-06-26T14:12:50.684203418Z     at pathToRegexp (/opt/render/project/src/node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/src/index.ts:478:3)
+2026-06-26T14:12:50.684207768Z     at Object.match (/opt/render/project/src/node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/src/index.ts:416:28)
+2026-06-26T14:12:50.684212608Z     at matcher (/opt/render/project/src/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:86:23)
+2026-06-26T14:12:50.684217198Z     at new Layer (/opt/render/project/src/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:93:62)
+2026-06-26T14:12:50.684221799Z     at router.route (/opt/render/project/src/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:428:17)
+2026-06-26T14:12:50.684226369Z     at app2.route (/opt/render/project/src/node_modules/.pnpm/express@5.2.1/node_modules/express/lib/application.js:257:22)
+2026-06-26T14:12:50.684230529Z     at app2.app2.<computed> (/opt/render/project/src/node_modules/.pnpm/express@5.2.1/node_modules/express/lib/application.js:478:22) {
+2026-06-26T14:12:50.684234899Z   originalPath: '*'
+2026-06-26T14:12:50.68423931Z }
+2026-06-26T14:12:50.68424368Z 
+2026-06-26T14:12:50.68424811Z Node.js v24.14.1
+2026-06-26T14:12:50.975186313Z /opt/render/project/src/artifacts/api-server:
+2026-06-26T14:12:50.975216805Z  ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/api-server@0.0.0 start: `node --enable-source-maps ./dist/index.mjs`
+2026-06-26T14:12:50.975222575Z Exit status 1
+2026-06-26T14:12:53.382743919Z ==> Exited with status 1
+2026-06-26T14:12:53.385604775Z ==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+2026-06-26T14:12:58.072385846Z ==> Running 'pnpm --filter @workspace/api-server run start'
+2026-06-26T14:13:11.593008477Z ==> No open ports detected, continuing to scan...
+2026-06-26T14:13:11.748597133Z ==> Docs on specifying a port: https://render.com/docs/web-services#port-binding
+2026-06-26T14:13:14.081704308Z 
+2026-06-26T14:13:14.081725449Z > @workspace/api-server@0.0.0 start /opt/render/project/src/artifacts/api-server
+2026-06-26T14:13:14.081732519Z > node --enable-source-maps ./dist/index.mjs
+2026-06-26T14:13:14.081736749Z 
+2026-06-26T14:13:16.775070233Z ◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+2026-06-26T14:13:16.810987608Z ◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+2026-06-26T14:13:17.38331001Z ◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+2026-06-26T14:13:17.483027795Z {"level":30,"time":1782483197472,"pid":109,"hostname":"srv-d7mdcthkh4rs73akq4gg-hibernate-5545f65698-q2wzl","msg":"Attempting to connect to MongoDB..."}
+2026-06-26T14:13:20.9843443Z /opt/render/project/src/node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/src/index.ts:218
+2026-06-26T14:13:20.984370761Z           throw new PathError(`Missing parameter name at index ${index}`, str);
+2026-06-26T14:13:20.984375941Z                 ^
+2026-06-26T14:13:20.984379961Z 
+2026-06-26T14:13:20.984465905Z PathError [TypeError]: Missing parameter name at index 1: *; visit https://git.new/pathToRegexpError for info
+2026-06-26T14:13:20.984472475Z     at consumeUntil (/opt/render/project/src/node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/src/index.ts:218:17)
+2026-06-26T14:13:20.984477425Z     at parse (/opt/render/project/src/node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/src/index.ts:262:24)
+2026-06-26T14:13:20.984481456Z     at process (/opt/render/project/src/node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/src/index.ts:466:52)
+2026-06-26T14:13:20.984485586Z     at pathToRegexp (/opt/render/project/src/node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/src/index.ts:478:3)
+2026-06-26T14:13:20.984489946Z     at Object.match (/opt/render/project/src/node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/src/index.ts:416:28)
+2026-06-26T14:13:20.984494126Z     at matcher (/opt/render/project/src/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:86:23)
+2026-06-26T14:13:20.984498136Z     at new Layer (/opt/render/project/src/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:93:62)
+2026-06-26T14:13:20.98459561Z     at router.route (/opt/render/project/src/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:428:17)
+2026-06-26T14:13:20.984600081Z     at app2.route (/opt/render/project/src/node_modules/.pnpm/express@5.2.1/node_modules/express/lib/application.js:257:22)
+2026-06-26T14:13:20.984604211Z     at app2.app2.<computed> (/opt/render/project/src/node_modules/.pnpm/express@5.2.1/node_modules/express/lib/application.js:478:22) {
+2026-06-26T14:13:20.984608401Z   originalPath: '*'
+2026-06-26T14:13:20.984710746Z }
+2026-06-26T14:13:20.984716886Z 
+2026-06-26T14:13:20.984720866Z Node.js v24.14.1
+2026-06-26T14:13:21.280003986Z /opt/render/project/src/artifacts/api-server:
+2026-06-26T14:13:21.280022727Z  ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/api-server@0.0.0 start: `node --enable-source-maps ./dist/index.mjs`
+2026-06-26T14:13:21.280028148Z Exit status 1
+2026-06-26T14:13:41.746152583Z ==> Running 'pnpm --filter @workspace/api-server run start'
