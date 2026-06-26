@@ -1,19 +1,9 @@
 services:
   - type: web
-    name: lomi-bingo-api
+    name: lomi-bingo
     runtime: node
-    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm --filter @workspace/lomi-bingo run build && pnpm --filter @workspace/api-server run build
     startCommand: pnpm --filter @workspace/api-server run start
     envVars:
       - key: NODE_ENV
         value: production
-
-  - type: web
-    name: lomi-bingo-frontend
-    runtime: static
-    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm --filter @workspace/lomi-bingo run build
-    staticPublishPath: artifacts/lomi-bingo/dist/public
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

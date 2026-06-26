@@ -70,6 +70,12 @@ const corsConfig: CorsOptions = {
 app.use(cors(corsConfig)); // Match REST API CORS policy to Socket.io
 app.use(express.json());
 
+// In production (single Render web service), serve the built frontend
+const FRONTEND_DIST = path.resolve(__dirname, '../../lomi-bingo/dist/public');
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(FRONTEND_DIST));
+}
+
 // Utility to wrap async Express route handlers for centralized error handling
 type AsyncHandler = (
   req: express.Request,
@@ -2301,7 +2307,12 @@ function registerSocketHandlers(io: SocketIOServer) {
   });
 }
 
-// Static files served by Vite
+// SPA catch-all: serve index.html for any non-API route in production
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+  });
+}
 
 // Handle Graceful Shutdown for Render
 process.on('SIGTERM', () => {
