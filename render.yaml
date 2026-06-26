@@ -2,7 +2,7 @@ services:
   - type: web
     name: lomi-bingo
     runtime: node
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/lomi-bingo run build && pnpm --filter @workspace/api-server run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/lomi-bingo run build && pnpm --filter @workspace/api-server run build
     startCommand: pnpm --filter @workspace/api-server run start
     envVars:
       - key: NODE_ENV
