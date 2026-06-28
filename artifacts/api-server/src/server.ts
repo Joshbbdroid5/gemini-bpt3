@@ -1939,7 +1939,7 @@ async function runGameLoop() {
 
       const splitPayout = totalPayout / winnersThisRound.length;
 
-      Promise.all(
+      await Promise.all(
         winnersThisRound.map(async (w: IWinnerInfo): Promise<any> => {
           // Explicitly typed return for map callback
           //
@@ -2088,9 +2088,12 @@ function resetGame() {
   singleRoomState.currentGameId = generateGameId();
   io.emit(socketEvents.GAME_RESET); // Emit to all connected clients
 
-  // Check if a stop was requested and no other rooms are still in a game
+  // Check if a stop was requested. resetGame() is only ever called at the end of a round
+  // (from the 10s post-game timer) so there are never any live games at this point.
+  // We cannot rely on singleRoomState.state here because in a full-deck (75 balls, no winner)
+  // scenario the state stays as GAME until reset, which would incorrectly block the stop.
   if (globalGameState.stopRequested) {
-    const hasLiveGames = singleRoomState.state === GameState.GAME; // Only one room now
+    const hasLiveGames = false;
     if (!hasLiveGames) {
       globalGameState.isGameRunning = false; // Stop engine
       if (singleRoomState.selectionTimer) {

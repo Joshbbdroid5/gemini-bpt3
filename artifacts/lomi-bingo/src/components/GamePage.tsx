@@ -204,6 +204,11 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
     return () => clearInterval(interval);
   }, [showWinnerPopup]);
 
+  // Sync current game state on mount — catches the case where GAME_INIT fired before GamePage was mounted
+  useEffect(() => {
+    resyncGameState();
+  }, []);
+
   // Pre-warm assets: Initialize and load audio on mount
   useEffect(() => {
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3');
