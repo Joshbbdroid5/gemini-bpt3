@@ -605,12 +605,6 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
                       <span className="text-[10px] text-gray-400">Next round is starting soon</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => onRestartGameRef.current()}
-                    className="w-full py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-sm uppercase tracking-wide transition-all"
-                  >
-                    Pick Board Now →
-                  </button>
                 </div>
               </motion.div>
           </div>
