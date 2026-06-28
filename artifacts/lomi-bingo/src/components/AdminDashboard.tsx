@@ -15,7 +15,7 @@ type AdminView = 'wallets' | 'rounds' | 'transactions';
 
 export default function AdminDashboard({ onBack }: Props) {
   const [secret, setSecret] = useState('');
-  const [wallets, setWallets] = useState<Record<string, { balance: number; username?: string }>>({});
+  const [wallets, setWallets] = useState<Record<string, { balance: number; username?: string; phone?: string }>>({});
   const [rounds, setRounds] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [roundSearch, setRoundSearch] = useState('');

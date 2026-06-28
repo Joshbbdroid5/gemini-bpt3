@@ -3,7 +3,7 @@ import { Plus, Minus, Check, Trash2, History } from 'lucide-react';
 
 interface WalletCardProps {
   id: string;
-  data: { balance: number; username?: string };
+  data: { balance: number; username?: string; phone?: string };
   adjustmentValues: Record<string, string>;
   isUpdating: string | null;
   onViewActivity: (userId: string) => void;
@@ -27,10 +27,13 @@ const WalletCard = memo(({
   return (
     <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col gap-4 shadow-md">
       <div className="flex items-center justify-between">
-        <div className="flex flex-col">
-          <span className="text-[10px] font-black text-indigo-300 uppercase leading-none mb-1">User</span>
-          <span className="text-xs font-bold text-white font-mono leading-none">{data.username || 'Anonymous'}</span>
-          <span className="text-[10px] text-gray-500 italic mt-1 font-medium italic underline">ID: {id}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-black text-indigo-300 uppercase leading-none mb-0.5">User</span>
+          <span className="text-xs font-bold text-white font-mono leading-none">{data.username || 'No username'}</span>
+          {data.phone && (
+            <span className="text-[10px] font-bold text-lime-400 leading-none">📱 {data.phone}</span>
+          )}
+          <span className="text-[10px] text-gray-500 font-mono mt-0.5">TG ID: {id}</span>
         </div>
         <div className="flex items-start gap-4">
           <button 

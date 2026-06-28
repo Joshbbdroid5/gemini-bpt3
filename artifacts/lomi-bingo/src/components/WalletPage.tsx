@@ -10,6 +10,7 @@ interface Props {
   transactions?: any[];
   userId?: string;
   telegramDisplayName?: string;
+  telegramUsername?: string;
   onRefresh?: () => void;
   onBack?: () => void;
 }
@@ -21,6 +22,7 @@ export default function WalletPage({
   transactions = [],
   userId = '',
   telegramDisplayName = '',
+  telegramUsername = '',
   onRefresh, 
   onBack 
 }: Props) {
@@ -69,9 +71,15 @@ export default function WalletPage({
         {/* User Profile Info */}
         <div className="ml-12 flex flex-col gap-1">
           <div className="text-lg font-black text-white italic tracking-tight">
-            {telegramDisplayName || phoneNumber || 'Loading profile...'}
+            {telegramDisplayName || 'Anonymous User'}
           </div>
-          <div className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${isVerified ? 'text-lime-400' : 'text-orange-400'}`}>
+          {telegramUsername && (
+            <div className="text-[10px] font-bold text-indigo-300 leading-none">@{telegramUsername}</div>
+          )}
+          {phoneNumber && (
+            <div className="text-[10px] font-bold text-lime-400 leading-none">📱 {phoneNumber}</div>
+          )}
+          <div className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest mt-0.5 ${isVerified ? 'text-lime-400' : 'text-orange-400'}`}>
             {isVerified ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
             {isVerified ? t.verified : t.unverified}
           </div>

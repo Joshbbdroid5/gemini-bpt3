@@ -1234,10 +1234,10 @@ app.post(
     }
 
     const allUsers: IUserLean[] = await User.find({}).lean();
-    const walletData: Record<string, { balance: number; username?: string }> =
+    const walletData: Record<string, { balance: number; username?: string; phone?: string }> =
       {};
     allUsers.forEach((u) => {
-      walletData[u.userId] = { balance: u.balance, username: u.username };
+      walletData[u.userId] = { balance: u.balance, username: u.username, phone: u.phone };
     });
 
     const now = new Date();

@@ -3,6 +3,8 @@ import { User, Award, DollarSign, Users, ArrowLeft } from 'lucide-react';
 
 interface Props {
   telegramName: string;
+  telegramUsername?: string;
+  phoneNumber?: string;
   walletBalance: number;
   gamesWon: number;
   totalEarnings: number;
@@ -15,6 +17,8 @@ interface Props {
 
 export default function ProfilePage({
   telegramName,
+  telegramUsername,
+  phoneNumber,
   walletBalance,
   gamesWon,
   totalEarnings,
@@ -61,10 +65,15 @@ export default function ProfilePage({
           <div className="text-lg font-black text-white italic tracking-tight">
             {telegramDisplayName || 'Anonymous User'}
           </div>
-          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-lime-400">
-            <User size={12} />
-            User ID: {telegramName}
-          </div>
+          {telegramUsername && (
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-300 leading-none">
+              <User size={11} />
+              @{telegramUsername}
+            </div>
+          )}
+          {phoneNumber && (
+            <div className="text-[10px] font-bold text-lime-400 leading-none">📱 {phoneNumber}</div>
+          )}
         </div>
       </div>
 

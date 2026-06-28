@@ -95,6 +95,7 @@ export default function App() {
   >(null);
   const [showNextRoundHint, setShowNextRoundHint] = useState(false);
   const [telegramDisplayName, setTelegramDisplayName] = useState('');
+  const [telegramUsername, setTelegramUsername] = useState('');
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const [referredCount, setReferredCount] = useState(0);
   const [roomStats, setRoomStats] = useState<
@@ -307,6 +308,7 @@ export default function App() {
         setTelegramDisplayName(
           `${user.first_name || user.username || ''}${lastName}`.trim()
         );
+        if (user.username) setTelegramUsername(user.username);
       }
       if (user?.id) setMyId(user.id.toString());
       connectToGame({ initData: tg.initData, user });
@@ -586,6 +588,7 @@ export default function App() {
                       transactions={transactions}
                       userId={myId}
                       telegramDisplayName={telegramDisplayName}
+                      telegramUsername={telegramUsername}
                       onRefresh={handleResync}
                       onBack={handleBackToHome}
                     />
@@ -601,6 +604,8 @@ export default function App() {
                   >
                     <ProfilePage
                       telegramName={myId}
+                      telegramUsername={telegramUsername}
+                      phoneNumber={phoneNumber}
                       walletBalance={wallet}
                       gamesWon={history.filter((h) => h.isMyWin).length}
                       totalEarnings={history.reduce(
