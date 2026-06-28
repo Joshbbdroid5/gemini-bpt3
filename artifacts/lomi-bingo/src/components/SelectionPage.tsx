@@ -12,7 +12,6 @@ import {
   Timer,
   ShoppingCart,
   ArrowLeft,
-  Search,
   RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -75,7 +74,7 @@ const BoardCellImpl = memo((props: BoardCellComponentProps) => {
               ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
               : isTaken
                 ? 'bg-black/20 text-white/20 border-white/5 border-dashed cursor-not-allowed'
-                : 'bg-yellow-500 text-white border-yellow-300 hover:bg-yellow-400 hover:border-white shadow-lg'
+                : 'bg-blue-600 text-white border-blue-400 hover:bg-blue-500 hover:border-blue-300 shadow-lg'
           }
         `}
         disabled={(!isSelected && isTaken) || pendingBoardId !== null}
@@ -112,7 +111,6 @@ export default function SelectionPage({
   );
   const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
   const [pendingBoardId, setPendingBoardId] = useState<number | null>(null); // Board currently being processed by server
-  const [jumpInput, setJumpInput] = useState('');
 
   // Centralized total boards count with fallback
   const totalBoardsCount = useMemo(() => TOTAL_BOARDS ?? 600, []);
@@ -333,32 +331,6 @@ export default function SelectionPage({
     };
   }, [onSelectionChange]);
 
-  const scrollToBoard = useCallback(
-    (id: number) => {
-      if (id < 1 || id > totalBoardsCount) {
-        toast.error(`Enter a board number between 1 and ${totalBoardsCount}`);
-        return;
-      }
-      const targetRow = Math.floor((id - 1) / columnCount);
-      const targetColumn = (id - 1) % columnCount;
-
-      gridRef.current?.scrollToCell({
-        rowIndex: targetRow,
-        columnIndex: targetColumn,
-        rowAlign: 'center',
-        columnAlign: 'center',
-      });
-    },
-    [columnCount, totalBoardsCount, gridRef]
-  );
-
-  const handleJump = () => {
-    const id = parseInt(jumpInput, 10);
-    if (Number.isNaN(id)) return;
-    scrollToBoard(id);
-    setJumpInput('');
-  };
-
   const selectedBoard: number | null =
     selectedIds.size > 0 ? Array.from(selectedIds)[0] : null;
 
@@ -410,28 +382,6 @@ export default function SelectionPage({
               {timerDisplay}
             </span>
           </div>
-        </div>
-      </div>
-
-      <div className="px-2 py-2 flex gap-2 items-center shrink-0">
-        <div className="flex-1 flex items-center gap-2 bg-[#23243d] rounded-xl px-3 py-2 border border-white/10">
-          <Search size={14} className="text-white/40 shrink-0" />
-          <input
-            type="number"
-            min={1}
-            max={totalBoardsCount}
-            placeholder="Jump to board #"
-            value={jumpInput}
-            onChange={(e) => setJumpInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleJump()}
-            className="flex-1 bg-transparent text-white text-xs font-bold outline-none placeholder:text-white/30"
-          />
-          <button
-            onClick={handleJump}
-            className="text-[10px] font-black uppercase text-indigo-950 px-2 py-1 rounded-lg bg-lime-400 hover:bg-lime-300 transition-colors"
-          >
-            Go
-          </button>
         </div>
       </div>
 
