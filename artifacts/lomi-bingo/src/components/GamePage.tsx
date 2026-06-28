@@ -144,6 +144,7 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
   const [winners, setWinners] = useState<{ id: number; username: string; grid: BingoBoardData; patterns: WinningPattern[]; payout: number }[]>([]);
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
   const [popupTimeLeft, setPopupTimeLeft] = useState(10);
+  const [autoNavCountdown, setAutoNavCountdown] = useState(7);
   const [isMuted, setIsMuted] = useState(() => localStorage.getItem('bingo_muted') === 'true');
   const [autoMarkMode, setAutoMarkMode] = useState(true);
   const [manualMarks, setManualMarks] = useState<Set<number>>(new Set());
@@ -162,6 +163,8 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
   const gameMetadataRef = useRef(gameMetadata);
   const autoMarkModeRef = useRef(autoMarkMode);
   const winnersRef = useRef(winners);
+  const onRestartGameRef = useRef(onRestartGame);
+  useEffect(() => { onRestartGameRef.current = onRestartGame; }, [onRestartGame]);
 
   const calledNumbersRef = useRef(calledNumbers);
   useEffect(() => {
@@ -180,6 +183,26 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
   useEffect(() => {
     localStorage.setItem('bingo_muted', String(isMuted));
   }, [isMuted]);
+
+  // 7-second auto-navigate to selection page after winner popup appears
+  useEffect(() => {
+    if (!showWinnerPopup) {
+      setAutoNavCountdown(7);
+      return;
+    }
+    setAutoNavCountdown(7);
+    const interval = setInterval(() => {
+      setAutoNavCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          onRestartGameRef.current();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showWinnerPopup]);
 
   // Pre-warm assets: Initialize and load audio on mount
   useEffect(() => {
@@ -558,10 +581,36 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
                     ))}
                   </div>
                 </div>
-                <div className="p-4 flex flex-col items-center gap-2">
-                  <span className="text-[10px] font-black text-gray-400">
-                    {t.nextRoundIn} {popupTimeLeft}s — then pick a board
-                  </span>
+                <div className="p-4 flex flex-col items-center gap-3">
+                  <div className="flex items-center gap-3 w-full justify-center">
+                    <div className="relative w-10 h-10 flex-shrink-0">
+                      <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.9" fill="none" stroke="#ffffff18" strokeWidth="3" />
+                        <circle
+                          cx="18" cy="18" r="15.9" fill="none"
+                          stroke={autoNavCountdown <= 2 ? '#ef4444' : autoNavCountdown <= 4 ? '#f59e0b' : '#a5b4fc'}
+                          strokeWidth="3"
+                          strokeDasharray="100"
+                          strokeDashoffset={100 - (autoNavCountdown / 7) * 100}
+                          strokeLinecap="round"
+                          style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s' }}
+                        />
+                      </svg>
+                      <span className={`absolute inset-0 flex items-center justify-center text-sm font-black ${autoNavCountdown <= 2 ? 'text-red-400' : autoNavCountdown <= 4 ? 'text-yellow-400' : 'text-indigo-300'}`}>
+                        {autoNavCountdown}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-white">Picking boards in {autoNavCountdown}s…</span>
+                      <span className="text-[10px] text-gray-400">Next round is starting soon</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onRestartGameRef.current()}
+                    className="w-full py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-sm uppercase tracking-wide transition-all"
+                  >
+                    Pick Board Now →
+                  </button>
                 </div>
               </motion.div>
           </div>
