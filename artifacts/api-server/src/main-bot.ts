@@ -98,6 +98,7 @@ const handleProfile = async (ctx: Context) => {
   if (!userId) return;
   try {
     const response = await fetch(`${API_URL}/admin/user-info?userId=${userId}&secret=${ADMIN_SECRET}`);
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
     const data: any = await response.json();
     const inviteLink = `https://t.me/${ctx.botInfo.username}?start=ref_${userId}`; // Keep referral link functionality
     const message = `👤 <b>MY PROFILE</b>\n\n🆔 <b>ID:</b> <code>${userId}</code>\n💰 <b>Balance:</b> ${data.balance.toFixed(2)} ETB\n✅ <b>Status:</b> ${data.isVerified ? 'Verified' : 'Unverified'}\n🤝 <b>Total Referred:</b> ${data.referredCount}\n\n🔗 <b>Referral Link:</b>\n${inviteLink}`;
@@ -131,10 +132,15 @@ mainBot?.on('contact', async (ctx) => {
 
 mainBot?.action('play', async (ctx) => {
   const userId = ctx.from.id.toString();
-  const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
-  const data: any = await response.json();
-  if (!data.isVerified) return ctx.reply('⚠️ Register first.', Markup.inlineKeyboard([[Markup.button.callback('📝 Register', 'register')]]));
-  return ctx.reply('Good luck! 🎮', Markup.inlineKeyboard([[Markup.button.webApp('Launch Game', FRONTEND_URL!)]]));
+  try {
+    const response = await fetch(`${API_URL}/admin/check-user?userId=${userId}&secret=${ADMIN_SECRET}`);
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+    const data: any = await response.json();
+    if (!data.isVerified) return ctx.reply('⚠️ Register first.', Markup.inlineKeyboard([[Markup.button.callback('📝 Register', 'register')]]));
+    return ctx.reply('Good luck! 🎮', Markup.inlineKeyboard([[Markup.button.webApp('Launch Game', FRONTEND_URL!)]]));
+  } catch (err) {
+    return ctx.reply('❌ Connection error. Please try again later.');
+  }
 });
 
 mainBot?.action('deposit', (ctx) => ctx.reply('💰 Choose method:', Markup.inlineKeyboard([[Markup.button.callback('💳 Telebirr', 'deposit_method_telebirr')]])));

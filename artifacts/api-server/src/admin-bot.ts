@@ -69,7 +69,7 @@ adminBot?.action(/maint_(on|off)/, async (ctx: Context & { match: RegExpExecArra
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret: ADMIN_SECRET, enabled: enable }),
     });
-
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
     const data: any = await response.json();
     await ctx.editMessageText(
       `Status: ${data.isMaintenanceMode ? '🛑 Maintenance Mode Active' : '✅ Game Server Running'}`,
@@ -91,6 +91,7 @@ adminBot?.action('engine_start', async (ctx: Context) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret: ADMIN_SECRET }),
     });
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
     const data: any = await response.json();
     await ctx.answerCbQuery(data.message || '🚀 Engine Started');
     await ctx.editMessageText(
@@ -128,6 +129,7 @@ adminBot?.action('engine_stop_confirm', async (ctx: Context) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret: ADMIN_SECRET }),
     });
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
     const data: any = await response.json();
     await ctx.answerCbQuery('🛑 Stop Requested');
     await ctx.editMessageText(`🛑 <b>Engine Status:</b> ${data.message}`, { parse_mode: 'HTML' });
@@ -154,6 +156,7 @@ adminBot?.action('view_pending', async (ctx: Context) => { // Explicitly typed c
 
   try {
     const response = await fetch(`${API_URL}/admin/pending-deposits?secret=${ADMIN_SECRET}`);
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
     const pending: any = await response.json();
 
     if (!Array.isArray(pending) || pending.length === 0) {
@@ -178,6 +181,7 @@ adminBot?.action('view_withdrawals', async (ctx: Context) => {
 
   try {
     const response = await fetch(`${API_URL}/admin/pending-withdrawals?secret=${ADMIN_SECRET}`);
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
     const pending: any = await response.json();
 
     if (!Array.isArray(pending) || pending.length === 0) {
@@ -206,6 +210,7 @@ adminBot?.action('view_stats', async (ctx: Context) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret: ADMIN_SECRET })
     });
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
     const data: any = await response.json();
     const s = data.stats;
 
