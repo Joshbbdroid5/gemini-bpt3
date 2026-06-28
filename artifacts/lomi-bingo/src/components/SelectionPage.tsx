@@ -363,22 +363,22 @@ export default function SelectionPage({
     selectedIds.size > 0 ? Array.from(selectedIds)[0] : null;
 
   return (
-    <div className="flex-1 h-full flex flex-col overflow-hidden relative bg-linear-to-br from-yellow-600 via-yellow-700 to-lime-900">
+    <div className="flex-1 h-full flex flex-col overflow-hidden relative bg-[#1a1b2e]">
       {showNextRoundHint && (
-        <div className="bg-lime-500/90 text-indigo-950 px-4 py-2 flex items-center justify-between gap-2 shrink-0">
+        <div className="bg-indigo-600/90 text-white px-4 py-2 flex items-center justify-between gap-2 shrink-0 border-b border-white/10">
           <span className="text-[10px] font-black uppercase tracking-wide">
             New round — pick a board to play ({SINGLE_STAKE} ETB)
           </span>
           <button
             onClick={onDismissHint}
-            className="text-[10px] font-black uppercase underline shrink-0"
+            className="text-[10px] font-black uppercase text-lime-300 underline shrink-0"
           >
             Got it
           </button>
         </div>
       )}
 
-      <div className="relative p-4 bg-black/30 border-b border-white/10 backdrop-blur-md flex items-center gap-4 shrink-0">
+      <div className="relative p-4 bg-[#2d2e4d] border-b border-white/10 flex items-center gap-4 shrink-0">
         <button
           onClick={onBack}
           className="p-2.5 bg-white/10 rounded-xl text-white hover:bg-white/20 transition-colors shadow-lg shrink-0"
@@ -388,22 +388,22 @@ export default function SelectionPage({
         </button>
 
         <div className="flex-1 grid grid-cols-3 gap-2">
-          <div className="flex flex-col items-center justify-center bg-black/20 p-2 rounded-xl border border-white/5">
+          <div className="flex flex-col items-center justify-center bg-[#23243d] p-2 rounded-xl border border-white/10">
             <Wallet size={14} className="text-lime-400 mb-1" />
             <span className="text-[10px] font-black text-white">{wallet}</span>
           </div>
-          <div className="flex flex-col items-center justify-center bg-black/20 p-2 rounded-xl border border-white/5">
+          <div className="flex flex-col items-center justify-center bg-[#23243d] p-2 rounded-xl border border-white/10">
             <ShoppingCart size={14} className="text-orange-400 mb-1" />
             <span className="text-[10px] font-black text-white uppercase italic">
               {SINGLE_STAKE}
             </span>
           </div>
-          <div className="flex flex-col items-center justify-center bg-black/20 p-2 rounded-xl border border-white/5">
+          <div className="flex flex-col items-center justify-center bg-[#23243d] p-2 rounded-xl border border-white/10">
             <Timer size={14} className="text-yellow-400 mb-1" />
             <span
               className={`text-[11px] font-mono font-black ${
                 timeLeft > 0 && timeLeft <= 5
-                  ? 'text-red-500 animate-pulse'
+                  ? 'text-red-400 animate-pulse'
                   : 'text-white'
               }`}
             >
@@ -414,8 +414,8 @@ export default function SelectionPage({
       </div>
 
       <div className="px-2 py-2 flex gap-2 items-center shrink-0">
-        <div className="flex-1 flex items-center gap-2 bg-black/30 rounded-xl px-3 py-2 border border-white/10">
-          <Search size={14} className="text-white/50 shrink-0" />
+        <div className="flex-1 flex items-center gap-2 bg-[#23243d] rounded-xl px-3 py-2 border border-white/10">
+          <Search size={14} className="text-white/40 shrink-0" />
           <input
             type="number"
             min={1}
@@ -428,7 +428,7 @@ export default function SelectionPage({
           />
           <button
             onClick={handleJump}
-            className="text-[10px] font-black uppercase text-lime-400 px-2 py-1 rounded-lg bg-white/10"
+            className="text-[10px] font-black uppercase text-indigo-950 px-2 py-1 rounded-lg bg-lime-400 hover:bg-lime-300 transition-colors"
           >
             Go
           </button>
@@ -436,19 +436,19 @@ export default function SelectionPage({
       </div>
 
       {selectedBoard && (
-        <div className="mx-2 mb-1 px-3 py-2 bg-green-500/20 border border-green-400/40 rounded-xl flex items-center justify-between shrink-0">
-          <span className="text-[11px] font-black text-green-200 uppercase">
+        <div className="mx-2 mb-1 px-3 py-2 bg-green-500/15 border border-green-400/30 rounded-xl flex items-center justify-between shrink-0">
+          <span className="text-[11px] font-black text-green-300 uppercase">
             Your board: #{selectedBoard}
           </span>
-          <span className="text-[9px] font-bold text-green-300/80">
+          <span className="text-[9px] font-bold text-green-400/70">
             Tap again to deselect
           </span>
         </div>
       )}
 
       {pendingBoardId !== null && (
-        <div className="mx-2 mb-1 px-3 py-1.5 bg-yellow-500/20 border border-yellow-400/30 rounded-xl text-center shrink-0">
-          <span className="text-[10px] font-black text-yellow-200 uppercase animate-pulse">
+        <div className="mx-2 mb-1 px-3 py-1.5 bg-yellow-400/10 border border-yellow-400/20 rounded-xl text-center shrink-0">
+          <span className="text-[10px] font-black text-yellow-300 uppercase animate-pulse">
             Confirming board #{pendingBoardId}…
           </span>
         </div>
@@ -459,11 +459,11 @@ export default function SelectionPage({
         className="flex-1 min-h-0 pt-1 px-2 pb-0 relative"
       >
         {syncError && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm p-6 text-center">
-            <div className="bg-indigo-950 border border-white/10 p-6 rounded-4xl shadow-2xl max-w-65">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#1a1b2e]/90 backdrop-blur-sm p-6 text-center">
+            <div className="bg-[#23243d] border border-white/10 p-6 rounded-4xl shadow-2xl max-w-65">
               <RefreshCw
                 size={32}
-                className="text-yellow-500 mb-4 mx-auto opacity-50"
+                className="text-yellow-400 mb-4 mx-auto opacity-50"
               />
               <h3 className="text-white text-sm font-black uppercase italic tracking-tight mb-2">
                 Sync Timeout
@@ -473,7 +473,7 @@ export default function SelectionPage({
               </p>
               <button
                 onClick={startSyncTimer}
-                className="w-full py-3.5 bg-yellow-500 text-indigo-950 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shadow-yellow-900/20"
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg"
               >
                 <RefreshCw
                   size={14}
@@ -487,7 +487,7 @@ export default function SelectionPage({
 
         {isSyncing && !syncError && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div className="bg-black/20 backdrop-blur-sm rounded-full p-3 border border-white/5">
+            <div className="bg-[#23243d]/80 backdrop-blur-sm rounded-full p-3 border border-white/10">
               <RefreshCw size={24} className="text-lime-400 animate-spin" />
             </div>
           </div>
