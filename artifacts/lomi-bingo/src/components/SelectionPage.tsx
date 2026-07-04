@@ -98,6 +98,7 @@ interface Props {
   onDismissHint?: () => void;
   serverTimeLeft?: number;
   showNextRoundHint?: boolean;
+  selectionLocked?: boolean;
 }
 
 export default function SelectionPage({
@@ -108,14 +109,13 @@ export default function SelectionPage({
   onDismissHint,
   serverTimeLeft,
   showNextRoundHint,
+  selectionLocked = false,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(
     new Set(selectedBoardIds)
   );
   const [takenBoards, setTakenBoards] = useState<Set<number>>(new Set());
-  const [pendingBoardId, setPendingBoardId] = useState<number | null>(null); // Board currently being processed by server
-  const [selectionLocked, setSelectionLocked] = useState(false);
-  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingBoardId, setPendingBoardId] = useState<number | null>(null);
 
   // Centralized total boards count with fallback
   const totalBoardsCount = useMemo(() => TOTAL_BOARDS ?? 600, []);
@@ -327,17 +327,11 @@ export default function SelectionPage({
     };
 
     const handleGameReset = () => {
-      // Immediately clear previous round's board selection
+      // Clear previous round's selections immediately (handles case where SelectionPage
+      // was already mounted during reset, e.g. user was watching without a board)
       setSelectedIds(new Set());
       setTakenBoards(new Set());
       setPendingBoardId(null);
-      // Lock selection for 2 seconds while the new round initializes
-      setSelectionLocked(true);
-      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
-      lockTimerRef.current = setTimeout(() => {
-        setSelectionLocked(false);
-        lockTimerRef.current = null;
-      }, 2000);
       // Re-sync to get fresh board state and timer from server
       startSyncTimer();
     };
@@ -353,7 +347,6 @@ export default function SelectionPage({
       socket.off(socketEvents.GAME_INIT, handleGameInit);
       socket.off(socketEvents.GAME_RESET, handleGameReset);
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
     };
   }, [onSelectionChange, startSyncTimer]);
 

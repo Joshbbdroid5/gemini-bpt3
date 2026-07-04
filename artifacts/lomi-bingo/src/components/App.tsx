@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Info, X, RefreshCw, Clock, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -94,6 +94,8 @@ export default function App() {
     string | null
   >(null);
   const [showNextRoundHint, setShowNextRoundHint] = useState(false);
+  const [selectionLocked, setSelectionLocked] = useState(false);
+  const selectionLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [telegramDisplayName, setTelegramDisplayName] = useState('');
   const [telegramUsername, setTelegramUsername] = useState('');
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
@@ -262,6 +264,13 @@ export default function App() {
         isLive: false,
       }));
       setSelectedBoardIds([]);
+      // Lock selection for 2 seconds so the new round has time to initialize
+      setSelectionLocked(true);
+      if (selectionLockTimerRef.current) clearTimeout(selectionLockTimerRef.current);
+      selectionLockTimerRef.current = setTimeout(() => {
+        setSelectionLocked(false);
+        selectionLockTimerRef.current = null;
+      }, 2000);
       setPhase((prev) => {
         if (prev === 'game') {
           setShowNextRoundHint(true);
@@ -334,6 +343,7 @@ export default function App() {
       clearTimeout(slowConnectId);
       clearTimeout(connectionTimeoutId);
       clearTimeout(tgSafetyId);
+      if (selectionLockTimerRef.current) clearTimeout(selectionLockTimerRef.current);
       disconnectFromGame();
     };
   }, []);
@@ -539,6 +549,7 @@ export default function App() {
                       onDismissHint={handleDismissNextRoundHint}
                       showNextRoundHint={showNextRoundHint}
                       serverTimeLeft={roomStats.selectionTimeLeft}
+                      selectionLocked={selectionLocked}
                     />
                   </motion.div>
                 )}
