@@ -319,17 +319,24 @@ export default function SelectionPage({
       }
     };
 
+    const handleGameReset = () => {
+      // Server started a new round — re-sync to get fresh board state and timer
+      startSyncTimer();
+    };
+
     socket.on(socketEvents.BOARD_SYNC, handleBoardSync);
     socket.on(socketEvents.PICK_BOARD_RESULT, handlePickResult);
     socket.on(socketEvents.GAME_INIT, handleGameInit);
+    socket.on(socketEvents.GAME_RESET, handleGameReset);
 
     return () => {
       socket.off(socketEvents.BOARD_SYNC, handleBoardSync);
       socket.off(socketEvents.PICK_BOARD_RESULT, handlePickResult);
       socket.off(socketEvents.GAME_INIT, handleGameInit);
+      socket.off(socketEvents.GAME_RESET, handleGameReset);
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     };
-  }, [onSelectionChange]);
+  }, [onSelectionChange, startSyncTimer]);
 
   const selectedBoard: number | null =
     selectedIds.size > 0 ? Array.from(selectedIds)[0] : null;

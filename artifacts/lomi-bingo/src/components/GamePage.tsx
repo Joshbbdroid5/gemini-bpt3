@@ -64,18 +64,19 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, isMy
     winner.patterns.flatMap((p: WinningPattern) => p.indices.map(i => `${i.r}-${i.c}`))
   ), [winner.patterns]);
   const isCompact = winnersCount > 1;
+  const shareAmount = ((totalPrize || 0) / (winnersCount || 1)).toFixed(0);
 
   return (
     <div key={winner.id} className={`bg-white/5 ${isCompact ? 'p-2' : 'p-3'} rounded-2xl border ${isMyBoard ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white/5'}`}>
-      <div className={`flex justify-between items-center ${isCompact ? 'mb-1' : 'mb-2'}`}>
-        <div className="flex flex-col">
-          <span className={`font-black ${isCompact ? 'text-[10px]' : 'text-xs'} uppercase tracking-tight leading-none ${isMyBoard ? 'text-yellow-400' : 'text-indigo-400'}`}>
+      <div className={`flex justify-between items-start ${isCompact ? 'mb-1' : 'mb-2'}`}>
+        <div className="flex flex-col min-w-0 flex-1 mr-2">
+          <span className={`font-black ${isCompact ? 'text-[10px]' : 'text-[11px]'} uppercase tracking-tight leading-none ${isMyBoard ? 'text-yellow-400' : 'text-indigo-400'} mb-0.5`}>
             {isMyBoard ? `${t.boardNum}${winner.id} (YOU)` : `${t.boardNum}${winner.id}`}
           </span>
-          <span className="text-[9px] font-bold text-gray-400 truncate max-w-[80px]">
-            {winner.username}
+          <span className={`font-bold ${isCompact ? 'text-[10px]' : 'text-xs'} text-white truncate`} title={winner.username}>
+            {winner.username || 'Anonymous'}
           </span>
-          <div className="flex flex-wrap gap-1 mt-0.5"> {/* Display winning patterns */}
+          <div className="flex flex-wrap gap-1 mt-0.5">
             {winner.patterns.map((p: WinningPattern, pIdx: number) => (
               <span key={pIdx} className={`${isCompact ? 'text-[6px]' : 'text-[7px]'} font-black bg-yellow-400/20 text-yellow-400 px-1 py-0.5 rounded uppercase`}>
                 {p.name}
@@ -83,9 +84,14 @@ const WinnerCard = memo(({ winner, winnersCount, totalPrize, calledNumbers, isMy
             ))}
           </div>
         </div>
-        <span className={`text-green-400 ${isCompact ? 'text-sm' : 'text-lg'} font-black italic`}>
-          {((totalPrize || 0) / (winnersCount || 1)).toFixed(0)} ETB
-        </span>
+        <div className="flex flex-col items-end shrink-0">
+          <span className={`text-green-400 ${isCompact ? 'text-sm' : 'text-lg'} font-black italic leading-none`}>
+            {shareAmount} ETB
+          </span>
+          {winnersCount > 1 && (
+            <span className="text-[8px] text-gray-400 font-bold mt-0.5">1/{winnersCount} share</span>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-5 gap-0.5">
         {Array.isArray(winner.grid) && winner.grid.map((row: any, rIdx: number) =>
@@ -564,7 +570,14 @@ export default function GamePage({ selectedBoardIds, onLeaveToHome, onRestartGam
               >
                 <div className="bg-indigo-600 p-4 text-center">
                   <Trophy className="text-yellow-400 w-8 h-8 mx-auto mb-1" aria-hidden="true" />
-                  <h2 id="winner-popup-title" className="text-xl font-black italic uppercase">{t.winners}!</h2>
+                  <h2 id="winner-popup-title" className="text-xl font-black italic uppercase">
+                    {winners.length > 1 ? `${winners.length} ${t.winners}!` : `${t.winners}!`}
+                  </h2>
+                  {winners.length > 1 && (
+                    <p className="text-indigo-200 text-[11px] font-bold mt-1">
+                      Prize split equally — {((stats.derash || 0) / winners.length).toFixed(0)} ETB each
+                    </p>
+                  )}
                   {isMyWin && (
                     <p className="text-yellow-300 text-sm font-black mt-2">
                       {t.youWon} {myPayout.toFixed(0)} ETB!

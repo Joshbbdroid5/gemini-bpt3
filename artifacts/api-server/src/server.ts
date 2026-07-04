@@ -2192,9 +2192,10 @@ function registerSocketHandlers(io: SocketIOServer) {
     }
 
     const userId = user.id.toString();
+    const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ');
     const telegramUsername = user.username
       ? `@${user.username}`
-      : user.first_name || 'User';
+      : displayName || 'User';
     // isVerified = true; // Removed: Assigned but never used
 
     logger.info(
