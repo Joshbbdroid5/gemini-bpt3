@@ -261,9 +261,11 @@ export default function App() {
         isLive: false,
       }));
       setSelectedBoardIds([]);
-      // Round finished — return to Home instead of auto-forcing the player
-      // into a new selection screen. They can tap "Play" when ready.
-      setPhase((prev) => (prev === 'game' ? 'home' : prev));
+      // Round finished — this is a global live game, so immediately move
+      // the player into board selection for the next round (40s timer).
+      // They can still hit the back arrow to land on Home if they don't
+      // want to play the next round.
+      setPhase((prev) => (prev === 'game' ? 'selection' : prev));
     };
 
     socket.on(socketEvents.USER_STATUS, handleStatus);
