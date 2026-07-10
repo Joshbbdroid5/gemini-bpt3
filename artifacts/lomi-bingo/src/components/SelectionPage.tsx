@@ -31,7 +31,6 @@ interface BoardCellData {
   handleSelect: (id: number) => void;
   columnCount: number;
   totalBoards: number;
-  selectionLocked: boolean;
 }
 
 type BoardCellComponentProps = Parameters<
@@ -50,7 +49,6 @@ const BoardCellImpl = memo((props: BoardCellComponentProps) => {
     handleSelect,
     columnCount,
     totalBoards,
-    selectionLocked,
   } = props;
   const id = rowIndex * columnCount + columnIndex + 1;
 
@@ -71,7 +69,6 @@ const BoardCellImpl = memo((props: BoardCellComponentProps) => {
         className={`
           w-full h-full flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-all active:scale-95 relative overflow-hidden
           ${isPending ? 'opacity-60 animate-pulse' : ''}
-          ${selectionLocked ? 'opacity-40 cursor-not-allowed' : ''}
           ${
             isSelected
               ? 'bg-green-500 text-white border-green-300 shadow-[0_0_20px_rgba(34,197,94,0.8)] z-10'
@@ -80,7 +77,7 @@ const BoardCellImpl = memo((props: BoardCellComponentProps) => {
                 : 'bg-blue-600 text-white border-blue-400 hover:bg-blue-500 hover:border-blue-300 shadow-lg'
           }
         `}
-        disabled={(!isSelected && isTaken) || pendingBoardId !== null || selectionLocked}
+        disabled={(!isSelected && isTaken) || pendingBoardId !== null}
       >
         <span className="relative z-10">{id}</span>
       </button>
@@ -95,10 +92,7 @@ interface Props {
   selectedBoardIds: number[];
   onSelectionChange: (selectedIds: number[]) => void;
   onBack: () => void;
-  onDismissHint?: () => void;
   serverTimeLeft?: number;
-  showNextRoundHint?: boolean;
-  selectionLocked?: boolean;
 }
 
 export default function SelectionPage({
@@ -106,10 +100,7 @@ export default function SelectionPage({
   selectedBoardIds,
   onSelectionChange,
   onBack,
-  onDismissHint,
   serverTimeLeft,
-  showNextRoundHint,
-  selectionLocked = false,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(
     new Set(selectedBoardIds)
@@ -199,7 +190,6 @@ export default function SelectionPage({
       handleSelect,
       columnCount,
       totalBoards: totalBoardsCount,
-      selectionLocked,
     }),
     [
       selectedIds,
@@ -208,7 +198,6 @@ export default function SelectionPage({
       handleSelect,
       columnCount,
       totalBoardsCount,
-      selectionLocked,
     ]
   );
 
@@ -355,20 +344,6 @@ export default function SelectionPage({
 
   return (
     <div className="flex-1 h-full flex flex-col overflow-hidden relative bg-[#1a1b2e]">
-      {showNextRoundHint && (
-        <div className="bg-indigo-600/90 text-white px-4 py-2 flex items-center justify-between gap-2 shrink-0 border-b border-white/10">
-          <span className="text-[10px] font-black uppercase tracking-wide">
-            New round — pick a board to play ({SINGLE_STAKE} ETB)
-          </span>
-          <button
-            onClick={onDismissHint}
-            className="text-[10px] font-black uppercase text-lime-300 underline shrink-0"
-          >
-            Got it
-          </button>
-        </div>
-      )}
-
       <div className="relative p-4 bg-[#2d2e4d] border-b border-white/10 flex items-center gap-4 shrink-0">
         <button
           onClick={onBack}
@@ -458,17 +433,6 @@ export default function SelectionPage({
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
             <div className="bg-[#23243d]/80 backdrop-blur-sm rounded-full p-3 border border-white/10">
               <RefreshCw size={24} className="text-lime-400 animate-spin" />
-            </div>
-          </div>
-        )}
-
-        {selectionLocked && !syncError && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div className="bg-[#23243d]/90 backdrop-blur-sm rounded-2xl px-5 py-4 border border-white/10 text-center shadow-2xl">
-              <RefreshCw size={20} className="text-lime-400 animate-spin mx-auto mb-2" />
-              <p className="text-[10px] font-black text-white uppercase tracking-widest">
-                Preparing next round…
-              </p>
             </div>
           </div>
         )}

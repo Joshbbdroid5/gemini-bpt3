@@ -93,9 +93,6 @@ export default function App() {
   const [showGameStoppedModal, setShowGameStoppedModal] = useState<
     string | null
   >(null);
-  const [showNextRoundHint, setShowNextRoundHint] = useState(false);
-  const [selectionLocked, setSelectionLocked] = useState(false);
-  const selectionLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [telegramDisplayName, setTelegramDisplayName] = useState('');
   const [telegramUsername, setTelegramUsername] = useState('');
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
@@ -264,20 +261,9 @@ export default function App() {
         isLive: false,
       }));
       setSelectedBoardIds([]);
-      // Lock selection for 2 seconds so the new round has time to initialize
-      setSelectionLocked(true);
-      if (selectionLockTimerRef.current) clearTimeout(selectionLockTimerRef.current);
-      selectionLockTimerRef.current = setTimeout(() => {
-        setSelectionLocked(false);
-        selectionLockTimerRef.current = null;
-      }, 2000);
-      setPhase((prev) => {
-        if (prev === 'game') {
-          setShowNextRoundHint(true);
-          return 'selection';
-        }
-        return prev;
-      });
+      // Round finished — return to Home instead of auto-forcing the player
+      // into a new selection screen. They can tap "Play" when ready.
+      setPhase((prev) => (prev === 'game' ? 'home' : prev));
     };
 
     socket.on(socketEvents.USER_STATUS, handleStatus);
@@ -343,7 +329,6 @@ export default function App() {
       clearTimeout(slowConnectId);
       clearTimeout(connectionTimeoutId);
       clearTimeout(tgSafetyId);
-      if (selectionLockTimerRef.current) clearTimeout(selectionLockTimerRef.current);
       disconnectFromGame();
     };
   }, []);
@@ -352,11 +337,6 @@ export default function App() {
     (ids: number[]) => setSelectedBoardIds(ids),
     []
   );
-  const handleDismissNextRoundHint = useCallback(
-    () => setShowNextRoundHint(false),
-    []
-  );
-
   const completeSelection = useCallback(
     (ids: number[]) => {
       setSelectedBoardIds(ids);
@@ -546,10 +526,7 @@ export default function App() {
                       selectedBoardIds={selectedBoardIds}
                       onSelectionChange={handleSelectionChange}
                       onBack={handleBackToHome}
-                      onDismissHint={handleDismissNextRoundHint}
-                      showNextRoundHint={showNextRoundHint}
                       serverTimeLeft={roomStats.selectionTimeLeft}
-                      selectionLocked={selectionLocked}
                     />
                   </motion.div>
                 )}
