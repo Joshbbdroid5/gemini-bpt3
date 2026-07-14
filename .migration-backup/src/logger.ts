@@ -1,7 +1,7 @@
 import winston from 'winston';
 
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL ?? 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
@@ -9,9 +9,14 @@ const logger = winston.createLogger({
       ? winston.format.json()
       : winston.format.combine(
           winston.format.colorize(),
-          winston.format.printf(({ timestamp, level, message, service, ...meta }) => {
-            return `[${timestamp}] ${level} [${service}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`;
-          })
+          winston.format.printf(
+            ({ timestamp, level, message, service, ...meta }) => {
+              const metaStr = Object.keys(meta).length
+                ? ` ${JSON.stringify(meta)}`
+                : '';
+              return `[${timestamp}] ${level} [${service}]: ${message}${metaStr}`;
+            }
+          )
         )
   ),
   defaultMeta: { service: 'bingo-backend' },

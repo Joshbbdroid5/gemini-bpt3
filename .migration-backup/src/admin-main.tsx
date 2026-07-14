@@ -1,4 +1,4 @@
-import React, { useEffect, useState, StrictMode } from 'react';
+import { useEffect, useState, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import AdminDashboard from './components/AdminDashboard';
 import './index.css';
@@ -7,7 +7,15 @@ import ErrorBoundary from './ErrorBoundary';
 // Global declaration for Telegram WebApp
 declare global {
   interface Window {
-    Telegram?: any;
+    Telegram?: {
+      WebApp: {
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+          };
+        };
+      };
+    };
   }
 }
 
@@ -20,15 +28,13 @@ const AdminRoot = () => {
     const tg = window.Telegram?.WebApp;
     const userId = tg?.initDataUnsafe?.user?.id?.toString();
 
-    // Check authorization.
-    // If inside Telegram, the user ID must match the VITE_ADMIN_CHAT_ID.
     if (userId) {
       setAuthorized(userId === ADMIN_ID);
     } else {
       // Allow regular browser access to reach the login/secret key screen
       setAuthorized(true);
     }
-  }, []);
+  }, [ADMIN_ID]);
 
   if (authorized === null) return null; // Wait for TG init
 

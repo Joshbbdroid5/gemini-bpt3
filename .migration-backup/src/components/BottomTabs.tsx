@@ -10,13 +10,11 @@ interface Props {
 }
 
 const TabButton = ({
-  tab,
   icon,
   label,
   active,
   onClick,
 }: {
-  tab: BottomTabKey;
   icon: React.ReactNode;
   label: string;
   active: boolean;
@@ -24,6 +22,7 @@ const TabButton = ({
 }) => {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`flex-1 flex flex-col items-center justify-center gap-1 h-full py-2 transition-all relative ${
         active
@@ -72,7 +71,6 @@ export default function BottomTabs({ active, onTabChange }: Props) {
     >
       <div className="grid grid-cols-4 h-14">
         <TabButton
-          tab="game"
           icon={
             <Trophy
               size={18}
@@ -86,7 +84,6 @@ export default function BottomTabs({ active, onTabChange }: Props) {
           onClick={() => onTabChange('game')}
         />
         <TabButton
-          tab="history"
           icon={
             <History
               size={18}
@@ -100,7 +97,6 @@ export default function BottomTabs({ active, onTabChange }: Props) {
           onClick={() => onTabChange('history')}
         />
         <TabButton
-          tab="wallet"
           icon={
             <Wallet
               size={18}
@@ -114,7 +110,6 @@ export default function BottomTabs({ active, onTabChange }: Props) {
           onClick={() => onTabChange('wallet')}
         />
         <TabButton
-          tab="profile"
           icon={
             <UserRound
               size={18}

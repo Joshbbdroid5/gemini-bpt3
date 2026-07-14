@@ -21,8 +21,8 @@ const isNode =
 
 // Environment-aware URL resolution to prevent Node.js crashes
 const SOCKET_URL: string = isNode
-  ? process.env.VITE_BACKEND_URL || 'http://localhost:3001'
-  : import.meta.env.VITE_BACKEND_URL || window.location.origin;
+  ? (process.env.VITE_BACKEND_URL ?? 'http://localhost:3001')
+  : (import.meta.env.VITE_BACKEND_URL ?? window.location.origin);
 
 export const socketEvents = {
   // Outgoing Events (Player -> Server)

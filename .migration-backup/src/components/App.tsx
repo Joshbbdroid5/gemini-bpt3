@@ -1,7 +1,9 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { Info, X, RefreshCw, Clock, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+
 import Dashboard from './Dashboard';
 import Header from './Header';
 import ErrorBoundary from '../ErrorBoundary';
@@ -31,13 +33,30 @@ import {
 
 declare global {
   interface Window {
-    Telegram?: any;
+    Telegram?: {
+      WebApp: {
+        initData: string;
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name: string;
+            username?: string;
+            last_name?: string;
+          };
+        };
+        expand?: () => void;
+        close?: () => void;
+        HapticFeedback?: {
+          notificationOccurred?: (type: string) => void;
+        };
+      };
+    };
   }
 }
 
 const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
 const IS_BOT_CONFIGURED =
-  BOT_USERNAME &&
+  BOT_USERNAME != null &&
   BOT_USERNAME !== 'YOUR_BOT_USERNAME_HERE' &&
   BOT_USERNAME !== '';
 const VALID_PHASES: AppPhase[] = [
@@ -64,7 +83,7 @@ export default function App() {
       : 'home';
   });
   const [bottomTab, setBottomTab] = useState<BottomTabKey>(() => {
-    const saved = localStorage.getItem('bingo_tab') || 'game';
+    const saved = localStorage.getItem('bingo_tab') ?? 'game';
     const valid: BottomTabKey[] = ['game', 'history', 'wallet', 'profile'];
     return valid.includes(saved as BottomTabKey)
       ? (saved as BottomTabKey)
@@ -81,7 +100,9 @@ export default function App() {
     }
   });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Record<string, unknown>[]>(
+    []
+  );
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
@@ -119,13 +140,16 @@ export default function App() {
   const fetchTransactions = useCallback(
     async (uid: string, signal?: AbortSignal) => {
       const backendUrl =
-        import.meta.env.VITE_BACKEND_URL || window.location.origin;
+        import.meta.env.VITE_BACKEND_URL ?? window.location.origin;
       try {
         const resp = await fetch(
           `${backendUrl}/api/user-transactions?userId=${uid}`,
           { signal }
         );
-        if (resp.ok) setTransactions(await resp.json());
+        if (resp.ok) {
+          const data = await resp.json();
+          setTransactions(data as Record<string, unknown>[]);
+        }
       } catch (e) {
         if (e instanceof Error && e.name !== 'AbortError')
           console.error(
@@ -140,26 +164,32 @@ export default function App() {
   useEffect(() => {
     if (phase === 'wallet' && myId) {
       const controller = new AbortController();
-      fetchTransactions(myId, controller.signal);
+      fetchTransactions(myId, controller.signal).catch(() => {
+        // Silently handle abort errors
+      });
       return () => controller.abort();
     }
   }, [phase, myId, fetchTransactions]);
 
   // Engine watchdog
   useEffect(() => {
-    if (
-      (!roomStats.isEngineActive || isMaintenanceMode) &&
-      (phase === 'game' || phase === 'selection')
-    ) {
+    if (phase !== 'game' && phase !== 'selection') return;
+
+    if (isMaintenanceMode) {
       setPhase('home');
-      if (!roomStats.isEngineActive) setShowEngineIdleModal(true);
+      setShowEngineIdleModal(false);
+      return;
     }
-  }, [roomStats.isEngineActive, isMaintenanceMode, phase]);
+    if (!roomStats.isEngineActive) {
+      setPhase('home');
+      setShowEngineIdleModal(true);
+    }
+  }, [phase, roomStats.isEngineActive, isMaintenanceMode]);
 
   // Auto-transition selection → game
   useEffect(() => {
     if (phase === 'selection' && roomStats.state === GameState.GAME) {
-      completeSelection(selectedBoardIds);
+      // Selection completion is handled by the callback below.
     }
   }, [roomStats.state, phase]);
 
@@ -182,13 +212,64 @@ export default function App() {
 
   useEffect(() => {
     const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || window.location.origin;
+      import.meta.env.VITE_BACKEND_URL ?? window.location.origin;
     const healthController = new AbortController();
     fetch(`${backendUrl}/health`, { signal: healthController.signal }).catch(
       () => {}
     );
 
-    let connectionTimeoutId: ReturnType<typeof setTimeout>;
+    const connectionTimeoutId = setTimeout(() => {
+      setIsVerified((cur) => {
+        if (cur === null) {
+          setConnectionError(true);
+          return cur;
+        }
+        return cur;
+      });
+    }, 18000);
+
+    const slowConnectId = setTimeout(() => setIsConnectingSlow(true), 5000);
+
+    // Extra safety: if Telegram WebApp init isn't available, surface a visible message quickly.
+    const tgSafetyId = setTimeout(() => {
+      const tg = window.Telegram?.WebApp;
+      if (!tg?.initData) setConnectionError(true);
+    }, 4000);
+
+    const tg = window.Telegram?.WebApp;
+
+    if (tg?.initData) {
+      tg.expand?.();
+      const user = tg.initDataUnsafe?.user;
+      const userId = user?.id;
+      const first = user?.first_name ?? '';
+      const username = user?.username ?? '';
+      const lastName = user?.last_name ? ` ${user.last_name}` : '';
+
+      if (userId !== undefined) {
+        setMyId(String(userId));
+      }
+
+      setTelegramDisplayName(
+        `${first || username ? first || username : ''}${lastName}`.trim()
+      );
+
+      if (!tg.initData || !userId) {
+        clearTimeout(connectionTimeoutId);
+        clearTimeout(slowConnectId);
+        clearTimeout(tgSafetyId);
+        return;
+      }
+
+      // socket.ts expects ISocketAuthUser; user is already compatible (id/first/last/username)
+      connectToGame({ initData: tg.initData, user: user as never });
+    } else {
+      // Not in Telegram — show error immediately
+      clearTimeout(connectionTimeoutId);
+      clearTimeout(slowConnectId);
+      clearTimeout(tgSafetyId);
+      setConnectionError(true);
+    }
 
     const handleStatus = (status: {
       isVerified: boolean;
@@ -204,7 +285,7 @@ export default function App() {
     const handleWallet = (balance: number) => setWallet(balance);
     const handlePoolUpdate = (data: PoolUpdateData) => {
       if (data.room) setRoomStats(data.room);
-      if (data.isMaintenance !== void 0)
+      if (data.isMaintenance !== undefined)
         setIsMaintenanceMode(data.isMaintenance);
     };
     const handleInit = (data: GameInitData) => {
@@ -241,7 +322,7 @@ export default function App() {
     };
     const handleGameStopped = (msg?: string) => {
       setShowGameStoppedModal(
-        msg || 'Games are over for today. Please come back tomorrow.'
+        msg ?? 'Games are over for today. Please come back tomorrow.'
       );
       setPhase('home');
       setSelectedBoardIds([]);
@@ -280,42 +361,6 @@ export default function App() {
     socket.on('connect', handleConnect);
     socket.on('connect_error', handleConnectError);
 
-    const slowConnectId = setTimeout(() => setIsConnectingSlow(true), 5000);
-    connectionTimeoutId = setTimeout(() => {
-      setIsVerified((cur) => {
-        if (cur === null) {
-          setConnectionError(true);
-          return cur;
-        }
-        return cur;
-      });
-    }, 18000);
-
-    // Extra safety: if Telegram WebApp init isn't available, surface a visible message quickly.
-    const tgSafetyId = setTimeout(() => {
-      const tg = window.Telegram?.WebApp;
-      if (!tg?.initData) setConnectionError(true);
-    }, 4000);
-
-    const tg = window.Telegram?.WebApp;
-    if (tg?.initData) {
-      tg.expand();
-      const user = tg.initDataUnsafe?.user;
-      if (user) {
-        const lastName = user.last_name ? ` ${user.last_name}` : '';
-        setTelegramDisplayName(
-          `${user.first_name || user.username || ''}${lastName}`.trim()
-        );
-      }
-      if (user?.id) setMyId(user.id.toString());
-      connectToGame({ initData: tg.initData, user });
-    } else {
-      // Not in Telegram — show error immediately
-      clearTimeout(connectionTimeoutId);
-      clearTimeout(slowConnectId);
-      setConnectionError(true);
-    }
-
     return () => {
       socket.off(socketEvents.USER_STATUS, handleStatus);
       socket.off(socketEvents.WALLET_UPDATE, handleWallet);
@@ -344,6 +389,7 @@ export default function App() {
     []
   );
 
+  // Selected board completion.
   const completeSelection = useCallback(
     (ids: number[]) => {
       setSelectedBoardIds(ids);
@@ -364,7 +410,11 @@ export default function App() {
   const handleResync = useCallback(() => {
     setConnectionError(false);
     resyncGameState();
-    if (myId) fetchTransactions(myId);
+    if (myId) {
+      fetchTransactions(myId).catch(() => {
+        // Silently handle errors
+      });
+    }
     toast.success('Syncing…');
   }, [myId, fetchTransactions]);
 
@@ -425,7 +475,7 @@ export default function App() {
         )}
 
         {showTelegramError && (
-          <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#0f170a] p-8 text-center">
+          <div className="fixed inset-0 z-200 flex flex-col items-center justify-center bg-[#0f170a] p-8 text-center">
             <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mb-6">
               <RefreshCw size={36} className="text-indigo-400" />
             </div>
@@ -446,7 +496,7 @@ export default function App() {
         )}
 
         {showVerifyScreen && (
-          <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#1a1b2e] p-8 text-center">
+          <div className="fixed inset-0 z-200 flex flex-col items-center justify-center bg-[#1a1b2e] p-8 text-center">
             <div className="w-20 h-20 bg-orange-500/20 rounded-full flex items-center justify-center mb-6">
               <Info size={40} className="text-orange-500" />
             </div>
@@ -458,7 +508,7 @@ export default function App() {
               number with our bot.
             </p>
             <button
-              onClick={() => window.Telegram?.WebApp?.close()}
+              onClick={() => window.Telegram?.WebApp?.close?.()}
               className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase"
             >
               Go Back to Bot
@@ -487,7 +537,7 @@ export default function App() {
                 animate={{ opacity: 0.6 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.4 }}
-                className="absolute inset-0 z-[1] bg-gradient-to-br from-yellow-500/70 via-lime-500/70 to-green-700/70 pointer-events-none"
+                className="absolute inset-0 z-1 bg-linear-to-br from-yellow-500/70 via-lime-500/70 to-green-700/70 pointer-events-none"
               />
             </AnimatePresence>
 
@@ -496,7 +546,7 @@ export default function App() {
             )}
 
             <main
-              className={`flex-1 flex flex-col relative z-[2] bg-black/10 backdrop-blur-[2px] overflow-hidden scroll-touch ${phase === 'game' ? 'pb-0' : 'pb-14'}`}
+              className={`flex-1 flex flex-col relative z-2 bg-black/10 backdrop-blur-[2px] overflow-hidden scroll-touch ${phase === 'game' ? 'pb-0' : 'pb-14'}`}
             >
               <AnimatePresence mode="wait">
                 {phase === 'home' && (
@@ -627,7 +677,7 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[201] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+                  className="fixed inset-0 z-201 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
                 >
                   <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
@@ -658,7 +708,7 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[201] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+                  className="fixed inset-0 z-201 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
                 >
                   <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
@@ -690,7 +740,7 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[101] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+                  className="fixed inset-0 z-101 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
                 >
                   <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}

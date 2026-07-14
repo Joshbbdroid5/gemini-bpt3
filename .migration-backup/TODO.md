@@ -1,8 +1,7 @@
-# TODO
-
-- [ ] Step 1: Fix ESLint import resolution causing `import-x/no-unresolved` false positives (Node built-ins + TS project).
-- [ ] Step 2: Re-run `npm run lint` to confirm unresolved-module errors are gone.
-- [ ] Step 3: Fix TypeScript errors in `server.ts` (string | undefined -> string, etc.).
-- [ ] Step 4: Reduce `@typescript-eslint/no-explicit-any` / `no-unsafe-*` by tightening mongoose/lean() types at the boundaries.
-- [ ] Step 5: Address remaining rule violations: `no-empty`, `prefer-const`, `prefer-nullish-coalescing`, `prefer-optional-chain`, `require-await`, `no-misused-promises`.
-- [ ] Step 6: Re-run `npm run lint` + `npm run server` (optional) / `tsc --noEmit`.
+- [ ] Inspect current TypeScript models for admin/server payloads in `src/types.ts`
+- [ ] Introduce missing DTO types for admin responses used in `AdminDashboard.tsx` (wallets/rounds/recentActivity/stats/activity logs/board preview)
+- [ ] Replace `useState<any[]>` and `cell: any` with typed structures using the new DTOs
+- [ ] Replace unsafe `err` handling (`catch (err)`) with typed `unknown` and narrowed access
+- [ ] Fix React hook correctness issues surfaced in diagnostics (missing deps, setState patterns, promise handling with void/await)
+- [ ] Apply the same type/DTO approach in other high-error components (App/GamePage/TransactionCard/RoundCard/ProfilePage)
+- [ ] Run eslint/typecheck to confirm error count drops

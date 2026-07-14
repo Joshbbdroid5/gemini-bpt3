@@ -18,7 +18,7 @@ export default function ProfilePage({
   walletBalance,
   gamesWon,
   totalEarnings,
-  telegramDisplayName, 
+  telegramDisplayName,
   referredCount,
   botUsername,
   onViewHistory,
@@ -52,7 +52,9 @@ export default function ProfilePage({
                 <ArrowLeft size={20} className="text-gray-400" />
               </button>
             )}
-            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">{t.myProfile}</h2>
+            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">
+              {t.myProfile}
+            </h2>
           </div>
         </div>
 
@@ -69,29 +71,46 @@ export default function ProfilePage({
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div
+        className="flex-1 overflow-y-auto min-h-0 p-4 custom-scrollbar"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="space-y-6"
         >
           <div className="p-6 bg-white/5 border border-white/5 rounded-[32px]">
-            <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4">{t.yourStats}</h3>
+            <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4">
+              {t.yourStats}
+            </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-white">
-                <span className="flex items-center gap-2 text-gray-300"><DollarSign size={16} /> {t.walletBalance}:</span>
-                <span className="font-black italic">{walletBalance.toLocaleString()} ETB</span>
+                <span className="flex items-center gap-2 text-gray-300">
+                  <DollarSign size={16} /> {t.walletBalance}:
+                </span>
+                <span className="font-black italic">
+                  {walletBalance.toLocaleString()} ETB
+                </span>
               </div>
               <div className="flex items-center justify-between text-white">
-                <span className="flex items-center gap-2 text-gray-300"><Award size={16} /> {t.gamesWon}:</span>
+                <span className="flex items-center gap-2 text-gray-300">
+                  <Award size={16} /> {t.gamesWon}:
+                </span>
                 <span className="font-black italic">{gamesWon}</span>
               </div>
               <div className="flex items-center justify-between text-white">
-                <span className="flex items-center gap-2 text-gray-300"><DollarSign size={16} /> {t.totalEarnings}:</span>
-                <span className="font-black italic">{totalEarnings.toLocaleString()} ETB</span>
+                <span className="flex items-center gap-2 text-gray-300">
+                  <DollarSign size={16} /> {t.totalEarnings}:
+                </span>
+                <span className="font-black italic">
+                  {totalEarnings.toLocaleString()} ETB
+                </span>
               </div>
               <div className="flex items-center justify-between text-white">
-                <span className="flex items-center gap-2 text-gray-300"><Users size={16} /> {t.totalReferred}:</span>
+                <span className="flex items-center gap-2 text-gray-300">
+                  <Users size={16} /> {t.totalReferred}:
+                </span>
                 <span className="font-black italic">{referredCount}</span>
               </div>
             </div>
@@ -109,9 +128,14 @@ export default function ProfilePage({
             <button
               onClick={() => {
                 if (botUsername) {
-                  window.open(`https://t.me/${botUsername.replace('@', '')}`, '_blank');
+                  window.open(
+                    `https://t.me/${botUsername.replace('@', '')}`,
+                    '_blank'
+                  );
                 } else {
-                  window.Telegram?.WebApp?.close?.();
+                  if (window.Telegram?.WebApp?.close) {
+                    window.Telegram.WebApp.close();
+                  }
                 }
               }}
               className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors"

@@ -2,14 +2,27 @@
 /// <reference types="react" />
 /// <reference types="react-dom" />
 
-interface ImportMetaEnv {
-  readonly VITE_API_URL: string;
-  readonly VITE_BACKEND_URL: string;
-  readonly VITE_TELEGRAM_BOT_USERNAME: string;
-  readonly VITE_ADMIN_CHAT_ID?: string;
-  readonly GEMINI_API_KEY?: string;
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp: {
+        initData: string;
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name: string;
+            username?: string;
+            last_name?: string;
+          };
+        };
+        expand?: () => void;
+        close?: () => void;
+        HapticFeedback?: {
+          notificationOccurred?: (type: string) => void;
+        };
+      };
+    };
+  }
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
+export {};
