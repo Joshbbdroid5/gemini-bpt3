@@ -1,1 +1,0 @@
-- [Lomi Bingo missing secrets masked as game-logic bugs](lomi-bingo-env-secrets.md) — no MONGODB_URI/TELEGRAM_BOT_TOKEN in dev meant engine never ran / all sockets rejected; looked like a reset/countdown bug.

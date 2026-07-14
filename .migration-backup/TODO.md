@@ -1,7 +1,0 @@
-- [ ] Inspect current TypeScript models for admin/server payloads in `src/types.ts`
-- [ ] Introduce missing DTO types for admin responses used in `AdminDashboard.tsx` (wallets/rounds/recentActivity/stats/activity logs/board preview)
-- [ ] Replace `useState<any[]>` and `cell: any` with typed structures using the new DTOs
-- [ ] Replace unsafe `err` handling (`catch (err)`) with typed `unknown` and narrowed access
-- [ ] Fix React hook correctness issues surfaced in diagnostics (missing deps, setState patterns, promise handling with void/await)
-- [ ] Apply the same type/DTO approach in other high-error components (App/GamePage/TransactionCard/RoundCard/ProfilePage)
-- [ ] Run eslint/typecheck to confirm error count drops
