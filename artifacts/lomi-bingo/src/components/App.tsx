@@ -371,7 +371,10 @@ export default function App() {
     (entry: HistoryEntry) => setHistory((prev) => [...prev, entry]),
     []
   );
-  const handleRestartGame = useCallback(() => setPhase('selection'), []);
+  const handleRestartGame = useCallback(() => {
+    setSelectedBoardIds([]);
+    setPhase('selection');
+  }, []);
   const handleViewHistory = useCallback(() => {
     setPhase('history');
     setBottomTab('history');

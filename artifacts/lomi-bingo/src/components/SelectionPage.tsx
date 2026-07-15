@@ -316,11 +316,11 @@ export default function SelectionPage({
     };
 
     const handleGameReset = () => {
-      // Clear previous round's selections immediately (handles case where SelectionPage
-      // was already mounted during reset, e.g. user was watching without a board)
+      // Clear previous round's selections immediately when the server enters a new selection phase.
       setSelectedIds(new Set());
       setTakenBoards(new Set());
       setPendingBoardId(null);
+      onSelectionChange([]);
       // Re-sync to get fresh board state and timer from server
       startSyncTimer();
     };
