@@ -1998,6 +1998,14 @@ async function runGameLoop() {
     singleRoomState.state === GameState.FINISHED ||
     singleRoomState.currentBalls.length >= 75
   ) {
+    // Clear any stale game-loop timeout before starting the post-round countdown.
+    // This avoids the case where the previous loop timeout is still referenced,
+    // which would suppress the countdown and prevent the next selection phase from starting.
+    if (singleRoomState.gameLoopTimeout) {
+      clearTimeout(singleRoomState.gameLoopTimeout);
+      singleRoomState.gameLoopTimeout = undefined;
+    }
+
     // 10-second winner declaration window — broadcast synced countdown to all clients
     if (!singleRoomState.gameLoopTimeout) {
       let secondsLeft = 10;
