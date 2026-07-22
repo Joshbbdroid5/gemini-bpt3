@@ -81,7 +81,7 @@ type AsyncHandler = (
   req: express.Request,
   res: express.Response,
   next: express.NextFunction
-) => Promise<void>; // Changed to Promise<void>
+) => Promise<void>;
 
 const asyncHandler =
   (fn: AsyncHandler) =>
@@ -90,7 +90,7 @@ const asyncHandler =
     res: express.Response,
     next: express.NextFunction
   ): void => {
-    void Promise.resolve(fn(req, res, next)).catch((err: unknown): void => {
+    void Promise.resolve(fn(req, res, next)).catch((err: unknown) => {
       logger.error('Unhandled route error', {
         path: req.path,
         method: req.method,
@@ -101,12 +101,14 @@ const asyncHandler =
       });
 
       if (err instanceof MongooseError.ValidationError) {
-        res.status(400).json({ error: 'Validation failed', details: err.message });
-        return;
+        return res
+          .status(400)
+          .json({ error: 'Validation failed', details: err.message });
       }
       if (err instanceof MongooseError.CastError) {
-        res.status(400).json({ error: 'Invalid input format', details: err.message });
-        return;
+        return res
+          .status(400)
+          .json({ error: 'Invalid input format', details: err.message });
       }
 
       const error = err as { code?: number; message?: string };
@@ -123,6 +125,7 @@ const asyncHandler =
           (err instanceof Error ? err.message : String(err)) ??
           'An unexpected error occurred.',
       });
+      return;
     });
   };
 

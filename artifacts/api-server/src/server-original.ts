@@ -4,18 +4,17 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors, { CorsOptions } from 'cors';
 import crypto from 'crypto';
-import { generateBoard, checkWin, WinningPattern } from './src/logic';
+import { generateBoard, checkWin, WinningPattern } from './logic';
 import fs from 'fs';
 import { mainBot, notifyUser } from './main-bot';
 import { adminBot } from './admin-bot';
 import { Markup } from 'telegraf';
 import path from 'path';
-import { fileURLToPath } from 'url'; //
-import { socketEvents } from './src/components/socket'; // Import socketEvents
+import { fileURLToPath } from 'url';
+import { socketEvents } from './socketEvents';
 import mongoose, { Error as MongooseError } from 'mongoose';
-import logger from './src/logger';
+import { logger } from './lib/logger';
 import client from 'prom-client';
-import { metrics, ObservableResult } from '@opentelemetry/api';
 import {
   GameState,
   RoomStats,
@@ -38,7 +37,7 @@ import {
   ISocketAuthUser,
   IRoomDocToObject,
   IUserLean,
-} from './src/types';
+} from './types';
 
 dotenv.config();
 
@@ -524,8 +523,8 @@ app.post(
         const displayId = user.username
           ? `${user.username}\n<i>ID: ${userId}</i>`
           : `<code>${userId}</code>`;
-        await adminBot.telegram
-          .sendMessage(
+        await adminBot?.telegram
+          ?.sendMessage(
             ADMIN_CHAT_ID,
             `👤 <b>New User Created:</b>\n${displayId}${referredBy ? `\n(Referred by: ${referredBy})` : ''}`,
             { parse_mode: 'HTML' }
@@ -566,7 +565,7 @@ app.post(
           ? `${user.username}\n<i>ID: ${userId}</i>`
           : `<code>${userId}</code>`;
 
-        await adminBot.telegram.sendMessage(
+        await adminBot?.telegram?.sendMessage(
           ADMIN_CHAT_ID,
           `🚨 <b>NEW TOP-UP REQUEST</b>\n\n👤 <b>User:</b>\n${displayId}\n💰 <b>Amount:</b> ${amount} ETB\n🧾 <b>SMS:</b>\n${telebirrSms}`,
           {
@@ -755,7 +754,7 @@ app.post(
 
     await Promise.all([
       notifyUser(userId, notificationMessage),
-      ADMIN_CHAT_ID
+      ADMIN_CHAT_ID && adminBot
         ? adminBot.telegram.sendMessage(
             ADMIN_CHAT_ID,
             `✅ <b>Admin Log:</b> User <code>${userId}</code> balance adjusted by ${amount} ETB. New balance: ${updatedUser.balance} ETB.`,
@@ -806,12 +805,12 @@ app.post(
       amount,
     });
 
-    if (ADMIN_CHAT_ID) {
+    if (ADMIN_CHAT_ID && adminBot) {
       const displayId = user.username
         ? `${user.username}\n<i>ID: ${userId}</i>`
         : `<code>${userId}</code>`;
-      await adminBot.telegram
-        .sendMessage(
+      await adminBot?.telegram
+        ?.sendMessage(
           ADMIN_CHAT_ID,
           `💸 <b>NEW WITHDRAWAL REQUEST</b>\n\n👤 <b>User:</b>\n${displayId}\n💰 <b>Amount:</b> ${amount} ETB\n📱 <b>Phone:</b> <code>${user.phone || 'N/A'}</code>`,
           {
@@ -888,12 +887,13 @@ app.post(
       userId,
       `💸 <b>Withdrawal Processed</b>\nYour withdrawal for ${amount} ETB has been paid! Please check your Telebirr account.`
     );
-    if (ADMIN_CHAT_ID) {
-      await adminBot.telegram.sendMessage(
-        ADMIN_CHAT_ID,
-        `💰 <b>Withdrawal Log:</b> Marked ${amount} ETB as paid to user <code>${userId}</code>.`,
-        { parse_mode: 'HTML' }
-      );
+    if (ADMIN_CHAT_ID && adminBot) {
+      await adminBot?.telegram
+        ?.sendMessage(
+          ADMIN_CHAT_ID,
+          `💰 <b>Withdrawal Log:</b> Marked ${amount} ETB as paid to user <code>${userId}</code>.`,
+          { parse_mode: 'HTML' }
+        );
     }
     res.json({ success: true });
     return;
@@ -921,12 +921,13 @@ app.post(
         userId,
         `❌ <b>Deposit Rejected</b>\nYour recent top-up request could not be verified. If you believe this is a mistake, please contact support.`
       );
-      if (ADMIN_CHAT_ID) {
-        await adminBot.telegram.sendMessage(
-          ADMIN_CHAT_ID,
-          `❌ <b>Rejection Log:</b> Rejected top-up for <code>${userId}</code>.`,
-          { parse_mode: 'HTML' }
-        );
+      if (ADMIN_CHAT_ID && adminBot) {
+        await adminBot.telegram
+          .sendMessage(
+            ADMIN_CHAT_ID,
+            `❌ <b>Rejection Log:</b> Rejected top-up for <code>${userId}</code>.`,
+            { parse_mode: 'HTML' }
+          );
       }
 
       res.json({ success: true });
@@ -987,8 +988,8 @@ app.post(
         const displayId = user.username
           ? `${user.username}\n<i>ID: ${userId}</i>`
           : `<code>${userId}</code>`;
-        await adminBot.telegram
-          .sendMessage(
+        await adminBot?.telegram
+          ?.sendMessage(
             ADMIN_CHAT_ID,
             `📱 <b>User Registered:</b>\n${displayId}\nhas verified phone: <code>${phone}</code>`,
             { parse_mode: 'HTML' }
@@ -1506,28 +1507,9 @@ app.post(
   })
 );
 
-// OpenTelemetry Business Metrics (meter version updated for clarity)
-const meter = metrics.getMeter('bingo-business-logic', '1.0.0');
-
-// Tracks the number of rooms currently in the LIVE (GAME) state
-const activeGamesGauge = meter.createObservableGauge('bingo_active_games', {
-  description: 'Number of games currently in the drawing phase',
-});
-activeGamesGauge.addCallback((result: ObservableResult) => {
-  const count = singleRoomState.state === GameState.GAME ? 1 : 0;
-  result.observe(count);
-});
-
-// Tracks the total volume of ETB staked (lifetime of this process + DB sync)
-const totalVolumeGauge = meter.createObservableGauge('bingo_total_volume_etb', {
-  description: 'Total amount of ETB staked across all rounds',
-});
-totalVolumeGauge.addCallback((result: ObservableResult) => {
-  result.observe(globalGameState.totalVolume);
-});
-
-const jackpotWinsCounter = meter.createCounter('bingo_jackpot_wins_total', {
-  description: 'Total number of winning boards declared',
+const jackpotWinsCounter = new client.Counter({
+  name: 'bingo_jackpot_wins_total',
+  help: 'Total number of winning boards declared',
 });
 
 function generateGameId() {
@@ -1995,7 +1977,7 @@ async function runGameLoop() {
             }),
           };
 
-          jackpotWinsCounter.add(1);
+          jackpotWinsCounter.inc(1);
           const sId = socketMapping.get(w.userId);
           if (sId && user)
             io.to(sId).emit(socketEvents.WALLET_UPDATE, user.balance); // Emit to specific user
@@ -2176,12 +2158,12 @@ dbPromise
     resetGame();
 
     try {
-      await Promise.all([mainBot.launch(), adminBot.launch()]);
+      await Promise.all([mainBot?.launch(), adminBot?.launch()]);
       logger.info('User and Admin Bots initialized');
 
       if (ADMIN_CHAT_ID && ADMIN_CHAT_ID !== 'YOUR_ADMIN_CHAT_ID_HERE') {
-        adminBot.telegram
-          .sendMessage(
+        await adminBot?.telegram
+          ?.sendMessage(
             ADMIN_CHAT_ID,
             '🚀 <b>Bots Online</b>\nThe game server and both bots have started successfully.',
             { parse_mode: 'HTML' }
@@ -2381,8 +2363,8 @@ app.get('*', (req, res) => {
 process.on('SIGTERM', () => {
   logger.info('SIGTERM signal received: closing HTTP server');
   server.close(() => {
-    mainBot.stop('SIGTERM'); // Stop main bot
-    adminBot.stop('SIGTERM'); // Stop admin bot
+    mainBot?.stop('SIGTERM'); // Stop main bot
+    adminBot?.stop('SIGTERM'); // Stop admin bot
     mongoose.connection
       .close()
       .then(() => logger.info('Database connection closed.'));
