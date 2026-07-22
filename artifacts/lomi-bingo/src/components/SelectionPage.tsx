@@ -132,11 +132,8 @@ export default function SelectionPage({
   const [gridWidth, setGridWidth] = useState(window.innerWidth - 32); // Better initial guess
   const [gridHeight, setGridHeight] = useState(window.innerHeight - 250); // Improved initial fallback
 
-  // Responsive column count: ensures touch targets don't get too small on narrow screens
-  const columnCount = useMemo(() => {
-    if (gridWidth === 0) return 10;
-    return Math.max(5, Math.floor(gridWidth / 34)) ?? 10;
-  }, [gridWidth]);
+  // Keep a fixed 10-column layout so the selection grid stays compact and avoids horizontal scroll.
+  const columnCount = 10;
 
   const gap = 2;
 
@@ -162,22 +159,22 @@ export default function SelectionPage({
   // Calculate item dimensions based on container width and aspect ratio
   const itemWidth = useMemo(() => {
     if (gridWidth === 0) return 0;
-    // Calculate width so that (columnCount * itemWidth) + (columnCount * gap) = gridWidth
-    return Math.max(1, gridWidth / columnCount - gap);
+    const availableWidth = Math.max(1, gridWidth - gap * (columnCount - 1));
+    return Math.max(1, Math.floor(availableWidth / columnCount));
   }, [gridWidth, columnCount, gap]);
 
   const itemHeight = useMemo(() => {
-    return Math.max(1, itemWidth * 1.35);
+    return Math.max(1, itemWidth * 1.22);
   }, [itemWidth]);
 
   // Ensure we have reasonable minimums for virtualization to prevent "pixel-sized" cell rendering
   // which can cause performance hangs or memory crashes.
   const columnWidth = useMemo(
-    () => Math.max(32, itemWidth + gap),
+    () => Math.max(28, itemWidth + gap),
     [itemWidth, gap]
   );
   const rowHeight = useMemo(
-    () => Math.max(44, itemHeight + gap),
+    () => Math.max(36, itemHeight + gap),
     [itemHeight, gap]
   );
 
@@ -446,7 +443,7 @@ export default function SelectionPage({
             cellProps={cellProps}
             className="custom-scrollbar"
             overscanCount={2}
-            style={{ height: gridHeight, width: gridWidth }}
+            style={{ height: gridHeight, width: gridWidth, overflowX: 'hidden' }}
           />
         )}
 
