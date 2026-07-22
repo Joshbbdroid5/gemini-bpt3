@@ -67,7 +67,7 @@ const BoardCellImpl = memo((props: BoardCellComponentProps) => {
         id={`board-${id}`}
         onClick={() => handleSelect(id)}
         className={`
-          w-full h-full flex items-center justify-center text-[11px] font-black rounded-xl border-2 transition-all active:scale-95 relative overflow-hidden
+          w-full h-full flex items-center justify-center text-[9px] font-black rounded-lg border-2 transition-all active:scale-95 relative overflow-hidden
           ${isPending ? 'opacity-60 animate-pulse' : ''}
           ${
             isSelected
@@ -135,10 +135,10 @@ export default function SelectionPage({
   // Responsive column count: ensures touch targets don't get too small on narrow screens
   const columnCount = useMemo(() => {
     if (gridWidth === 0) return 10;
-    return Math.max(5, Math.floor(gridWidth / 38)) ?? 10;
+    return Math.max(5, Math.floor(gridWidth / 34)) ?? 10;
   }, [gridWidth]);
 
-  const gap = 6; // Tailwind's gap-1.5 is 0.375rem, assuming 1rem = 16px, so 6px
+  const gap = 2;
 
   // Move handleSelect declaration above itemData to fix "used before its declaration" error
   const handleSelect = useCallback(
@@ -167,17 +167,17 @@ export default function SelectionPage({
   }, [gridWidth, columnCount, gap]);
 
   const itemHeight = useMemo(() => {
-    return Math.max(1, itemWidth * 1.5); // aspect-[2/3] means height is 1.5 times width
+    return Math.max(1, itemWidth * 1.35);
   }, [itemWidth]);
 
   // Ensure we have reasonable minimums for virtualization to prevent "pixel-sized" cell rendering
   // which can cause performance hangs or memory crashes.
   const columnWidth = useMemo(
-    () => Math.max(38, itemWidth + gap),
+    () => Math.max(32, itemWidth + gap),
     [itemWidth, gap]
   );
   const rowHeight = useMemo(
-    () => Math.max(57, itemHeight + gap),
+    () => Math.max(44, itemHeight + gap),
     [itemHeight, gap]
   );
 
@@ -234,20 +234,18 @@ export default function SelectionPage({
 
     // Perform an initial measurement immediately on mount
     if (gridContainerRef.current) {
-      setGridWidth(
-        gridContainerRef.current.offsetWidth ?? window.innerWidth - 32
-      );
+      setGridWidth(gridContainerRef.current.clientWidth || window.innerWidth - 24);
       setGridHeight(
-        gridContainerRef.current.offsetHeight ?? window.innerHeight - 250
+        gridContainerRef.current.clientHeight || window.innerHeight - 250
       );
     }
 
     const observer = new ResizeObserver((entries) => {
       if (entries[0]) {
         window.requestAnimationFrame(() => {
-          setGridWidth(entries[0].contentRect.width ?? window.innerWidth - 32);
+          setGridWidth(entries[0].contentRect.width || window.innerWidth - 24);
           setGridHeight(
-            entries[0].contentRect.height ?? window.innerHeight - 250
+            entries[0].contentRect.height || window.innerHeight - 250
           );
         });
       }
@@ -400,7 +398,7 @@ export default function SelectionPage({
 
       <div
         ref={gridContainerRef}
-        className="flex-1 min-h-0 pt-1 px-2 pb-0 relative"
+        className="flex-1 min-h-0 pt-1 px-1 pb-0 relative"
       >
         {syncError && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#1a1b2e]/90 backdrop-blur-sm p-6 text-center">
